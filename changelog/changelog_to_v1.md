@@ -440,3 +440,49 @@ POL's `GetAttribute(mob, attr, precision)` defaults to `ATTRIBUTE_PRECISION_NORM
 - [ ] `build_combatant(CombatantSpec(skills={27: 100}))` stores skill as internal value 1000 (display × 10)
 
 ---
+
+## M9 — Reporting & Notebooks
+
+**Date**: 2026-03-10
+
+### Summary
+
+Added the reporting layer: summary and comparison tables (list-of-dicts format compatible with pandas, tabulate, and raw HTML), matplotlib figure factories for histograms, parameter curves, damage breakdowns, and scenario overlays. Includes a hot-reload utility for Jupyter workflows and three example notebooks demonstrating the full pipeline from scenario definition to visualisation.
+
+### New files
+
+- `src/omega/reporting/tables.py` — `summary_table()`, `comparison_table()`, `format_table_html()`; `_get_stat()` maps column names to `CellResult` fields; `_fmt()` auto-formats percentages vs decimals
+- `src/omega/reporting/plots.py` — `damage_histogram()`, `damage_vs_parameter()`, `damage_breakdown()`, `comparison_overlay()`; matplotlib is lazy-imported (optional dependency)
+- `src/omega/reporting/reload.py` — `reload_omega()` reloads all `omega.*` modules in sorted order for Jupyter hot-reload
+- `tests/test_reporting/test_tables.py` — 16 tests for summary, comparison, and HTML rendering
+- `tests/test_reporting/test_plots.py` — 11 tests for all four plot functions (skipped if matplotlib not installed)
+- `tests/test_reporting/test_reload.py` — 4 tests for the reload utility
+- `notebooks/01_basic_damage.ipynb` — Single scenario: Warrior vs NPC, histogram + breakdown + summary table
+- `notebooks/02_skill_sweep.ipynb` — Tactics sweep with damage-vs-parameter curve and p5–p95 shading
+- `notebooks/03_class_comparison.ipynb` — STR Warrior vs DEX Warrior, overlaid histograms + comparison table
+
+### Modified files
+
+- `src/omega/reporting/__init__.py` — Public API exports (tables + reload; plots are lazy-imported)
+- `path_to_v1.md` — M9 status → Complete
+
+### Key decisions
+
+- **Matplotlib is optional**: Plot functions raise `ImportError` with install instructions at call time, not at module import. Tables work without any extra dependencies
+- **List-of-dicts output**: Tables return `list[dict]` which works with `pandas.DataFrame(rows)`, `tabulate(rows, headers="keys")`, `IPython.display.HTML(format_table_html(rows))`, or plain iteration — no forced dependency on any display library
+- **`plt.close(fig)` after creation**: All figure factories close the figure before returning to prevent memory leaks in notebook loops. The returned `Figure` object is still renderable
+- **Comparison delta**: `comparison_table()` adds a `delta` column only when exactly 2 scenarios are compared
+- **Reload sorts parents first**: `reload_omega()` reloads in sorted order (omega, omega.combat, omega.combat.result, ...) so parent modules are refreshed before children
+
+### Test Criteria
+
+- [ ] `summary_table(result)` returns one dict per sweep cell with variable values as leading columns and stat values (mean, median, min, max, std_dev, p5, p95, hit_rate, count) as trailing columns. Custom `stats=["mean", "max"]` limits output to specified columns only
+- [ ] `comparison_table({"A": cell_a, "B": cell_b})` returns one row per stat with columns `stat`, `A`, `B`, and `delta` (difference B−A). With 3+ scenarios, `delta` is omitted
+- [ ] `format_table_html(rows)` produces valid HTML with XSS escaping — `<script>` in data renders as `&lt;script&gt;`, not executable. Floats in 0–1 range display as percentages (e.g., `50.0%`), others as 2 decimal places
+- [ ] `damage_histogram(cell)` returns a matplotlib Figure with mean and median overlay lines. `damage_vs_parameter(result, "skill_name")` shows line plot with optional p5–p95 shaded range. `comparison_overlay({"A": cell, "B": cell})` shows overlaid histograms with per-scenario legend
+- [ ] All plot functions gracefully handle edge cases: empty cells, single data point, missing variable name
+- [ ] `reload_omega()` reloads all loaded omega modules and returns the list of reloaded module names in parent-first sorted order
+- [ ] Example notebooks (01, 02, 03) are syntactically valid `.ipynb` files that can be opened in JupyterLab. They demonstrate the full pipeline: shard loading → scenario definition → simulation → visualisation
+- [ ] Plot tests are skipped (not failed) when matplotlib is not installed. All table and reload tests pass without matplotlib
+
+---

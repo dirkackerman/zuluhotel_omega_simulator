@@ -429,7 +429,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M9 — Reporting & Notebooks
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Visualize simulation results in Jupyter notebooks with publication-quality graphs suitable for game design decisions.
 
