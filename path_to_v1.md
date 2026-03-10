@@ -100,7 +100,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M2 — eScript Parser
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Parse eScript `.src` and `.inc` files into an AST we can walk in the interpreter. Must handle all language constructs used by the combat scripts.
 
