@@ -294,7 +294,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M6 — POL Runtime Stubs
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Implement the mock POL built-in functions that the combat scripts call. These bridge the interpreter to the game object model.
 

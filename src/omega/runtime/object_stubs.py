@@ -1,0 +1,281 @@
+"""Batch 2 — Object model POL built-in stubs.
+
+Property bag access, stat/vital/skill accessors, equipment layer lookup.
+These delegate directly to the game object model from M4.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from omega.logging import get_logger
+from omega.model.constants import ATTRIBUTE_TO_SKILLID, SKILLID_TO_ATTRIBUTE
+from omega.runtime.registry import pol_function
+
+logger = get_logger("omega.runtime")
+
+# ---------------------------------------------------------------------------
+# Property system (uo module)
+# ---------------------------------------------------------------------------
+
+
+@pol_function("uo", "GetObjProperty")
+@pol_function("", "GetObjProperty")
+def get_obj_property(obj: Any = None, name: Any = None) -> Any:
+    """Get a custom property from a game object."""
+    if obj is None or name is None:
+        return None
+    if hasattr(obj, "get_property"):
+        return obj.get_property(str(name))
+    return None
+
+
+@pol_function("uo", "SetObjProperty")
+@pol_function("", "SetObjProperty")
+def set_obj_property(obj: Any = None, name: Any = None, value: Any = None) -> None:
+    """Set a custom property on a game object."""
+    if obj is None or name is None:
+        return
+    if hasattr(obj, "set_property"):
+        obj.set_property(str(name), value)
+
+
+@pol_function("uo", "EraseObjProperty")
+@pol_function("", "EraseObjProperty")
+def erase_obj_property(obj: Any = None, name: Any = None) -> None:
+    """Erase a custom property from a game object."""
+    if obj is None or name is None:
+        return
+    if hasattr(obj, "erase_property"):
+        obj.erase_property(str(name))
+
+
+# ---------------------------------------------------------------------------
+# Stats (vitals module)
+# ---------------------------------------------------------------------------
+
+
+@pol_function("vitals", "GetStrength")
+@pol_function("", "GetStrength")
+def get_strength(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "strength", 0)
+
+
+@pol_function("vitals", "GetDexterity")
+@pol_function("", "GetDexterity")
+def get_dexterity(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "dexterity", 0)
+
+
+@pol_function("vitals", "GetIntelligence")
+@pol_function("", "GetIntelligence")
+def get_intelligence(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "intelligence", 0)
+
+
+@pol_function("vitals", "GetStrengthMod")
+@pol_function("", "GetStrengthMod")
+def get_strength_mod(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "str_mod", 0)
+
+
+@pol_function("vitals", "GetDexterityMod")
+@pol_function("", "GetDexterityMod")
+def get_dexterity_mod(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "dex_mod", 0)
+
+
+@pol_function("vitals", "GetIntelligenceMod")
+@pol_function("", "GetIntelligenceMod")
+def get_intelligence_mod(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "int_mod", 0)
+
+
+@pol_function("vitals", "SetStrengthMod")
+@pol_function("", "SetStrengthMod")
+def set_strength_mod(mobile: Any = None, value: Any = 0) -> None:
+    if mobile is not None:
+        mobile.str_mod = int(value)
+
+
+@pol_function("vitals", "SetDexterityMod")
+@pol_function("", "SetDexterityMod")
+def set_dexterity_mod(mobile: Any = None, value: Any = 0) -> None:
+    if mobile is not None:
+        mobile.dex_mod = int(value)
+
+
+@pol_function("vitals", "SetIntelligenceMod")
+@pol_function("", "SetIntelligenceMod")
+def set_intelligence_mod(mobile: Any = None, value: Any = 0) -> None:
+    if mobile is not None:
+        mobile.int_mod = int(value)
+
+
+# ---------------------------------------------------------------------------
+# Vitals (uo module — HP, Mana, Stamina)
+# ---------------------------------------------------------------------------
+
+
+@pol_function("uo", "GetHP")
+@pol_function("", "GetHP")
+def get_hp(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "hp", 0)
+
+
+@pol_function("uo", "GetMaxHP")
+@pol_function("", "GetMaxHP")
+def get_max_hp(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "max_hp", 0)
+
+
+@pol_function("uo", "GetMana")
+@pol_function("", "GetMana")
+def get_mana(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "mana", 0)
+
+
+@pol_function("uo", "GetStamina")
+@pol_function("", "GetStamina")
+def get_stamina(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "stamina", 0)
+
+
+@pol_function("uo", "SetMana")
+@pol_function("", "SetMana")
+def set_mana(mobile: Any = None, value: Any = 0) -> None:
+    if mobile is not None:
+        mobile.mana = int(value)
+
+
+@pol_function("uo", "SetStamina")
+@pol_function("", "SetStamina")
+def set_stamina(mobile: Any = None, value: Any = 0) -> None:
+    if mobile is not None:
+        mobile.stamina = int(value)
+
+
+@pol_function("vitals", "SetHpRegenRate")
+@pol_function("", "SetHpRegenRate")
+def set_hp_regen_rate(mobile: Any = None, rate: Any = None) -> None:
+    logger.debug("SetHpRegenRate (no-op in simulation)", rate=rate)
+
+
+# ---------------------------------------------------------------------------
+# Skills (attributes module)
+# ---------------------------------------------------------------------------
+
+
+@pol_function("", "GetEffectiveSkill")
+@pol_function("attributes", "GetEffectiveSkill")
+def get_effective_skill(mobile: Any = None, skill_id: Any = None) -> int:
+    """Get effective skill value (display units, 0-200)."""
+    if mobile is None or skill_id is None:
+        return 0
+    if hasattr(mobile, "get_effective_skill"):
+        return mobile.get_effective_skill(int(skill_id))
+    return 0
+
+
+@pol_function("", "GetAttribute")
+@pol_function("attributes", "GetAttribute")
+def get_attribute(mobile: Any = None, attr_name: Any = None) -> int:
+    """Get attribute value by string name (returns tenths)."""
+    if mobile is None or attr_name is None:
+        return 0
+    if hasattr(mobile, "get_attribute"):
+        return mobile.get_attribute(str(attr_name))
+    return 0
+
+
+@pol_function("", "GetAttributeBaseValue")
+@pol_function("attributes", "GetAttributeBaseValue")
+def get_attribute_base_value(mobile: Any = None, attr_name: Any = None) -> int:
+    """Get base attribute value (same as GetAttribute in V1 — no temp mods)."""
+    return get_attribute(mobile, attr_name)
+
+
+@pol_function("", "GetBaseSkill")
+@pol_function("attributes", "GetBaseSkill")
+def get_base_skill(mobile: Any = None, skill_id: Any = None) -> int:
+    """Get base skill (same as effective in V1)."""
+    return get_effective_skill(mobile, skill_id)
+
+
+@pol_function("", "SetBaseSkill")
+@pol_function("attributes", "SetBaseSkill")
+def set_base_skill(
+    mobile: Any = None, skill_id: Any = None, value: Any = None
+) -> None:
+    """Set base skill value."""
+    if mobile is not None and skill_id is not None and value is not None:
+        if hasattr(mobile, "set_skill"):
+            mobile.set_skill(int(skill_id), int(value))
+
+
+@pol_function("", "GetAttributeIdBySkillId")
+@pol_function("attributes", "GetAttributeIdBySkillId")
+def get_attribute_id_by_skill_id(skill_id: Any = None) -> str:
+    """Convert a numeric skill ID to an attribute name string."""
+    if skill_id is None:
+        return ""
+    return SKILLID_TO_ATTRIBUTE.get(int(skill_id), "")
+
+
+# ---------------------------------------------------------------------------
+# Equipment (uo module)
+# ---------------------------------------------------------------------------
+
+
+@pol_function("uo", "GetEquipmentByLayer")
+@pol_function("", "GetEquipmentByLayer")
+def get_equipment_by_layer(mobile: Any = None, layer: Any = None) -> Any:
+    """Get item equipped at a specific layer.
+
+    Returns the item or None (POL returns error, but None is safer for stubs).
+    """
+    if mobile is None or layer is None:
+        return None
+    if hasattr(mobile, "get_equipped"):
+        return mobile.get_equipped(int(layer))
+    return None
+
+
+@pol_function("uo", "ListEquippedItems")
+@pol_function("", "ListEquippedItems")
+def list_equipped_items(mobile: Any = None) -> list[Any]:
+    """Get list of all equipped items."""
+    if mobile is None:
+        return []
+    if hasattr(mobile, "list_equipment"):
+        return list(mobile.list_equipment().values())
+    return []
+
+
+@pol_function("uo", "GetKarma")
+@pol_function("", "GetKarma")
+def get_karma(mobile: Any = None) -> int:
+    """Get karma value. Returns 0 in simulation."""
+    if mobile is None:
+        return 0
+    return getattr(mobile, "karma", 0)

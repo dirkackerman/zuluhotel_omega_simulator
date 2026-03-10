@@ -192,3 +192,64 @@ Built the in-memory game object model: base `GameObject` with property bag, `Mob
 - [ ] `create_mobile_from_template("beckon")` → STR 200, INT 200, DEX 175, skills populated
 - [ ] `Weapon.isa(POLCLASS_WEAPON)` → True, `Mobile.isa(POLCLASS_NPC)` → True for NPCs
 - [ ] Snapshot→modify→restore cycle preserves original state
+
+---
+
+## M6 — POL Runtime Stubs
+
+**Date**: 2026-03-10
+
+### Summary
+
+Implemented ~60 POL built-in function stubs organized in 3 batches, plus a deterministic RNG, simulation context with side effect tracking, and a decorator-based registry with case-insensitive dispatch. 158 total registry entries (many functions registered under both bare and module-scoped names).
+
+**Files created**:
+- `src/omega/runtime/rng.py` — `SimulationRNG` wrapping `random.Random` with seed. `random(max)` for [1,max], `random_int(max)` for [0,max-1]. Stored in `contextvars.ContextVar` for per-iteration isolation
+- `src/omega/runtime/context.py` — `SimulationContext` with attacker/defender/weapon refs, side effect recording (`SideEffect` dataclass), damage tracking, object registry for serial lookup, config file cache, `reset_hit()` for iteration reset
+- `src/omega/runtime/registry.py` — `@pol_function(module, name)` decorator, `call_builtin(module, name, args)` dispatch with case-insensitive lookup, bare-name fallback for unscoped calls, WARNING log for unknown functions (returns None, doesn't crash)
+- `src/omega/runtime/basic_stubs.py` — Batch 1 (~25 functions): CInt/CDbl/CStr/Hex, Max/Min, TypeOf/Len, Pow/Abs/Sqrt/Sin/Cos, Random/RandomInt (deterministic via RNG), SplitWords/Lower/Upper/SubStr, ReadGameClock, SendSysMessage/PrintTextAbove (DEBUG_MODE aware via `omega.runtime.messaging` logger), PerformAction/PlaySoundEffect/IncRevision/Sleepms/Distance (no-ops)
+- `src/omega/runtime/object_stubs.py` — Batch 2 (~20 functions): GetObjProperty/SetObjProperty/EraseObjProperty → property bag, GetStrength/GetDexterity/GetIntelligence + mod setters, GetHP/GetMaxHP/GetMana/GetStamina + setters, GetEffectiveSkill/GetAttribute/GetAttributeBaseValue/GetBaseSkill/SetBaseSkill/GetAttributeIdBySkillId, GetEquipmentByLayer/ListEquippedItems
+- `src/omega/runtime/structural_stubs.py` — Batch 3 (~15 functions): ReadConfigFile (with caching + RuntimeConfigFile wrapper), FindConfigElem/GetConfigInt/GetConfigString/GetConfigStringKeys, ApplyRawDamage (HP reduction + side effect), SystemFindObjectBySerial/FindMobile, FindGuild (stub with IsEnemyGuild/IsAllyGuild → False), start_script (WARNING + None), SetPoisoned/SetParalyzed/DestroyItem (side effect recording), GetGlobalProperty (sensible defaults)
+- `src/omega/runtime/__init__.py` — imports all stub modules to trigger registration on `import omega.runtime`
+
+### Key decisions
+- Unknown functions return None instead of raising — maximizes script coverage without crashes; gaps logged at WARNING
+- Side effects recorded but not executed — `SetPoisoned` records "poison applied" for stats but doesn't simulate ticks
+- Config file caching per simulation context — `ReadConfigFile` is called per-hit in combat scripts
+- RNG via `contextvars.ContextVar` — each iteration gets its own seeded instance without threading state
+- DEBUG_MODE messaging — `SendSysMessage` silent by default, logs at INFO when `debug_mode=True` in scenario
+- Functions registered under both bare (`""`, `"CInt"`) and module-scoped (`"util"`, `"CInt"`) for flexible lookup
+
+### Test Criteria
+
+- [ ] `uv run pytest -v` — all 372 tests pass (23 logging + 86 parser + 58 config + 89 model + 116 runtime):
+  - `TestRegistration` (6 tests) — registration, case-insensitive lookup, many stubs present
+  - `TestDispatch` (5 tests) — CInt dispatch, module/bare, case-insensitive, unknown → None, bare fallback
+  - `TestSimulationRNG` (6 tests) — deterministic seeds, bounds, zero max
+  - `TestRNGContext` (1 test) — set_rng_seed reproducibility
+  - `TestSimulationContext` (6 tests) — defaults, side effects, damage, absorption, reset, cache preservation
+  - `TestObjectRegistry` (2 tests) — register/find, missing serial
+  - `TestConfigCache` (2 tests) — cache hit/miss
+  - `TestTypeCasts` (11 tests) — CInt/CDbl/CStr/Hex/Max/Min with edge cases
+  - `TestTypeQueries` (9 tests) — TypeOf for all types, Len
+  - `TestMathOps` (6 tests) — Pow, Abs, Sqrt with edge cases
+  - `TestRandom` (3 tests) — deterministic, bounds for Random and RandomInt
+  - `TestStringOps` (6 tests) — SplitWords, Lower, Upper, SubStr
+  - `TestTime` (1 test) — ReadGameClock from context
+  - `TestMessaging` (2 tests) — silent by default, debug mode
+  - `TestNoOps` (6 tests) — PerformAction, PlaySoundEffect, IncRevision, set_critical, Sleepms, Distance
+  - `TestPropertySystem` (5 tests) — get/set/erase roundtrip, weapon properties, null safety
+  - `TestStatAccessors` (6 tests) — STR/DEX/INT, mods, null safety
+  - `TestVitalAccessors` (6 tests) — HP/Mana/Stamina get/set
+  - `TestSkillAccessors` (4 tests) — GetEffectiveSkill, GetAttribute by name, GetAttributeIdBySkillId
+  - `TestEquipmentAccessors` (3 tests) — GetEquipmentByLayer, empty layer, ListEquippedItems
+  - `TestApplyRawDamage` (5 tests) — HP reduction, damage recording, side effect, lethal, zero ignored
+  - `TestGuildStubs` (3 tests) — FindGuild, IsEnemyGuild/IsAllyGuild → False
+  - `TestScriptControl` (2 tests) — start_script → None
+  - `TestSideEffectRecording` (3 tests) — poison, item_destroyed, paralyze
+  - `TestObjectLookup` (2 tests) — registered object, missing serial
+  - `TestMiscStubs` (5 tests) — GetGlobalProperty, EnumerateOnlineCharacters, no-op stubs
+- [ ] 158 registry entries covering ~60 distinct POL built-in functions
+- [ ] `ApplyRawDamage(mob, 50)` → HP decreases by 50, side effect recorded
+- [ ] `Random`/`RandomInt` produce identical sequences for same seed
+- [ ] Unknown function → WARNING log, returns None (no crash)
