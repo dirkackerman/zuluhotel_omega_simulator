@@ -183,6 +183,19 @@ class ConfigFile:
         """Flat key=value properties (for non-block configs)."""
         return dict(self._flat_properties)
 
+    def find_by_name(self, name: str) -> ConfigElement | None:
+        """Find an element whose ``Name`` property matches *name*.
+
+        This searches the ``Name`` property *inside* each block, not the
+        block identifier used by ``__getitem__``.  Useful for itemdesc.cfg
+        where blocks are keyed by hex objtype but items have a human-readable
+        ``Name`` property.
+        """
+        for elem in self._elements_ordered:
+            if elem.get("Name") == name:
+                return elem
+        return None
+
     def __repr__(self) -> str:
         return f"ConfigFile({self.path!r}, elements={len(self._elements_ordered)}, flat={len(self._flat_properties)})"
 

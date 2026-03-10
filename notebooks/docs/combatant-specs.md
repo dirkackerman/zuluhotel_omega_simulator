@@ -287,7 +287,7 @@ Instead of specifying weapon damage and armor AR manually, you can load real ite
 
 **Import path:**
 ```python
-from omega.model import create_weapon_from_config, create_armor_from_config
+from omega.model import find_weapon_by_name, find_armor_by_name
 from omega.config.cfg_parser import parse_config_file
 ```
 
@@ -304,33 +304,32 @@ itemdesc = parse_config_file(
 
 ### Looking up items by Name
 
-Items in `itemdesc.cfg` are indexed by their hex objtype (e.g., `Weapon 0x27A8`), but each has a `Name` property. The factory functions resolve items by scanning for a matching `Name`:
+Items in `itemdesc.cfg` are indexed by their hex objtype (e.g., `Weapon 0x27A8`), but each has a `Name` property. Use `find_weapon_by_name` and `find_armor_by_name` to look up items directly:
 
 ```python
-from omega.model import create_weapon_from_config
+from omega.model import find_weapon_by_name
 
-# Scan for a weapon named "TheHeartwood"
-heartwood_elem = None
-for elem in itemdesc:
-    if elem.get("Name") == "TheHeartwood":
-        heartwood_elem = elem
-        break
-
-heartwood = create_weapon_from_config(heartwood_elem)
+heartwood = find_weapon_by_name("TheHeartwood", itemdesc)
 # Result: Weapon(name="TheHeartwood", damage=1d18+35, speed=88,
 #                attribute=Swords, two_handed=True, max_hp=200)
 ```
 
 The shard's `TheHeartwood` is a two-handed bokuto dealing `1d18+35` damage (range 36–53), governed by the Swordsmanship skill. All properties — speed, hitscript, two-handed flag — are read directly from the config.
 
+For lower-level access, `ConfigFile.find_by_name(name)` returns the raw `ConfigElement` (or `None`):
+
+```python
+elem = itemdesc.find_by_name("TheHeartwood")
+# elem is a ConfigElement — pass to create_weapon_from_config() if needed
+```
+
 ### Player character with a config weapon
 
 ```python
-from omega.model import create_mobile_inline
+from omega.model import create_mobile_inline, find_weapon_by_name
 from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_TACTICS, SKILLID_ANATOMY
 
-# Load TheHeartwood from config (as above)
-heartwood = create_weapon_from_config(heartwood_elem)
+heartwood = find_weapon_by_name("TheHeartwood", itemdesc)
 
 player = create_mobile_inline(
     name="Heartwood Warrior",
@@ -346,13 +345,9 @@ player = create_mobile_inline(
 NPC weapons work the same way. For example, Modain's Staff:
 
 ```python
-modain_elem = None
-for elem in itemdesc:
-    if elem.get("Name") == "ModainsStaffWeapon":
-        modain_elem = elem
-        break
+from omega.model import find_weapon_by_name
 
-modain_staff = create_weapon_from_config(modain_elem)
+modain_staff = find_weapon_by_name("ModainsStaffWeapon", itemdesc)
 # Result: Weapon(name="ModainsStaffWeapon", damage=10d6, speed=50,
 #                attribute=Mace, two_handed=True, max_hp=250)
 ```
@@ -362,16 +357,9 @@ modain_staff = create_weapon_from_config(modain_elem)
 ### Armor from config
 
 ```python
-from omega.model import create_armor_from_config
+from omega.model import find_armor_by_name
 
-# Find chainmail coif (AR 16, covers Head + Neck)
-coif_elem = None
-for elem in itemdesc:
-    if elem.get("Name") == "ChainmailCoif":
-        coif_elem = elem
-        break
-
-coif = create_armor_from_config(coif_elem)
+coif = find_armor_by_name("ChainmailCoif", itemdesc)
 # Result: Armor(name="ChainmailCoif", ar=16, coverage=["Head", "Neck"], max_hp=70)
 # CProps like DefaultDex and MagicPenalty are carried over to the property bag
 ```
@@ -451,14 +439,13 @@ After creating from template, you can modify the NPC before running a simulation
 
 **Change the weapon:**
 ```python
-from omega.model import create_weapon_from_config, create_mobile_from_template
+from omega.model import find_weapon_by_name, create_mobile_from_template
 from omega.model.constants import LAYER_HAND1
 
 dk = create_mobile_from_template("dragonking", npcdesc, equip, itemdesc)
 
 # Replace with Modain's Staff instead of the default dragon king weapon
-modain_elem = next(e for e in itemdesc if e.get("Name") == "ModainsStaffWeapon")
-modain_staff = create_weapon_from_config(modain_elem)
+modain_staff = find_weapon_by_name("ModainsStaffWeapon", itemdesc)
 dk.equip(LAYER_HAND1, modain_staff)
 ```
 

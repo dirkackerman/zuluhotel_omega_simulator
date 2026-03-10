@@ -14,6 +14,8 @@ from omega.model.factories import (
     create_mobile_inline,
     create_weapon_from_config,
     equip_from_template,
+    find_armor_by_name,
+    find_weapon_by_name,
 )
 from omega.model.game_object import GameObject
 from omega.model.items import Armor, Weapon
@@ -31,6 +33,8 @@ __all__ = [
     "create_mobile_inline",
     "create_weapon_from_config",
     "equip_from_template",
+    "find_armor_by_name",
+    "find_weapon_by_name",
     "restore",
     "snapshot",
 ]

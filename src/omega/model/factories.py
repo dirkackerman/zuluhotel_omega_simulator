@@ -64,6 +64,48 @@ _WEAPON_ATTRIBUTE_NAMES: dict[str, int] = {
 }
 
 
+def find_weapon_by_name(name: str, itemdesc: ConfigFile) -> Weapon:
+    """Look up a weapon by its ``Name`` property in itemdesc.cfg and create it.
+
+    Parameters
+    ----------
+    name:
+        The ``Name`` property value (e.g., ``"TheHeartwood"``).
+    itemdesc:
+        Parsed itemdesc.cfg.
+
+    Raises
+    ------
+    KeyError
+        If no weapon with the given name is found.
+    """
+    elem = itemdesc.find_by_name(name)
+    if elem is None or elem.block_type != "Weapon":
+        raise KeyError(f"Weapon {name!r} not found in itemdesc")
+    return create_weapon_from_config(elem)
+
+
+def find_armor_by_name(name: str, itemdesc: ConfigFile) -> Armor:
+    """Look up an armor piece by its ``Name`` property in itemdesc.cfg and create it.
+
+    Parameters
+    ----------
+    name:
+        The ``Name`` property value (e.g., ``"ChainmailCoif"``).
+    itemdesc:
+        Parsed itemdesc.cfg.
+
+    Raises
+    ------
+    KeyError
+        If no armor with the given name is found.
+    """
+    elem = itemdesc.find_by_name(name)
+    if elem is None or elem.block_type != "Armor":
+        raise KeyError(f"Armor {name!r} not found in itemdesc")
+    return create_armor_from_config(elem)
+
+
 def create_weapon_from_config(elem: ConfigElement) -> Weapon:
     """Create a Weapon from an itemdesc.cfg element.
 
@@ -385,9 +427,9 @@ def _resolve_item_ref(ref: str, itemdesc: ConfigFile) -> ConfigElement | None:
         return result
 
     # Try scanning for Name property match
-    for elem in itemdesc:
-        if elem.get("Name") == ref:
-            return elem
+    by_name = itemdesc.find_by_name(ref)
+    if by_name is not None:
+        return by_name
 
     logger.debug("Item reference not resolved", ref=ref)
     return None

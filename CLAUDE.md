@@ -261,6 +261,8 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **[Path to V1](./planning/path_to_v1.md)** — Milestone plan (M0-M11) with dependency graph, deliverables, and acceptance criteria per milestone
 - **[Changelog to V1](./changelog/changelog_to_v1.md)** — Per-milestone change summaries with test criteria
 - **V1 status**: All milestones (M0–M11) complete. 670 tests, 374 hits/sec, submodule-independent fixtures.
+- **[Path to V1.5](./planning/path_to_v1.5.md)** — Elemental & Enchanted Weapons roadmap (M12–M22), three phases: elemental damage, sub-script execution, polish
+- **[Changelog to V1.5](./changelog/changelog_to_v1.5.md)** — Per-milestone change summaries for V1.5
 
 ## Commands
 - `uv run pytest` or `python -m pytest` - run tests
