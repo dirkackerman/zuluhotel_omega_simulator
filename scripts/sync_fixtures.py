@@ -59,6 +59,58 @@ def discover_include_tree(shard_root: Path) -> set[Path]:
     return set(trees.keys())
 
 
+def discover_enchantment_scripts(shard_root: Path) -> set[Path]:
+    """Discover enchantment sub-scripts from hitscriptdesc.cfg and hardcoded paths.
+
+    Parses hitscriptdesc.cfg to find all ``Hitscript`` values (e.g.,
+    ``:combat:spellstrikescript``) and resolves them to ``.src`` files.
+    Also includes the hardcoded ``reactivearmoronhit.src`` from
+    hitscriptinc.inc.
+    """
+    scripts: set[Path] = set()
+
+    # Hardcoded: reactive armor on-hit script (called directly in hitscriptinc.inc)
+    combat_dir = shard_root / "pkg" / "systems" / "combat"
+    reactive = combat_dir / "reactivearmoronhit.src"
+    if reactive.exists():
+        scripts.add(reactive.resolve())
+
+    # Data-driven: parse hitscriptdesc.cfg for Hitscript values
+    cfg_path = combat_dir / "config" / "hitscriptdesc.cfg"
+    if not cfg_path.exists():
+        return scripts
+
+    text = cfg_path.read_text(encoding="utf-8", errors="replace")
+    for match in re.finditer(r'^\s*Hitscript\s+(\S+)', text, re.MULTILINE):
+        hitscript = match.group(1).strip()
+        if hitscript.startswith(":"):
+            # Resolve :combat:name → pkg/systems/combat/name.src
+            parts = hitscript.lstrip(":").split(":", 1)
+            if len(parts) == 2:
+                pkg_name, file_name = parts
+                # Map package name to directory
+                pkg_dir = _find_package_dir(shard_root, pkg_name)
+                if pkg_dir:
+                    src = pkg_dir / f"{file_name}.src"
+                    if src.exists():
+                        scripts.add(src.resolve())
+
+    return scripts
+
+
+def _find_package_dir(shard_root: Path, pkg_name: str) -> Path | None:
+    """Find a package directory by scanning pkg.cfg files."""
+    pkg_root = shard_root / "pkg"
+    if not pkg_root.exists():
+        return None
+    for cfg in pkg_root.rglob("pkg.cfg"):
+        text = cfg.read_text(encoding="utf-8", errors="replace")
+        name_match = re.search(r'^\s*Name\s+(\S+)', text, re.MULTILINE)
+        if name_match and name_match.group(1).lower() == pkg_name.lower():
+            return cfg.parent
+    return None
+
+
 def discover_package_cfgs(shard_root: Path) -> list[Path]:
     """Find all pkg.cfg files under the shard's pkg/ directory."""
     pkg_root = shard_root / "pkg"
@@ -164,6 +216,19 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
     # 2. Copy all included files (preserving relative paths)
     print("\nCopying eScript source files...")
     for src_path in sorted(included_files):
+        rel = src_path.relative_to(shard_root.resolve())
+        dest = FIXTURE_DIR / rel
+        copy_file(src_path, dest)
+
+    # 2b. Discover and copy enchantment sub-scripts
+    print("\nDiscovering enchantment sub-scripts from hitscriptdesc.cfg...")
+    enchantment_scripts = discover_enchantment_scripts(shard_root)
+    print(f"  Found {len(enchantment_scripts)} enchantment scripts")
+
+    print("\nCopying enchantment scripts...")
+    for src_path in sorted(enchantment_scripts):
+        if src_path in included_files:
+            continue  # Already copied as part of include tree
         rel = src_path.relative_to(shard_root.resolve())
         dest = FIXTURE_DIR / rel
         copy_file(src_path, dest)

@@ -1,0 +1,93 @@
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/spelldata";
+include "include/random";
+include "include/areas";
+
+program spellstrikescript(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+	if (lower(TypeOf(attacker)) == "array")
+		defender 	:= attacker[2];
+		weapon 	:= attacker[3];
+		armor 	:= attacker[4];
+		basedamage := attacker[5];
+		rawdamage	:= attacker[6];
+		attacker 	:= attacker[1];
+	endif
+
+	// This is a workaround, need to find everything that is calling the hitscript besides omegaattack
+	if(IsThief(attacker) || IsBard(attacker) || IsMage(attacker))
+		if(!(weapon.graphic in ClassWeapons(GetClass(attacker))))
+			if(DEBUG_MODE)
+				PrintTextAbovePrivate( attacker, "Out of class weapon exiting hitscript.", attacker );
+			endif
+			return 0;
+		endif
+	endif
+
+	// Check if attacker is already casting something.
+    var is_casting := GetObjProperty(attacker, "#Casting");
+	if(is_casting)
+		SendSysMessage( attacker, "Spellstrike failed! You are already casting something!");
+		return 0;
+	endif
+
+	// Range limit.
+	var dist := Distance( attacker, defender );
+	if( (dist < 1) || (dist > 14 ) )
+		return;
+	endif
+
+	var chance := Cint(GetObjProperty(weapon, "ChanceOfEffect"));
+	if(RandomDiceStr("1d100") <= chance)
+		var spellid := GetObjProperty( weapon , "HitWithSpell" );
+		if(spellid == 666)
+			var chuns := Random(5)+1;
+			case(chuns)
+				1:	spellid := 51;
+					break;
+				2:	spellid := 55;
+					break;
+				3:	spellid := 46;
+					break;
+				4:	spellid := 5;
+					break;
+				5:	spellid := 37;
+					break;
+			endcase
+		endif
+		var circle := Cint(GetObjProperty(weapon, "EffectCircle"));
+		var targ;
+		var caster;
+
+		if (GetObjProperty( weapon , "Cursed"))
+			targ := attacker;
+			caster := defender;
+		else
+			targ := defender;
+			caster := attacker;
+		endif
+
+		var spellparms := { };
+		spellparms[1] := "#MOB";
+		spellparms[2] := caster;
+		spellparms[3] := targ;
+		spellparms[4] := circle;
+		spellparms[5] := 1;
+		Start_Script( GetScript( spellid ) , spellparms );
+
+	endif
+
+	//Slayer checks moved to RecalcPhysicalDmg called by RecalcDmg - No additional logic is required here
+	//Slayer checks will apply in RecalcDmg IF the weapon has a SlayType property
+	if( GetObjProperty( attacker , CLASSEID_POWERPLAYER ) )
+		rawdamage := (RecalcDmg( attacker , defender , weapon , armor , basedamage + 10 )*0.9);
+	else
+		rawdamage := (RecalcDmg( attacker , defender , weapon , armor , basedamage + 10 )*0.8);
+	endif
+
+	DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
+
+endprogram

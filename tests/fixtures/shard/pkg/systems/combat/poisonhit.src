@@ -1,0 +1,42 @@
+use uo;
+use os;
+
+include "include/dotempmods";
+include ":combat:hitscriptinc";
+include "include/areas";
+
+program poisonhit(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+
+		if (lower(TypeOf(attacker)) == "array")
+			defender 	:= attacker[2];
+			weapon 	:= attacker[3];
+			armor 	:= attacker[4];
+			basedamage := attacker[5];
+			rawdamage	:= attacker[6];
+			attacker 	:= attacker[1];
+		endif
+		
+        var poison := GetObjProperty( weapon , "Poisonlvl" );
+        var targ;
+        
+        if( GetObjProperty( weapon , "Cursed" ) )
+            targ := attacker;
+        else
+            targ := defender;
+        endif
+        
+		
+		var noPKatk := GetObjProperty(attacker, "NOPKAREA");
+		var noPKdef := GetObjProperty(defender, "NOPKAREA");
+		if(attacker.isa(POLCLASS_NPC) && GetObjProperty( attacker , CLASSEID_THIEF ))
+			SetPoison( targ , poison , "You have been poisoned by " + attacker.name, attacker);
+		elseif((!attacker.cmdlevel && defender.isa(POLCLASS_MOBILE) && !defender.isa(POLCLASS_NPC) && defender != attacker) && (noPKatk || noPKdef))	
+		
+		else
+			SetPoison( targ , poison , "You have been poisoned by " + attacker.name);
+		endif
+        rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage );
+        DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
+	
+endprogram

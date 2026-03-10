@@ -109,3 +109,30 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Verify `start_script()` with no executor returns None gracefully
 
 **Key insight**: Sub-scripts share the same function registry and global scope as the main program. This is critical because shard sub-scripts (`reactivearmoronhit.src`, `piercingscript.src`, etc.) include the same files as `mainhit.src` and call the same functions (`ApplyTheDamage`, `RecalcDmg`). Parsing just the `.src` file (without re-parsing includes) is sufficient since all functions are already registered.
+
+---
+
+## M16 — Fixture Sync for Enchantment Scripts
+
+**Summary**: Added 13 enchantment sub-scripts to the test fixture set via data-driven discovery from `hitscriptdesc.cfg`. Fixture count increased from 209 to 222 files (891 KB). No new include files needed — all dependencies were already in the fixture tree.
+
+**Changes**:
+- **`discover_enchantment_scripts()`** (`sync_fixtures.py`): New function — parses `hitscriptdesc.cfg` with regex to extract unique `Hitscript` values, resolves `:combat:name` → `.src` file paths. Also includes the hardcoded `reactivearmoronhit.src`.
+- **`_find_package_dir()`** (`sync_fixtures.py`): Helper to resolve package names to directories by scanning `pkg.cfg` files.
+- **`sync_fixtures()`** (`sync_fixtures.py`): New step 2b between include tree copy and pkg.cfg copy — discovers and copies enchantment scripts.
+
+**Scripts added** (13 files under `tests/fixtures/shard/pkg/systems/combat/`):
+- Spell type (1): `spellstrikescript.src`
+- Slayer type (1): `slayerscript.src`
+- Effect type (7): `piercingscript.src`, `banishscript.src`, `poisonhit.src`, `lifedrainscript.src`, `manadrainscript.src`, `staminadrainscript.src`, `blindingscript.src`
+- Greater type (3): `dualplanarscript.src`, `voidscript.src`, `trielementalscript.src`
+- Hardcoded (1): `reactivearmoronhit.src`
+
+**Testing**:
+- Verify `sync_fixtures.py` discovers exactly 13 enchantment scripts
+- Verify all 13 `.src` files are present in `tests/fixtures/shard/pkg/systems/combat/`
+- Verify no new include files were needed (all 8 unique includes already in fixture tree)
+- Verify all existing tests still pass after fixture refresh (777 tests)
+- Verify `sync_fixtures.py --dry-run` previews the enchantment scripts
+
+**Key insight**: Discovery is data-driven — `hitscriptdesc.cfg` is the source of truth for which scripts exist. When the shard adds or removes enchantments, `sync_fixtures.py` automatically adapts without code changes.

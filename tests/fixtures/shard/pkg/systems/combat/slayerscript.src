@@ -1,0 +1,23 @@
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/areas";
+
+program slayerscript(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+	if (lower(TypeOf(attacker)) == "array")
+		defender 	:= attacker[2];
+		weapon 		:= attacker[3];
+		armor 		:= attacker[4];
+		basedamage	:= attacker[5];
+		rawdamage	:= attacker[6];
+		attacker 	:= attacker[1];
+	endif
+
+    //Slayer checks moved to RecalcPhysicalDmg called by RecalcDmg - No additional logic is required here
+    //This script does nothing special when compared to mainhit, EXCEPT is piercing
+	rawdamage := RecalcDmg(attacker, defender, weapon, armor, basedamage, 1); //NOTE: All slayer scripts items are piercing
+	DealDamage(attacker, defender, weapon, armor, basedamage, rawdamage);
+
+endprogram

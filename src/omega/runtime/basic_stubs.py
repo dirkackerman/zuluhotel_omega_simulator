@@ -272,21 +272,21 @@ def read_game_clock() -> int:
 def send_sys_message(
     mobile: Any = None, text: Any = "", font: Any = None, color: Any = None
 ) -> None:
-    """Send system message. Logs when debug_mode is enabled."""
+    """Send system message. Logs the message text when debug_mode is enabled."""
     ctx = get_context()
     if ctx.debug_mode:
         name = getattr(mobile, "name", "?")
-        msg_logger.info("SendSysMessage", target=name, text=str(text))
+        msg_logger.info(f"[{name}] {text}")
 
 
 @pol_function("uo", "PrintTextAbove")
 @pol_function("", "PrintTextAbove")
 def print_text_above(mobile: Any = None, text: Any = "") -> None:
-    """Display text above character. Logs when debug_mode is enabled."""
+    """Display text above character. Logs the message text when debug_mode is enabled."""
     ctx = get_context()
     if ctx.debug_mode:
         name = getattr(mobile, "name", "?")
-        msg_logger.info("PrintTextAbove", target=name, text=str(text))
+        msg_logger.info(f"[{name}] {text}")
 
 
 @pol_function("uo", "PrintTextAbovePrivate")
@@ -294,11 +294,20 @@ def print_text_above(mobile: Any = None, text: Any = "") -> None:
 def print_text_above_private(
     mobile: Any = None, text: Any = "", viewer: Any = None
 ) -> None:
-    """Display text visible only to viewer. Logs when debug_mode is enabled."""
+    """Display text visible only to viewer. Logs the message text when debug_mode is enabled."""
     ctx = get_context()
     if ctx.debug_mode:
         name = getattr(mobile, "name", "?")
-        msg_logger.info("PrintTextAbovePrivate", target=name, text=str(text))
+        msg_logger.info(f"[{name}] {text}")
+
+
+@pol_function("basic", "Print")
+@pol_function("", "Print")
+def print_stub(text: Any = "") -> None:
+    """eScript Print() — server console output. Logs the message text when debug_mode is enabled."""
+    ctx = get_context()
+    if ctx.debug_mode:
+        msg_logger.info(f"{text}")
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,38 @@
+////////////////////////////////////////////////////////////////////////////////////
+//										   			    //
+//      Piercing hitscript make a weapon to go through any armor deal a raw  	    //
+//      amount of damage, defined in the piercingDam porperty of the weapon.	    //
+//								  		   			    //
+////////////////////////////////////////////////////////////////////////////////////
+
+
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/areas";
+
+
+program piercingscript(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+		if (lower(TypeOf(attacker)) == "array")
+			defender 	:= attacker[2];
+			weapon 	:= attacker[3];
+			armor 	:= attacker[4];
+			basedamage := attacker[5];
+			rawdamage	:= attacker[6];
+			attacker 	:= attacker[1];
+		endif
+		//Print("Piercing script launched!");
+		
+        rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage , 1 );
+        
+        if( GetObjProperty( weapon , "Cursed" ) )
+            rawdamage := Cint( rawdamage / 2 );
+            ApplyTheDamage( attacker , attacker , rawdamage );
+        else
+            DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
+        endif
+
+
+endprogram

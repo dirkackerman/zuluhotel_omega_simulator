@@ -92,12 +92,12 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Add enchantment sub-scripts to the test fixture set.
 
 **Deliverables**:
-- [ ] Identify all `.src` files referenced by hitscriptdesc.cfg entries (up to 45 scripts across categories)
-- [ ] Determine which scripts are reachable from the combat path and required for testing
-- [ ] Update `scripts/sync_fixtures.py` to discover and copy enchantment scripts and their includes
-- [ ] Re-run sync: `python scripts/sync_fixtures.py`
-- [ ] Verify fixture completeness: all referenced enchantment scripts are present
-- [ ] Update `FIXTURE_SHARD_ROOT` test count if fixture file count changes
+- [x] Identify all `.src` files referenced by hitscriptdesc.cfg entries (12 unique scripts across 4 categories)
+- [x] Determine which scripts are reachable from the combat path and required for testing (all 12 + reactivearmoronhit = 13)
+- [x] Update `scripts/sync_fixtures.py` to discover and copy enchantment scripts and their includes
+- [x] Re-run sync: `python scripts/sync_fixtures.py` (222 files, 891 KB)
+- [x] Verify fixture completeness: all referenced enchantment scripts are present
+- [x] Update CLAUDE.md fixture count (209 → 222)
 
 **Key files**: `scripts/sync_fixtures.py`, `tests/fixtures/shard/`
 
@@ -110,6 +110,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Implement the reactive armor on-hit script.
 
 **Deliverables**:
+- [ ] Stub `Print()` as a debug-mode logger (like `SendSysMessage`/`PrintTextAbovePrivate`) — needed by enchantment scripts
 - [ ] Parse and include `:combat:reactivearmoronhit.src` in the combat script set
 - [ ] Verify the reactive armor script executes through the sub-script executor
 - [ ] Handle the reactive armor flow: read `ReactiveArmor` property from defender → calculate return damage → apply to attacker
@@ -230,7 +231,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 | M13 | Elemental Damage Application | 1 | M12 | **Done** |
 | M14 | Elemental Damage Reporting | 1 | M13 | **Done** |
 | M15 | Sub-Script Executor | 2 | — | **Done** |
-| M16 | Fixture Sync for Enchantment Scripts | 2 | M15 | Not started |
+| M16 | Fixture Sync for Enchantment Scripts | 2 | M15 | **Done** |
 | M17 | Reactive Armor | 2 | M15, M16 | Not started |
 | M18 | Spell Strike Enchantments | 2 | M15, M16, M12 | Not started |
 | M19 | Effect Enchantments | 2 | M15, M16 | Not started |

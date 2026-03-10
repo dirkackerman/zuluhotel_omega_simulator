@@ -237,7 +237,7 @@ pytest                    # everything (777 tests, ~57s)
 All tests run unconditionally — no markers, no skips, no submodule dependency.
 
 ### Test fixture locality principle
-- Tests **never** directly reference the shard submodule. All shard resources are snapshotted into `tests/fixtures/shard/` (209 files, 866 KB).
+- Tests **never** directly reference the shard submodule. All shard resources are snapshotted into `tests/fixtures/shard/` (222 files, 891 KB).
 - `tests/conftest.py` provides session-scoped fixtures: `fixture_shard` (ShardData), `fixture_parse_results` (parsed combat scripts).
 - `FIXTURE_SHARD_ROOT` from `tests/conftest.py` is the canonical path for all test files needing shard data.
 
@@ -273,7 +273,7 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **[Path to V1](./planning/path_to_v1.md)** — Milestone plan (M0-M11) with dependency graph, deliverables, and acceptance criteria per milestone
 - **[Changelog to V1](./changelog/changelog_to_v1.md)** — Per-milestone change summaries with test criteria
 - **V1 status**: All milestones (M0–M11) complete. 374 hits/sec, submodule-independent fixtures.
-- **V1.5 status**: M12–M15 complete (elemental damage + sub-script executor). 777 tests. Phase 1 done, Phase 2 started.
+- **V1.5 status**: M12–M16 complete (elemental damage + sub-script executor + fixture sync). 777 tests. Phase 2 infrastructure done, enchantment milestones (M17–M20) unblocked.
 - **[Path to V1.5](./planning/path_to_v1.5.md)** — Elemental & Enchanted Weapons roadmap (M12–M22), three phases: elemental damage, sub-script execution, polish
 - **[Changelog to V1.5](./changelog/changelog_to_v1.5.md)** — Per-milestone change summaries for V1.5
 

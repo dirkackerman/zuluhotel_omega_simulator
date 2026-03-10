@@ -1,0 +1,66 @@
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/client";
+include "include/random";
+include "include/areas";
+
+program manadrainscript(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+
+		if (lower(TypeOf(attacker)) == "array")
+			defender 	:= attacker[2];
+			weapon 	:= attacker[3];
+			armor 	:= attacker[4];
+			basedamage := attacker[5];
+			rawdamage	:= attacker[6];
+			attacker 	:= attacker[1];
+		endif
+		
+        var drained;
+        var drainer;
+        var amount := RandomInt(40) + GetObjProperty(weapon , "dmg_mod");
+        var cursed := GetObjProperty( weapon , "Cursed" );
+            
+        rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage);
+        
+        if( cursed )
+            rawdamage := Cint( rawdamage / 2 );
+            ApplyTheDamage( attacker , attacker , rawdamage );
+            drained := attacker;
+            drainer := defender;
+        else
+            DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
+            drained := defender;
+            drainer := attacker;
+        endif
+		
+		if(GetObjProperty(defender, "InSafeArea"))
+			return 0;
+		endif
+		amount := rawdamage/2;
+
+            if(cursed)
+                PlayObjectCenteredEffectEx( drained, 14154, 8, 15, 88);
+            else
+                PlayObjectCenteredEffect(drained, 
+                                         FX_SPELL_MANA_VAMPIRE,
+                                         SPEED_SPELL_MANA_VAMPIRE,
+                                         LOOP_SPELL_MANA_VAMPIRE);
+            endif
+        SetMana(drained, GetMana(drained) - amount); //Mana Taken
+            if( GetMana(drained) > GetMaxMana(drained))
+                SetMana(drained, 0);
+            endif
+            if(cursed)
+                PlaySoundEffect( drainer , SFX_C7);
+            else
+                PlaySoundEffect( drainer , SFX_SPELL_MANA_VAMPIRE );
+            endif
+        SetMana(drainer, GetMana(drainer)+amount); //Mana Given
+            if( GetMana(drainer) > GetMaxMana(drainer))
+                SetMana(drainer, GetMaxMana(drainer));
+            endif
+
+endprogram

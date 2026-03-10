@@ -1,0 +1,52 @@
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/damages";
+include "include/client";
+include "include/areas";
+include "include/attributes";
+
+program lifedrainscript(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+		if (lower(TypeOf(attacker)) == "array")
+			defender 	:= attacker[2];
+			weapon 	:= attacker[3];
+			armor 	:= attacker[4];
+			basedamage := attacker[5];
+			rawdamage	:= attacker[6];
+			attacker 	:= attacker[1];
+		endif
+		
+        var drained;
+        var drainer;
+            
+        rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage );
+        
+        if( GetObjProperty( weapon , "Cursed" ) )
+            drained := attacker;
+            drainer := defender;
+        else
+            drained := defender;
+            drainer := attacker;
+        endif
+				
+		if(GetObjProperty(defender, "InSafeArea"))
+			return 0;
+		endif
+
+        var amount := rawdamage / 2;
+        amount := amount * 0.75;
+        
+        DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
+
+        var rdm := Random(10000);
+		if(rdm < 5000)
+            SetHP(drainer,GetHP(drainer) + amount);
+            if( GetHP(drainer) > GetMaxHP(drainer) )
+                SetHP(drainer,GetMaxHP(drainer));
+            endif
+        endif
+        
+endprogram
+

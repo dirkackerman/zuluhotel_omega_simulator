@@ -1,0 +1,56 @@
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/client";
+include "include/areas";
+
+
+program staminadrainscript(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+
+		if (lower(TypeOf(attacker)) == "array")
+			defender 	:= attacker[2];
+			weapon 	:= attacker[3];
+			armor 	:= attacker[4];
+			basedamage := attacker[5];
+			rawdamage	:= attacker[6];
+			attacker 	:= attacker[1];
+		endif
+		
+        var drained;
+        var drainer;
+            
+        rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage );
+
+        if( GetObjProperty( weapon , "Cursed" ) )
+            drained := attacker;
+            drainer := defender;
+        else
+            drained := defender;
+            drainer := attacker;
+        endif
+		
+		if(GetObjProperty(defender, "InSafeArea"))
+			return 0;
+		endif
+        var amount := rawdamage / 2;
+        
+        var rdm := Random(10000);
+		if(rdm < 5000)
+            if( amount > GetStamina(drained))
+                SetStamina(drained, 0);//drained.stamina := 0;
+            else
+                SetStamina(drained, GetStamina(drained)-amount);//drained.stamina := drained.stamina - amount;
+            endif
+            
+            SetStamina(drainer, GetStamina(drainer) + amount);//drainer.stamina := drainer.stamina + amount;
+            if( GetStamina(drainer) > GetMaxStamina(drainer))//drainer.stamina > drainer.maxstamina)
+                SetStamina(drainer, GetMaxStamina(drainer));//drainer.stamina := drainer.maxstamina;
+            endif
+        endif
+        
+        DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
+
+endprogram
+

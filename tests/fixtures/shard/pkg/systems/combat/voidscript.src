@@ -1,0 +1,52 @@
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/client";
+include "include/random";
+include "include/areas";
+
+program voidscript(attacker, defender, weapon, armor, basedamage, rawdamage)
+
+	if (lower(TypeOf(attacker)) == "array")
+		defender	:= attacker[2];
+		weapon		:= attacker[3];
+		armor		:= attacker[4];
+		basedamage	:= attacker[5];
+		rawdamage	:= attacker[6];
+		attacker	:= attacker[1];
+	endif
+	
+	var drained;
+	var drainer;
+	
+	rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage + 15 , 1 );
+	
+	if( GetObjProperty( weapon , "Cursed" ) )
+		rawdamage := Cint( rawdamage / 2 );
+		ApplyTheDamage( attacker , attacker , rawdamage );
+		drained := attacker;
+		drainer := defender;
+	else
+		DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
+		drained := defender;
+		drainer := attacker;
+	endif
+	
+	if(GetObjProperty(defender, "InSafeArea"))
+		return 0;
+	endif
+	var amount := rawdamage/2;
+	case(RandomInt(3))
+		0:
+			SetHP(drainer, GetHP(drainer)+amount);
+		1:
+			SetMana(drained, GetMana(drained) - amount);
+			SetMana(drainer, GetMana(drainer)+amount);
+		2:
+			SetStamina(drained, GetStamina(drained) - amount);
+			SetStamina(drainer, GetStamina(drainer)+amount);
+	endcase
+
+endprogram
+
