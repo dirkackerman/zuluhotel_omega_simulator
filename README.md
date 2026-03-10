@@ -1,6 +1,6 @@
 # Zuluhotel Omega Combat Simulator
 
-An eScript interpreter and combat simulator for the [Zuluhotel Omega](https://github.com/zuluhotel) UO shard. Parses and executes POL eScript combat scripts to model damage scenarios (physical hits, resistance, mitigation) without running a full POL server. Built for game designers iterating on balance.
+An eScript interpreter and combat simulator for the [Zuluhotel Omega](https://zuluhotelomega.com/) UO shard. Parses and executes POL eScript combat scripts to model damage scenarios (physical hits, resistance, mitigation) without running a full POL server. Built for game designers iterating on balance.
 
 ## Requirements
 

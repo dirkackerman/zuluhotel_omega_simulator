@@ -20,6 +20,7 @@ from typing import Any
 
 from omega.combat.hit import execute_hit
 from omega.combat.result import HitResult
+from omega.interpreter.executor import Executor
 from omega.logging import get_logger
 from omega.model.snapshot import restore, snapshot
 from omega.parser.parser import ParseResult
@@ -42,6 +43,7 @@ def run_scenario(
     config_resolver: Any = None,
     em_modules_dir: Path | None = None,
     shard: Any = None,
+    _executor: Executor | None = None,
 ) -> CellResult:
     """Run a single scenario (N iterations) and return aggregated results.
 
@@ -79,6 +81,9 @@ def run_scenario(
     attacker, weapon, _atk_armor = build_combatant(scenario.attacker)
     defender, _def_weapon, armor = build_combatant(scenario.defender)
 
+    # Build executor once — reused across all iterations
+    cached_executor = _executor or Executor(parse_results, em_modules_dir=em_modules_dir)
+
     # Snapshot for per-iteration reset
     atk_snap = snapshot(attacker)
     def_snap = snapshot(defender)
@@ -99,7 +104,7 @@ def run_scenario(
             rng_seed=seed,
             debug=scenario.debug_mode,
             config_resolver=config_resolver,
-            em_modules_dir=em_modules_dir,
+            executor=cached_executor,
         )
         results.append(result)
 
@@ -143,6 +148,9 @@ def run_sweep(
             "Either parse_results or shard must be provided"
         )
 
+    # Build executor once for all cells in the sweep
+    shared_executor = Executor(parse_results, em_modules_dir=em_modules_dir)
+
     # Build the Cartesian product grid
     if not sweep.variables:
         # No variables — just run the base scenario
@@ -152,6 +160,7 @@ def run_sweep(
             parse_results=parse_results,
             config_resolver=config_resolver,
             em_modules_dir=em_modules_dir,
+            _executor=shared_executor,
         )
         elapsed = time.monotonic() - start
         return SimulationResult(cells=[cell], total_time=elapsed)
@@ -212,6 +221,7 @@ def run_sweep(
             parse_results=parse_results,
             config_resolver=config_resolver,
             em_modules_dir=em_modules_dir,
+            _executor=shared_executor,
         )
         cell.variable_values = dict(zip(var_names, combo))
         cells.append(cell)

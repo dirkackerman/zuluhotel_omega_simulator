@@ -20,8 +20,25 @@ from omega.interpreter.types import (
     is_truthy,
 )
 from omega.logging import get_logger
+from antlr4 import TerminalNode
+
 from omega.parser.gen.EscriptParser import EscriptParser
 from omega.parser.gen.EscriptParserVisitor import EscriptParserVisitor
+
+# Pre-build type dispatch table for visitPrimary.
+# Maps ANTLR4 context class → handler name (resolved at first call).
+_PRIMARY_RULE_TYPES: tuple[type, ...] = (
+    EscriptParser.LiteralContext,
+    EscriptParser.ParExpressionContext,
+    EscriptParser.FunctionCallContext,
+    EscriptParser.ScopedFunctionCallContext,
+    EscriptParser.FunctionReferenceContext,
+    EscriptParser.ExplicitArrayInitializerContext,
+    EscriptParser.BareArrayInitializerContext,
+    EscriptParser.ExplicitStructInitializerContext,
+    EscriptParser.ExplicitDictInitializerContext,
+    EscriptParser.ExplicitErrorInitializerContext,
+)
 
 logger = get_logger("omega.interpreter")
 
@@ -94,22 +111,23 @@ class EscriptInterpreter(EscriptParserVisitor):
     # ------------------------------------------------------------------
 
     def visitBlock(self, ctx: EscriptParser.BlockContext) -> Any:
+        # Direct call to visitStatement avoids visit() → accept() → hasattr() chain
         result = None
         for stmt in ctx.statement() or []:
-            result = self.visit(stmt)
+            result = self.visitStatement(stmt)
         return result
 
     def visitStatement(self, ctx: EscriptParser.StatementContext) -> Any:
-        # Expression statement
+        # Expression statement — direct call avoids visit/accept overhead
         if ctx.statementExpression is not None:
-            return self.visit(ctx.statementExpression)
+            return self.visitExpression(ctx.statementExpression)
         # Empty statement (bare semicolon)
         if ctx.SEMI() is not None and ctx.getChildCount() == 1:
             return None
-        # Delegate to specific statement type
+        # Delegate to specific statement type via accept (visitor dispatch)
         child = ctx.getChild(0)
         if child is not None:
-            return self.visit(child)
+            return child.accept(self)
         return None
 
     # ------------------------------------------------------------------
@@ -172,14 +190,14 @@ class EscriptInterpreter(EscriptParserVisitor):
         par_exprs = ctx.parExpression()
         blocks = ctx.block()
 
-        # First condition (if)
-        if is_truthy(self.visit(par_exprs[0])):
+        # First condition (if) — direct call avoids visit/accept
+        if is_truthy(self.visitParExpression(par_exprs[0])):
             return self.visitBlock(blocks[0])
 
         # Elseif conditions
         elseif_count = len(par_exprs) - 1
         for i in range(elseif_count):
-            if is_truthy(self.visit(par_exprs[i + 1])):
+            if is_truthy(self.visitParExpression(par_exprs[i + 1])):
                 return self.visitBlock(blocks[i + 1])
 
         # Else block
@@ -194,9 +212,11 @@ class EscriptInterpreter(EscriptParserVisitor):
 
     def visitWhileStatement(self, ctx: EscriptParser.WhileStatementContext) -> Any:
         result = None
-        while is_truthy(self.visit(ctx.parExpression())):
+        par = ctx.parExpression()
+        blk = ctx.block()
+        while is_truthy(self.visitParExpression(par)):
             try:
-                result = self.visitBlock(ctx.block())
+                result = self.visitBlock(blk)
             except BreakSignal:
                 break
             except ContinueSignal:
@@ -205,27 +225,31 @@ class EscriptInterpreter(EscriptParserVisitor):
 
     def visitDoStatement(self, ctx: EscriptParser.DoStatementContext) -> Any:
         result = None
+        par = ctx.parExpression()
+        blk = ctx.block()
         while True:
             try:
-                result = self.visitBlock(ctx.block())
+                result = self.visitBlock(blk)
             except BreakSignal:
                 break
             except ContinueSignal:
                 pass
-            if not is_truthy(self.visit(ctx.parExpression())):
+            if not is_truthy(self.visitParExpression(par)):
                 break
         return result
 
     def visitRepeatStatement(self, ctx: EscriptParser.RepeatStatementContext) -> Any:
         result = None
+        expr = ctx.expression()
+        blk = ctx.block()
         while True:
             try:
-                result = self.visitBlock(ctx.block())
+                result = self.visitBlock(blk)
             except BreakSignal:
                 break
             except ContinueSignal:
                 pass
-            if is_truthy(self.visit(ctx.expression())):
+            if is_truthy(self.visitExpression(expr)):
                 break
         return result
 
@@ -240,8 +264,8 @@ class EscriptInterpreter(EscriptParserVisitor):
 
     def visitBasicForStatement(self, ctx: EscriptParser.BasicForStatementContext) -> Any:
         name = ctx.IDENTIFIER().getText()
-        start = self.visit(ctx.expression(0))
-        end = self.visit(ctx.expression(1))
+        start = self.visitExpression(ctx.expression(0))
+        end = self.visitExpression(ctx.expression(1))
         start = _to_int(start)
         end = _to_int(end)
 
@@ -261,23 +285,24 @@ class EscriptInterpreter(EscriptParserVisitor):
 
     def visitCstyleForStatement(self, ctx: EscriptParser.CstyleForStatementContext) -> Any:
         exprs = ctx.expression()
+        blk = ctx.block()
         # init
-        self.visit(exprs[0])
+        self.visitExpression(exprs[0])
         result = None
-        while is_truthy(self.visit(exprs[1])):
+        while is_truthy(self.visitExpression(exprs[1])):
             try:
-                result = self.visitBlock(ctx.block())
+                result = self.visitBlock(blk)
             except BreakSignal:
                 break
             except ContinueSignal:
                 pass
             # step
-            self.visit(exprs[2])
+            self.visitExpression(exprs[2])
         return result
 
     def visitForeachStatement(self, ctx: EscriptParser.ForeachStatementContext) -> Any:
         name = ctx.IDENTIFIER().getText()
-        iterable = self.visit(ctx.foreachIterableExpression())
+        iterable = self.visitForeachIterableExpression(ctx.foreachIterableExpression())
         self.scopes.define(name, UNINIT)
 
         result = None
@@ -307,7 +332,7 @@ class EscriptInterpreter(EscriptParserVisitor):
     # ------------------------------------------------------------------
 
     def visitCaseStatement(self, ctx: EscriptParser.CaseStatementContext) -> Any:
-        value = self.visit(ctx.expression())
+        value = self.visitExpression(ctx.expression())
 
         for group in ctx.switchBlockStatementGroup():
             labels = group.switchLabel()
@@ -362,47 +387,34 @@ class EscriptInterpreter(EscriptParserVisitor):
     # ------------------------------------------------------------------
 
     def visitExpression(self, ctx: EscriptParser.ExpressionContext) -> Any:
-        # Primary expression
-        primary = ctx.primary()
-        if primary is not None:
-            return self.visit(primary)
+        # Fast path: use pre-set token attributes to avoid getTypedRuleContext.
+        children = ctx.children
 
-        exprs = ctx.expression()
+        # Single child → must be a primary (most common case)
+        if len(children) == 1:
+            return self.visitPrimary(children[0])
 
-        # Expression suffix (member access, indexing, method call)
-        suffix = ctx.expressionSuffix()
-        if suffix is not None:
-            obj = self.visit(exprs[0])
-            return self._eval_suffix(obj, suffix, exprs[0])
+        # Binary operator — very common (3 children: expr bop expr)
+        bop = ctx.bop
+        if bop is not None:
+            op = bop.text.lower()
+            return self._eval_binary(op, children[0], children[2] if len(children) > 2 else None, ctx)
 
-        # Postfix operators
-        if ctx.postfix is not None:
-            op = ctx.postfix.text
-            name = self._get_lvalue_name(exprs[0])
-            val = self.visit(exprs[0])
-            val = _to_number(val)
-            if op == "++":
-                self.scopes.set(name, val + 1)
-                return val  # return old value
-            else:
-                self.scopes.set(name, val - 1)
-                return val
-
-        # Prefix operators
+        # Two children: prefix+expr or expr+postfix or expr+suffix
         if ctx.prefix is not None:
             op = ctx.prefix.text.lower()
-            val = self.visit(exprs[0])
+            val = self.visitExpression(children[1])
             if op == "+":
                 return _to_number(val)
             elif op == "-":
                 return -_to_number(val)
             elif op == "++":
-                name = self._get_lvalue_name(exprs[0])
+                name = self._get_lvalue_name(children[1])
                 val = _to_number(val) + 1
                 self.scopes.set(name, val)
                 return val
             elif op == "--":
-                name = self._get_lvalue_name(exprs[0])
+                name = self._get_lvalue_name(children[1])
                 val = _to_number(val) - 1
                 self.scopes.set(name, val)
                 return val
@@ -411,16 +423,26 @@ class EscriptInterpreter(EscriptParserVisitor):
             elif op in ("!", "not"):
                 return 0 if is_truthy(val) else 1
 
-        # Binary operators
-        if ctx.bop is not None:
-            op = ctx.bop.text.lower()
-            return self._eval_binary(op, exprs[0], exprs[1] if len(exprs) > 1 else None, ctx)
+        if ctx.postfix is not None:
+            op = ctx.postfix.text
+            name = self._get_lvalue_name(children[0])
+            val = self.visitExpression(children[0])
+            val = _to_number(val)
+            if op == "++":
+                self.scopes.set(name, val + 1)
+                return val
+            else:
+                self.scopes.set(name, val - 1)
+                return val
+
+        # Expression suffix (member access, indexing, method call)
+        # Two children: expr + suffix
+        if len(children) == 2 and isinstance(children[1], EscriptParser.ExpressionSuffixContext):
+            obj = self.visitExpression(children[0])
+            return self._eval_suffix(obj, children[1], children[0])
 
         # Fallback
-        if len(exprs) == 1:
-            return self.visit(exprs[0])
-
-        return None
+        return self.visitExpression(children[0])
 
     def _eval_binary(
         self,
@@ -435,20 +457,20 @@ class EscriptInterpreter(EscriptParserVisitor):
 
         # Short-circuit logical operators
         if op in ("&&", "and"):
-            left = self.visit(left_ctx)
+            left = self.visitExpression(left_ctx)
             if not is_truthy(left):
                 return left
-            return self.visit(right_ctx)
+            return self.visitExpression(right_ctx)
 
         if op in ("||", "or"):
-            left = self.visit(left_ctx)
+            left = self.visitExpression(left_ctx)
             if is_truthy(left):
                 return left
-            return self.visit(right_ctx)
+            return self.visitExpression(right_ctx)
 
         # Eager evaluation for all other operators
-        left = self.visit(left_ctx)
-        right = self.visit(right_ctx) if right_ctx is not None else None
+        left = self.visitExpression(left_ctx)
+        right = self.visitExpression(right_ctx) if right_ctx is not None else None
 
         # Arithmetic
         if op == "+":
@@ -516,7 +538,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         left_ctx: EscriptParser.ExpressionContext,
         right_ctx: EscriptParser.ExpressionContext | None,
     ) -> Any:
-        right = self.visit(right_ctx) if right_ctx is not None else UNINIT
+        right = self.visitExpression(right_ctx) if right_ctx is not None else UNINIT
 
         # Simple variable assignment
         lvalue = self._resolve_lvalue(left_ctx)
@@ -626,7 +648,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         # Indexing: obj[expr]
         idx = suffix.indexingSuffix()
         if idx is not None:
-            indices = [self.visit(e) for e in idx.expressionList().expression()]
+            indices = [self.visitExpression(e) for e in idx.expressionList().expression()]
             result = obj
             for index in indices:
                 result = _get_index(result, index)
@@ -637,7 +659,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         if method is not None:
             name = method.IDENTIFIER().getText()
             expr_list = method.expressionList()
-            args = [self.visit(e) for e in expr_list.expression()] if expr_list else []
+            args = [self.visitExpression(e) for e in expr_list.expression()] if expr_list else []
             return self._call_method(obj, name, args)
 
         # Navigation: obj.member
@@ -712,59 +734,21 @@ class EscriptInterpreter(EscriptParserVisitor):
     # ------------------------------------------------------------------
 
     def visitPrimary(self, ctx: EscriptParser.PrimaryContext) -> Any:
-        # Literal
-        lit = ctx.literal()
-        if lit is not None:
-            return self.visit(lit)
+        # Fast path: dispatch on the type of the first child node
+        # instead of 11 sequential getTypedRuleContext calls.
+        child = ctx.children[0]
 
-        # Parenthesized expression
-        par = ctx.parExpression()
-        if par is not None:
-            return self.visit(par)
+        # Most common case: terminal node (IDENTIFIER)
+        if isinstance(child, TerminalNode):
+            return self.scopes.get(child.getText())
 
-        # Function call
-        func_call = ctx.functionCall()
-        if func_call is not None:
-            return self.visit(func_call)
-
-        # Scoped function call
-        scoped = ctx.scopedFunctionCall()
-        if scoped is not None:
-            return self.visit(scoped)
-
-        # Identifier (variable reference)
-        ident = ctx.IDENTIFIER()
-        if ident is not None:
-            return self.scopes.get(ident.getText())
-
-        # Function reference (@func)
-        func_ref = ctx.functionReference()
-        if func_ref is not None:
-            return func_ref.IDENTIFIER().getText()
-
-        # Array initializer
-        arr = ctx.explicitArrayInitializer()
-        if arr is not None:
-            return self.visit(arr)
-
-        bare_arr = ctx.bareArrayInitializer()
-        if bare_arr is not None:
-            return self.visit(bare_arr)
-
-        # Struct initializer
-        struct = ctx.explicitStructInitializer()
-        if struct is not None:
-            return self.visit(struct)
-
-        # Dict initializer
-        dict_init = ctx.explicitDictInitializer()
-        if dict_init is not None:
-            return self.visit(dict_init)
-
-        # Error initializer
-        err = ctx.explicitErrorInitializer()
-        if err is not None:
-            return self.visit(err)
+        # Rule context nodes — visit directly
+        child_type = type(child)
+        if child_type in _PRIMARY_RULE_TYPES:
+            # Special case: functionReference returns name, not visited
+            if child_type is EscriptParser.FunctionReferenceContext:
+                return child.IDENTIFIER().getText()
+            return self.visit(child)
 
         return UNINIT
 
@@ -773,23 +757,17 @@ class EscriptInterpreter(EscriptParserVisitor):
     # ------------------------------------------------------------------
 
     def visitLiteral(self, ctx: EscriptParser.LiteralContext) -> Any:
-        int_lit = ctx.integerLiteral()
-        if int_lit is not None:
-            return self._parse_int_literal(int_lit)
-
-        float_lit = ctx.floatLiteral()
-        if float_lit is not None:
-            return float(float_lit.getText())
-
-        str_lit = ctx.STRING_LITERAL()
-        if str_lit is not None:
-            return _strip_quotes(str_lit.getText())
-
-        char_lit = ctx.CHAR_LITERAL()
-        if char_lit is not None:
-            text = char_lit.getText()
-            return _strip_quotes(text)
-
+        # Fast dispatch on first child type instead of sequential getTypedRuleContext
+        child = ctx.children[0]
+        if isinstance(child, TerminalNode):
+            # STRING_LITERAL or CHAR_LITERAL
+            return _strip_quotes(child.getText())
+        # integerLiteral or floatLiteral context
+        child_type = type(child)
+        if child_type is EscriptParser.IntegerLiteralContext:
+            return self._parse_int_literal(child)
+        if child_type is EscriptParser.FloatLiteralContext:
+            return float(child.getText())
         return UNINIT
 
     def _parse_int_literal(self, ctx: EscriptParser.IntegerLiteralContext) -> int:
@@ -802,7 +780,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         return int(ctx.getText())
 
     def visitParExpression(self, ctx: EscriptParser.ParExpressionContext) -> Any:
-        return self.visit(ctx.expression())
+        return self.visitExpression(ctx.expression())
 
     # ------------------------------------------------------------------
     # Initializers
@@ -896,7 +874,7 @@ class EscriptInterpreter(EscriptParserVisitor):
     def visitFunctionCall(self, ctx: EscriptParser.FunctionCallContext) -> Any:
         name = ctx.IDENTIFIER().getText()
         expr_list = ctx.expressionList()
-        args = [self.visit(e) for e in expr_list.expression()] if expr_list else []
+        args = [self.visitExpression(e) for e in expr_list.expression()] if expr_list else []
 
         return self._dispatch_call("", name, args, ctx)
 
@@ -905,7 +883,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         func_call = ctx.functionCall()
         name = func_call.IDENTIFIER().getText()
         expr_list = func_call.expressionList()
-        args = [self.visit(e) for e in expr_list.expression()] if expr_list else []
+        args = [self.visitExpression(e) for e in expr_list.expression()] if expr_list else []
 
         return self._dispatch_call(module, name, args, ctx)
 

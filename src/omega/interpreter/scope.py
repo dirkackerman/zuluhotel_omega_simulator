@@ -128,15 +128,21 @@ class ScopeStack:
         """
         key = name.lower()
 
-        # Check current local scope
+        # Check current local scope — inline dict lookup to avoid
+        # has_local + get_local double-lowering and double-lookup.
         if self._stack:
-            scope = self._stack[-1]
-            if scope.has_local(key):
-                return scope.get_local(key)
+            val = self._stack[-1]._vars.get(key, UNINIT)
+            if val is not UNINIT:
+                if isinstance(val, ByRef):
+                    return val.get()
+                return val
 
         # Check global scope
-        if self._global.has_local(key):
-            return self._global.get_local(key)
+        val = self._global._vars.get(key, UNINIT)
+        if val is not UNINIT:
+            if isinstance(val, ByRef):
+                return val.get()
+            return val
 
         return UNINIT
 
@@ -149,20 +155,32 @@ class ScopeStack:
         """
         key = name.lower()
 
-        # Check current local scope first
+        # Check current local scope first — inline to avoid double-lookup
         if self._stack:
             scope = self._stack[-1]
-            if scope.has_local(key):
-                scope.set_local(key, value)
+            if key in scope._vars:
+                if key in scope._consts:
+                    raise RuntimeError(f"Cannot assign to constant '{name}'")
+                existing = scope._vars[key]
+                if isinstance(existing, ByRef):
+                    existing.set(value)
+                else:
+                    scope._vars[key] = value
                 return
 
         # Check global scope
-        if self._global.has_local(key):
-            self._global.set_local(key, value)
+        if key in self._global._vars:
+            if key in self._global._consts:
+                raise RuntimeError(f"Cannot assign to constant '{name}'")
+            existing = self._global._vars[key]
+            if isinstance(existing, ByRef):
+                existing.set(value)
+            else:
+                self._global._vars[key] = value
             return
 
         # Not found — set in current scope
-        self.current.set_local(key, value)
+        self.current._vars[key] = value
 
     def define(self, name: str, value: Any = UNINIT, *, const: bool = False) -> None:
         """Define a new variable in the current scope."""
@@ -171,3 +189,14 @@ class ScopeStack:
     def define_global(self, name: str, value: Any = UNINIT, *, const: bool = False) -> None:
         """Define a variable in the global scope."""
         self._global.define(name, value, const=const)
+
+    def snapshot_globals(self) -> tuple[dict[str, Any], set[str]]:
+        """Capture a snapshot of the global scope (vars + const set)."""
+        return dict(self._global._vars), set(self._global._consts)
+
+    def restore_globals(self, snapshot: tuple[dict[str, Any], set[str]]) -> None:
+        """Reset scope stack and restore global scope from snapshot."""
+        self._stack.clear()
+        saved_vars, saved_consts = snapshot
+        self._global._vars = dict(saved_vars)
+        self._global._consts = set(saved_consts)

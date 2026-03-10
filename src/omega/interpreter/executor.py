@@ -66,6 +66,18 @@ class Executor:
         self._em_modules_dir = em_modules_dir
 
         self._load(parse_results)
+        # Snapshot the global scope after loading so we can cheaply
+        # restore it before each run_program() call.
+        self._global_snapshot = self.scopes.snapshot_globals()
+
+    def reset(self) -> None:
+        """Reset interpreter state for a new run.
+
+        Restores the global scope to the post-load state (constants +
+        functions preserved, runtime variables cleared) and empties the
+        local scope stack.  Much cheaper than re-creating the Executor.
+        """
+        self.scopes.restore_globals(self._global_snapshot)
 
     def _load(self, parse_results: dict[Path, ParseResult]) -> None:
         """Load all parsed files: extract functions, constants, program."""

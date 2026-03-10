@@ -79,9 +79,25 @@ FIRE=0x01, AIR=0x02, EARTH=0x04, WATER=0x08, NECRO=0x10, HOLY=0x20, POISON=0x40,
 ### Combat Flow
 1. `mainhit.src` receives (attacker, defender, weapon, armor, basedamage, rawdamage)
 2. `RecalcDmg()` branches to Physical or Astral path
-3. Physical: slayer multiplier -> class bonus -> elemental damage -> shield absorption -> AR -> protection -> mace effects
+3. Physical path (`RecalcPhysicalDmg` → `CalcPhysicalDamage`):
+   1. Slayer multiplier (2x match, 1.5x human vs player, 1x none)
+   2. Weapon quality bonus: `basedamage += (quality - 1) * 15`
+   3. STR bonus (players only): `basedamage *= 1 + STR * 0.005`
+   4. Class skill bonus (Warrior melee): `basedamage *= 1 + avg(Anatomy, Tactics) * 0.005`
+   5. Class level bonus vs NPC: `basedamage *= ClasseSmallBonusByLevel(level - 3)`
+   6. Defender class penalty (Warrior/Paladin/Mage)
+   7. **PvP basedamage scaling: `basedamage *= 0.4`** (player vs player only)
+   8. Shield/parry absorption
+   9. AR absorption: `absorbed = basedamage * Pow(ar/5, 0.5) * 0.05`
+   10. Protection modifier: `rawdamage *= 1 - PhysicalProtection * 0.05`
 4. Astral: spirit speak scaling -> class bonuses -> meditation resistance -> astral armor -> 50% reduction
-5. `ApplyTheDamage()`: PvP scaling (60%) -> tamed multiplier -> ally scaling -> ApplyRawDamage()
+5. `ApplyTheDamage()`: **PvP final scaling `*= 0.6`** -> tamed multiplier -> ally scaling -> ApplyRawDamage()
+6. **Net PvP multiplier: 0.4 × 0.6 = 0.24** (76% total reduction, applied in two stages)
+
+### Class Bonus Constants (classes.inc)
+- `BONUS_PER_LEVEL = 0.25` — `ClasseBonusByLevel(n) = 1 + 0.25 * n`
+- `SMALL_BONUS_PER_LEVEL = 0.15` — `ClasseSmallBonusByLevel(n) = 1 + 0.15 * n`
+- Level can be negative (e.g., level 1 warrior: `ClasseSmallBonusByLevel(1-3) = 0.70`)
 
 ### Combat Path Side Effects (per hit)
 These occur in the real scripts but need careful handling in simulation:

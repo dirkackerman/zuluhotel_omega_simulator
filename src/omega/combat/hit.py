@@ -43,6 +43,7 @@ def execute_hit(
     debug: bool = False,
     config_resolver: Any = None,
     em_modules_dir: Path | None = None,
+    executor: Executor | None = None,
 ) -> HitResult:
     """Execute a single combat hit through the eScript interpreter.
 
@@ -69,6 +70,10 @@ def execute_hit(
     config_resolver:
         Callable that resolves package config paths (e.g., ":combat:settings")
         to filesystem Paths. Typically ``shard.resolve_config_path``.
+    executor:
+        Pre-built :class:`Executor` to reuse across multiple hits.
+        If provided, ``parse_results`` and ``em_modules_dir`` are ignored.
+        The executor is reset before each run.
 
     Returns
     -------
@@ -113,8 +118,11 @@ def execute_hit(
     set_context(ctx)
 
     try:
-        # Build executor from pre-parsed trees
-        executor = Executor(parse_results, em_modules_dir=em_modules_dir)
+        # Build executor or reuse cached one
+        if executor is None:
+            executor = Executor(parse_results, em_modules_dir=em_modules_dir)
+        else:
+            executor.reset()
 
         # Inject Python override for __RecordSimulatorMetric so the
         # eScript no-op is replaced with actual metric recording.
