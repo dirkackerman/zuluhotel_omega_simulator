@@ -75,6 +75,9 @@ class SimulationContext:
     # Set by combat runner when a shard is loaded
     _config_resolver: Any = None
 
+    # Metrics recorded by __RecordSimulatorMetric from eScript
+    metrics: dict[str, Any] = field(default_factory=dict)
+
     def record_side_effect(
         self, kind: str, target_serial: int, value: Any = None, detail: str = ""
     ) -> None:
@@ -116,6 +119,7 @@ class SimulationContext:
         self.side_effects.clear()
         self.total_damage_dealt = 0.0
         self.damage_absorbed = 0.0
+        self.metrics.clear()
         self.iteration += 1
         self.game_clock += 1
 

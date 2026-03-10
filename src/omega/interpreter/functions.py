@@ -6,6 +6,7 @@ for the interpreter's call dispatch.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -45,6 +46,7 @@ class FunctionRegistry:
     def __init__(self) -> None:
         self._functions: dict[str, FunctionDef] = {}
         self._modules: set[str] = set()  # USE declarations
+        self._overrides: dict[str, Callable[..., Any]] = {}  # Python callable overrides
 
     def register(self, func_def: FunctionDef) -> None:
         """Register a function definition."""
@@ -76,10 +78,23 @@ class FunctionRegistry:
         """Return all USE'd module names."""
         return sorted(self._modules)
 
+    def set_override(self, name: str, func: Callable[..., Any]) -> None:
+        """Register a Python callable that replaces a user-defined function.
+
+        Used by the simulator to inject metric-recording implementations
+        for eScript no-op stubs like ``__RecordSimulatorMetric``.
+        """
+        self._overrides[name.lower()] = func
+
+    def get_override(self, name: str) -> Callable[..., Any] | None:
+        """Look up an override by name (case-insensitive)."""
+        return self._overrides.get(name.lower())
+
     def clear(self) -> None:
         """Clear all functions and modules."""
         self._functions.clear()
         self._modules.clear()
+        self._overrides.clear()
 
 
 def extract_functions(

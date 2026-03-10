@@ -137,7 +137,7 @@ def damage_breakdown(
     title: str | None = None,
     figsize: tuple[float, float] = (6, 4),
 ) -> Any:
-    """Stacked bar showing base damage, absorbed, and final damage means.
+    """Grouped bar showing base damage, absorbed, and final damage means.
 
     Parameters
     ----------
@@ -158,36 +158,77 @@ def damage_breakdown(
     absorbed = cell.absorbed_stats.mean
     final = cell.damage_stats.mean
 
+    categories = ["Base", "Absorbed", "Final"]
+    values = [base, absorbed, final]
+    colors = ["#2196F3", "#FF9800", "#4CAF50"]
+
     fig, ax = plt.subplots(figsize=figsize)
 
-    bars = ax.bar(
-        ["Damage"],
-        [final],
-        label=f"Final: {final:.1f}",
-        color="#4CAF50",
-    )
-    ax.bar(
-        ["Damage"],
-        [absorbed],
-        bottom=[final],
-        label=f"Absorbed: {absorbed:.1f}",
-        color="#FF9800",
-        alpha=0.7,
-    )
+    bars = ax.bar(categories, values, color=colors, edgecolor="black", linewidth=0.5)
+
+    for bar, val in zip(bars, values):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.3,
+                f"{val:.1f}", ha="center", va="bottom", fontsize=10, fontweight="bold")
 
     ax.set_ylabel("Damage")
     ax.set_title(title or "Damage Breakdown")
+    fig.tight_layout()
+    plt.close(fig)
+    return fig
+
+
+def comparison_breakdown(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Any:
+    """Grouped bar chart comparing damage breakdown across scenarios.
+
+    Each scenario shows three side-by-side bars: base, absorbed, final.
+
+    Parameters
+    ----------
+    cells:
+        Mapping of scenario label → :class:`CellResult`.
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+    import numpy as np
+
+    labels = list(cells.keys())
+    finals = [cells[l].damage_stats.mean for l in labels]
+    absorbeds = [cells[l].absorbed_stats.mean for l in labels]
+    bases = [cells[l].base_damage_stats.mean for l in labels]
+
+    x = np.arange(len(labels))
+    width = 0.22
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    b1 = ax.bar(x - width, bases, width, label="Base", color="#2196F3", edgecolor="black", linewidth=0.5)
+    b2 = ax.bar(x, absorbeds, width, label="Absorbed", color="#FF9800", edgecolor="black", linewidth=0.5)
+    b3 = ax.bar(x + width, finals, width, label="Final", color="#4CAF50", edgecolor="black", linewidth=0.5)
+
+    # Value labels above each bar
+    for bars in (b1, b2, b3):
+        for bar in bars:
+            h = bar.get_height()
+            ax.text(bar.get_x() + bar.get_width() / 2, h + 0.3,
+                    f"{h:.1f}", ha="center", va="bottom", fontsize=8)
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels)
+    ax.set_ylabel("Damage")
+    ax.set_title(title or "Damage Breakdown Comparison")
     ax.legend()
-
-    # Annotate total base damage
-    ax.annotate(
-        f"Base: {base:.1f}",
-        xy=(0, base),
-        xytext=(0.3, base + base * 0.05),
-        fontsize=9,
-        color="gray",
-    )
-
     fig.tight_layout()
     plt.close(fig)
     return fig

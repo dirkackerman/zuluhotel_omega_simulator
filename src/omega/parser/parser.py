@@ -218,7 +218,14 @@ def _parse_recursive(
             included_file = resolver.resolve(include_path, from_file=resolved)
             _parse_recursive(included_file, resolver, results)
         except (FileNotFoundError, ValueError) as exc:
-            logger.warning("include resolution failed", error=str(exc))
+            logger.warning(
+                "include resolution failed "
+                "(hint: package names are case-sensitive on Linux — "
+                "check pkg.cfg Name field matches the include path exactly)",
+                from_file=resolved.name,
+                include_path=include_path,
+                error=str(exc),
+            )
             result.errors.append(
                 ParseError(0, 0, f"Include resolution failed: {exc}", str(resolved))
             )

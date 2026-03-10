@@ -88,8 +88,9 @@ def call_builtin(module: str, name: str, args: list[Any]) -> Any:
         if func is not None:
             return func(*args)
 
-    logger.warning(
-        "Unimplemented built-in function",
+    qualified = f"{module}::{name}" if module else name
+    logger.debug(
+        f"Unimplemented built-in: {qualified}(… {len(args)} args)",
         module=module or "(global)",
         function=name,
         arg_count=len(args),

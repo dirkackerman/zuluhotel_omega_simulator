@@ -20,6 +20,7 @@ from typing import Any
 from omega.combat.damage import roll_base_damage
 from omega.combat.result import HitResult
 from omega.interpreter.executor import Executor
+from omega.interpreter.types import EStruct
 from omega.logging import get_logger
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
@@ -115,6 +116,20 @@ def execute_hit(
         # Build executor from pre-parsed trees
         executor = Executor(parse_results, em_modules_dir=em_modules_dir)
 
+        # Inject Python override for __RecordSimulatorMetric so the
+        # eScript no-op is replaced with actual metric recording.
+        def _record_metric(key_or_metrics: Any = "", value: Any = 0) -> None:
+            if isinstance(key_or_metrics, EStruct):
+                for k in key_or_metrics.keys():
+                    ctx.metrics[str(k)] = key_or_metrics.get_member(k)
+            elif isinstance(key_or_metrics, dict):
+                for k, v in key_or_metrics.items():
+                    ctx.metrics[str(k)] = v
+            else:
+                ctx.metrics[str(key_or_metrics)] = value
+
+        executor.functions.set_override("__RecordSimulatorMetric", _record_metric)
+
         # mainhit expects: (attacker, defender, weapon, armor, basedamage, rawdamage)
         program_args = {
             "attacker": attacker,
@@ -129,7 +144,7 @@ def execute_hit(
 
         # Collect results from context
         result.final_damage = ctx.total_damage_dealt
-        result.absorbed = ctx.damage_absorbed
+        result.absorbed = float(ctx.metrics.get("absorbed", 0.0))
         result.side_effects = list(ctx.side_effects)
         result.defender_hp_after = defender.hp
 

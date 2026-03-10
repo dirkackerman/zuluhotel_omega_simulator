@@ -13,7 +13,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from omega.config.dice import DiceSpec, parse_dice
-from omega.model.constants import LAYER_HAND1, SKILLID_SWORDSMANSHIP
+from omega.model.constants import LAYER_CHEST, LAYER_HAND1, SKILLID_SWORDSMANSHIP
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
 
@@ -193,8 +193,10 @@ def build_combatant(spec: CombatantSpec) -> tuple[Mobile, Weapon, Armor]:
     weapon = build_weapon(spec.weapon) if spec.weapon is not None else Weapon(name="Fist")
     mob.equip(LAYER_HAND1, weapon)
 
-    # Armor
+    # Armor — equip on the mobile so defender.ar works in shard scripts
     armor = build_armor(spec.armor) if spec.armor is not None else Armor(name="None", ar=0)
+    armor_layer = spec.armor.layer if spec.armor is not None and spec.armor.layer else LAYER_CHEST
+    mob.equip(armor_layer, armor)
 
     return mob, weapon, armor
 

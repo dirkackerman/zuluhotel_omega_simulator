@@ -22,6 +22,10 @@ class PackageMap(Protocol):
         """Return the filesystem path for a package, or None if unknown."""
         ...
 
+    def names(self) -> list[str]:
+        """Return all known package names."""
+        ...
+
 
 class DictPackageMap:
     """Simple dict-backed package map, suitable for testing or hardcoding."""
@@ -31,6 +35,9 @@ class DictPackageMap:
 
     def resolve(self, package_name: str) -> Path | None:
         return self._mapping.get(package_name)
+
+    def names(self) -> list[str]:
+        return list(self._mapping.keys())
 
 
 class IncludeResolver:
@@ -111,6 +118,13 @@ class IncludeResolver:
         """Check if a file has already been included."""
         return path.resolve() in self._resolved
 
+    def _known_package_names(self) -> list[str]:
+        """Return known package names for diagnostic messages."""
+        try:
+            return self.package_map.names()
+        except AttributeError:
+            return []
+
     def _resolve_package_path(self, include_path: str) -> Path:
         """Resolve ``:pkgname:filepath`` format."""
         # Strip leading colon, split on next colon
@@ -124,9 +138,20 @@ class IncludeResolver:
         pkg_name, file_path = parts
         pkg_dir = self.package_map.resolve(pkg_name)
         if pkg_dir is None:
+            # Check for case mismatch — common on Linux where fs is case-sensitive
+            near = [
+                n for n in self._known_package_names()
+                if n.lower() == pkg_name.lower()
+            ]
+            hint = ""
+            if near:
+                hint = (
+                    f". Did you mean {near[0]!r}? "
+                    f"Package names are case-sensitive on Linux"
+                )
             raise FileNotFoundError(
                 f"Unknown package: {pkg_name!r} "
-                f"(from include path {include_path!r})"
+                f"(from include path {include_path!r}){hint}"
             )
 
         # Try with .inc extension first, then without

@@ -108,14 +108,25 @@ def format_table_html(rows: list[dict[str, Any]]) -> str:
 
     headers = list(rows[0].keys())
 
-    parts = ['<table style="border-collapse:collapse;">']
+    # Use CSS custom properties so the table adapts to light/dark mode
+    parts = [
+        "<style>",
+        ".omega-table { border-collapse: collapse; color-scheme: light dark; }",
+        ".omega-table th, .omega-table td "
+        "{ border: 1px solid rgba(128,128,128,0.4); padding: 4px 8px; text-align: right; }",
+        ".omega-table th "
+        "{ text-align: left; font-weight: 600; "
+        "background: rgba(128,128,128,0.15); }",
+        ".omega-table tr:nth-child(even) td "
+        "{ background: rgba(128,128,128,0.06); }",
+        "</style>",
+        '<table class="omega-table">',
+    ]
+
     # Header row
     parts.append("<tr>")
     for h in headers:
-        parts.append(
-            f'<th style="border:1px solid #ccc;padding:4px 8px;'
-            f'background:#f5f5f5;text-align:left;">{_escape(str(h))}</th>'
-        )
+        parts.append(f"<th>{_escape(str(h))}</th>")
     parts.append("</tr>")
 
     # Data rows
@@ -123,10 +134,7 @@ def format_table_html(rows: list[dict[str, Any]]) -> str:
         parts.append("<tr>")
         for h in headers:
             val = row.get(h, "")
-            parts.append(
-                f'<td style="border:1px solid #ccc;padding:4px 8px;">'
-                f"{_escape(_fmt(val))}</td>"
-            )
+            parts.append(f"<td>{_escape(_fmt(val))}</td>")
         parts.append("</tr>")
 
     parts.append("</table>")
@@ -158,6 +166,7 @@ def _get_stat(cell: CellResult, name: str) -> Any:
         "poison_rate": rs.poison_rate,
         "equipment_break_rate": rs.equipment_break_rate,
         "base_mean": cell.base_damage_stats.mean,
+        "total": ds.count * ds.mean,
         "absorbed_mean": cell.absorbed_stats.mean,
         "errors": cell.error_count,
     }

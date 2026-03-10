@@ -17,7 +17,7 @@ def _build_package_map() -> dict[str, Path]:
         text = pkg_cfg.read_text(errors="replace")
         m = re.search(r"Name\s+(\S+)", text, re.IGNORECASE)
         if m:
-            pkg_map[m.group(1).lower()] = pkg_cfg.parent
+            pkg_map[m.group(1)] = pkg_cfg.parent
     return pkg_map
 
 

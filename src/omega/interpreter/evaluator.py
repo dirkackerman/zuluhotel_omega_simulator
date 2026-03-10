@@ -910,7 +910,18 @@ class EscriptInterpreter(EscriptParserVisitor):
         return self._dispatch_call(module, name, args, ctx)
 
     def _dispatch_call(self, module: str, name: str, args: list[Any], ctx: Any) -> Any:
-        """Dispatch a function call — user-defined first, then built-in."""
+        """Dispatch a function call — user-defined first, then built-in.
+
+        Python callable overrides (registered via FunctionRegistry.set_override)
+        replace user-defined functions when present.  This is how the simulator
+        injects metric-recording implementations for eScript no-op stubs.
+        """
+        # Check for Python callable overrides (e.g., __RecordSimulatorMetric)
+        if not module and self.functions is not None:
+            override = self.functions.get_override(name)
+            if override is not None:
+                return override(*args)
+
         # Try user-defined function (only for bare calls)
         if not module and self.functions is not None:
             func_def = self.functions.get(name)
