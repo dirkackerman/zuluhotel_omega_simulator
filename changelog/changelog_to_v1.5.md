@@ -49,3 +49,30 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Verify scalar metrics (like `absorbed`) remain unaffected by the `list:` protocol
 
 **Key insight**: Like the protection functions in M12, `ApplyElementalDamageNoResist` and `ApplyTheDamage` are eScript user-defined functions — not POL built-ins. The entire elemental damage path runs through the interpreter without any Python wrapping. The `list:` metric protocol solves the per-element accumulation problem cleanly from the eScript side.
+
+---
+
+## M14 — Elemental Damage Reporting
+
+**Summary**: Surfaced per-element damage breakdown in results and reporting. Each element now tracks gross damage, net damage, protection percentage, healed amount, and absorbed amount. Data flows from `ctx.metrics` through `HitResult.metrics` into `ElementalBreakdown` on `CellResult`.
+
+**Changes**:
+- **`HitResult.metrics`** (`result.py`): New `dict[str, Any]` field — all `ctx.metrics` are now propagated to the result layer, making metric data available for aggregation.
+- **`ElementDamage` dataclass** (`stats.py`): Per-element struct with `gross`, `net`, `prot`, `healed` fields and a computed `absorbed` property (`gross - net`).
+- **`ElementalBreakdown` dataclass** (`stats.py`): Holds `dict[str, ElementDamage]` with accessor methods: `total_net`, `total_gross`, `net_dict()`, `gross_dict()`, `prot_dict()`.
+- **`aggregate_cell()`** (`stats.py`): Computes mean gross/net/prot/healed per element from `HitResult.metrics["elemental_applied"]` across iterations.
+- **`elemental_breakdown_chart()`** (`plots.py`): Horizontal stacked bar chart showing net damage by element with fixed color mapping.
+- **`elemental_vs_parameter()`** (`plots.py`): Stacked bar chart of per-element net damage across a swept parameter.
+- **`_get_stat()` extension** (`tables.py`): Dynamic element stat columns — `elem_<name>` (defaults to net), `elem_<name>_net`, `elem_<name>_gross`, `elem_<name>_prot`, `elem_<name>_absorbed`, `elem_total_net`, `elem_total_gross`.
+- **`dmg_gross` metric** (`spelldata.inc`): Added pre-protection damage to the `list:elemental_applied` struct so both gross and net are captured per element.
+
+**Testing**:
+- Verify `ElementDamage.absorbed` equals `gross - net`
+- Verify `ElementalBreakdown` with single/multi elements computes correct totals
+- Verify `aggregate_cell` computes mean gross/net/prot across multiple iterations
+- Verify pure physical weapon produces empty elemental breakdown
+- Verify over-protection entries aggregate healed amounts correctly
+- Verify table columns `elem_fire`, `elem_fire_gross`, `elem_fire_prot`, `elem_fire_absorbed` return correct values
+- Verify `elem_total_net` sums across all elements
+- Verify `elemental_breakdown_chart` and `elemental_vs_parameter` return Figure objects
+- Verify empty/missing elemental data handled gracefully in both plots and tables

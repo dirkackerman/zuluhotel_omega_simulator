@@ -9,6 +9,8 @@ from omega.reporting.tables import (
 from omega.simulation.stats import (
     CellResult,
     DamageStats,
+    ElementDamage,
+    ElementalBreakdown,
     RatioStats,
     SimulationResult,
     aggregate_cell,
@@ -158,3 +160,60 @@ class TestFormatTableHtml:
         assert "skill" in html
         assert "100" in html
         assert "10.00" in html  # mean
+
+
+class TestElementalStatColumns:
+    """Test elemental stat columns in summary_table."""
+
+    def _make_elemental_cell(self) -> CellResult:
+        cell = _make_cell()
+        cell.elemental_breakdown = ElementalBreakdown(elements={
+            "fire": ElementDamage(gross=20.0, net=14.0, prot=30.0, healed=0.0),
+            "water": ElementDamage(gross=10.0, net=10.0, prot=0.0, healed=0.0),
+        })
+        return cell
+
+    def test_elem_fire_defaults_to_net(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_fire"])
+        assert rows[0]["elem_fire"] == 14.0
+
+    def test_elem_fire_net_explicit(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_fire_net"])
+        assert rows[0]["elem_fire_net"] == 14.0
+
+    def test_elem_fire_gross(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_fire_gross"])
+        assert rows[0]["elem_fire_gross"] == 20.0
+
+    def test_elem_fire_prot(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_fire_prot"])
+        assert rows[0]["elem_fire_prot"] == 30.0
+
+    def test_elem_fire_absorbed(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_fire_absorbed"])
+        assert rows[0]["elem_fire_absorbed"] == 6.0  # 20 - 14
+
+    def test_elem_total_net(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_total_net"])
+        assert rows[0]["elem_total_net"] == 24.0  # 14 + 10
+
+    def test_elem_total_gross(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_total_gross"])
+        assert rows[0]["elem_total_gross"] == 30.0  # 20 + 10
+
+    def test_unknown_element_returns_empty(self):
+        result = SimulationResult(cells=[self._make_elemental_cell()])
+        rows = summary_table(result, stats=["elem_astral"])
+        assert rows[0]["elem_astral"] == ""
+
+    def test_no_elemental_data_returns_zero(self):
+        result = SimulationResult(cells=[_make_cell()])
+        rows = summary_table(result, stats=["elem_total_net"])
+        assert rows[0]["elem_total_net"] == 0.0

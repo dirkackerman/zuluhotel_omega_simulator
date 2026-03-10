@@ -282,3 +282,155 @@ def comparison_overlay(
     fig.tight_layout()
     plt.close(fig)
     return fig
+
+
+# Fixed color map for each element type
+_ELEMENT_COLORS: dict[str, str] = {
+    "fire": "#E53935",
+    "air": "#00ACC1",
+    "earth": "#6D4C41",
+    "water": "#1E88E5",
+    "necro": "#8E24AA",
+    "holy": "#FFD600",
+    "poison": "#43A047",
+    "acid": "#C0CA33",
+    "physical": "#78909C",
+    "magic": "#AB47BC",
+    "astral": "#90CAF9",
+}
+
+
+def elemental_breakdown_chart(
+    cell: CellResult,
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 3),
+) -> Any:
+    """Horizontal stacked bar showing mean damage by element type.
+
+    Parameters
+    ----------
+    cell:
+        A :class:`CellResult` with elemental_breakdown populated.
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+
+    data = cell.elemental_breakdown.net_dict()
+    if not data:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, "No elemental damage data",
+                ha="center", va="center", transform=ax.transAxes)
+        ax.set_title(title or "Elemental Damage Breakdown")
+        plt.close(fig)
+        return fig
+
+    fig, ax = plt.subplots(figsize=figsize)
+    left = 0.0
+    total = cell.elemental_breakdown.total_net
+    for elem, val in data.items():
+        color = _ELEMENT_COLORS.get(elem, "#BDBDBD")
+        ax.barh(0, val, left=left, color=color, edgecolor="black",
+                linewidth=0.5, label=f"{elem} ({val:.1f})")
+        # Label inside the segment if wide enough
+        if total > 0 and val > total * 0.08:
+            ax.text(left + val / 2, 0, f"{val:.1f}",
+                    ha="center", va="center", fontsize=9, fontweight="bold")
+        left += val
+
+    ax.set_yticks([])
+    ax.set_xlabel("Mean Damage")
+    ax.set_title(title or "Elemental Damage Breakdown")
+    ax.legend(loc="upper right", fontsize=8)
+    fig.tight_layout()
+    plt.close(fig)
+    return fig
+
+
+def elemental_vs_parameter(
+    result: SimulationResult,
+    variable_name: str,
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Any:
+    """Stacked bar chart of per-element mean damage across a swept parameter.
+
+    Parameters
+    ----------
+    result:
+        A :class:`SimulationResult` from ``run_sweep()``.
+    variable_name:
+        The variable to plot on the x-axis.
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+    import numpy as np
+
+    # Collect data: x values and per-element means
+    x_vals = []
+    breakdowns: list[dict[str, float]] = []
+    for cell in result.cells:
+        if variable_name not in cell.variable_values:
+            continue
+        x_vals.append(cell.variable_values[variable_name])
+        breakdowns.append(cell.elemental_breakdown.net_dict(include_zero=True))
+
+    if not x_vals:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, f"No data for variable: {variable_name}",
+                ha="center", va="center", transform=ax.transAxes)
+        plt.close(fig)
+        return fig
+
+    # Find which elements have non-zero values anywhere
+    all_elements = [
+        "fire", "air", "earth", "water", "necro", "holy",
+        "poison", "acid", "physical", "magic", "astral",
+    ]
+    active = [e for e in all_elements if any(b.get(e, 0) != 0 for b in breakdowns)]
+
+    if not active:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, "No elemental damage data",
+                ha="center", va="center", transform=ax.transAxes)
+        ax.set_title(title or f"Elemental Damage vs. {variable_name}")
+        plt.close(fig)
+        return fig
+
+    x = np.arange(len(x_vals))
+    width = 0.7
+
+    fig, ax = plt.subplots(figsize=figsize)
+    bottom = np.zeros(len(x_vals))
+
+    for elem in active:
+        values = np.array([b.get(elem, 0.0) for b in breakdowns])
+        color = _ELEMENT_COLORS.get(elem, "#BDBDBD")
+        ax.bar(x, values, width, bottom=bottom, label=elem, color=color,
+               edgecolor="black", linewidth=0.3)
+        bottom += values
+
+    ax.set_xticks(x)
+    ax.set_xticklabels([str(v) for v in x_vals])
+    ax.set_xlabel(variable_name)
+    ax.set_ylabel("Mean Elemental Damage")
+    ax.set_title(title or f"Elemental Damage vs. {variable_name}")
+    ax.legend(fontsize=8)
+    fig.tight_layout()
+    plt.close(fig)
+    return fig

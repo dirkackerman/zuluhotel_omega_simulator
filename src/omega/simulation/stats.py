@@ -44,6 +44,97 @@ class RatioStats:
     equipment_break_rate: float = 0.0
 
 
+# Bitflag → field name mapping for element types
+_DMGID_TO_ELEMENT: dict[int, str] = {
+    0x0001: "fire",
+    0x0002: "air",
+    0x0004: "earth",
+    0x0008: "water",
+    0x0010: "necro",
+    0x0020: "holy",
+    0x0040: "poison",
+    0x0080: "acid",
+    0x0100: "physical",
+    0x0200: "magic",
+    0x0400: "astral",
+}
+
+
+@dataclass(slots=True)
+class ElementDamage:
+    """Aggregated damage stats for a single element type.
+
+    All values are means across iterations.
+    """
+
+    gross: float = 0.0
+    """Mean damage before protection reduction."""
+
+    net: float = 0.0
+    """Mean damage after protection reduction."""
+
+    prot: float = 0.0
+    """Mean protection percentage applied (0–100+)."""
+
+    healed: float = 0.0
+    """Mean amount healed via over-protection (>100%)."""
+
+    @property
+    def absorbed(self) -> float:
+        """Mean damage absorbed by protection (gross - net)."""
+        return self.gross - self.net
+
+
+# All known element names in canonical order
+_ELEMENT_NAMES = (
+    "fire", "air", "earth", "water", "necro", "holy",
+    "poison", "acid", "physical", "magic", "astral",
+)
+
+
+@dataclass
+class ElementalBreakdown:
+    """Per-element damage breakdown from the elemental damage pipeline.
+
+    Contains an :class:`ElementDamage` per element that was active.
+    Only populated for weapons with ``ElementalDamage`` property.
+    """
+
+    elements: dict[str, ElementDamage] = field(default_factory=dict)
+    """Mapping of element name → :class:`ElementDamage`."""
+
+    @property
+    def total_net(self) -> float:
+        """Sum of net damage across all elements."""
+        return sum(ed.net for ed in self.elements.values())
+
+    @property
+    def total_gross(self) -> float:
+        """Sum of gross damage across all elements."""
+        return sum(ed.gross for ed in self.elements.values())
+
+    def net_dict(self, *, include_zero: bool = False) -> dict[str, float]:
+        """Return ``{element_name: net_damage}`` mapping.
+
+        By default only includes non-zero elements.
+        """
+        if include_zero:
+            return {name: self.elements.get(name, ElementDamage()).net for name in _ELEMENT_NAMES}
+        return {name: ed.net for name, ed in self.elements.items() if ed.net != 0.0}
+
+    def gross_dict(self, *, include_zero: bool = False) -> dict[str, float]:
+        """Return ``{element_name: gross_damage}`` mapping."""
+        if include_zero:
+            return {name: self.elements.get(name, ElementDamage()).gross for name in _ELEMENT_NAMES}
+        return {name: ed.gross for name, ed in self.elements.items() if ed.gross != 0.0}
+
+    def prot_dict(self, *, include_zero: bool = False) -> dict[str, float]:
+        """Return ``{element_name: protection_%}`` mapping."""
+        if include_zero:
+            return {name: self.elements.get(name, ElementDamage()).prot for name in _ELEMENT_NAMES}
+        return {name: ed.prot for name, ed in self.elements.items() if ed.prot != 0.0}
+
+
 @dataclass
 class CellResult:
     """Results for a single scenario (one cell in a sweep grid)."""
@@ -53,6 +144,7 @@ class CellResult:
     base_damage_stats: DamageStats = field(default_factory=DamageStats)
     absorbed_stats: DamageStats = field(default_factory=DamageStats)
     ratios: RatioStats = field(default_factory=RatioStats)
+    elemental_breakdown: ElementalBreakdown = field(default_factory=ElementalBreakdown)
     raw_results: list[HitResult] = field(default_factory=list)
     iteration_count: int = 0
     success_count: int = 0
@@ -172,5 +264,38 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
         poison_rate=poisons / n,
         equipment_break_rate=equip_breaks / n,
     )
+
+    # Elemental breakdown — aggregate from per-hit metrics
+    # Accumulate gross, net, prot, healed per element across all hits
+    elem_gross: dict[str, float] = {}
+    elem_net: dict[str, float] = {}
+    elem_prot: dict[str, float] = {}
+    elem_healed: dict[str, float] = {}
+    elem_count = 0
+    for r in successes:
+        applied = r.metrics.get("elemental_applied")
+        if not applied:
+            continue
+        elem_count += 1
+        for entry in applied:
+            attack_type = entry.get("attack_type", 0)
+            elem_name = _DMGID_TO_ELEMENT.get(int(attack_type))
+            if elem_name is None:
+                continue
+            elem_gross[elem_name] = elem_gross.get(elem_name, 0.0) + float(entry.get("dmg_gross", 0))
+            elem_net[elem_name] = elem_net.get(elem_name, 0.0) + float(entry.get("dmg_net", 0))
+            elem_prot[elem_name] = elem_prot.get(elem_name, 0.0) + float(entry.get("prot", 0))
+            elem_healed[elem_name] = elem_healed.get(elem_name, 0.0) + float(entry.get("healed", 0))
+
+    if elem_count > 0:
+        elements = {}
+        for name in set(elem_gross) | set(elem_net) | set(elem_healed):
+            elements[name] = ElementDamage(
+                gross=elem_gross.get(name, 0.0) / elem_count,
+                net=elem_net.get(name, 0.0) / elem_count,
+                prot=elem_prot.get(name, 0.0) / elem_count,
+                healed=elem_healed.get(name, 0.0) / elem_count,
+            )
+        cell.elemental_breakdown = ElementalBreakdown(elements=elements)
 
     return cell

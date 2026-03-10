@@ -5,6 +5,8 @@ from omega.runtime.context import SideEffect
 from omega.simulation.stats import (
     CellResult,
     DamageStats,
+    ElementDamage,
+    ElementalBreakdown,
     SimulationResult,
     aggregate_cell,
 )
@@ -134,3 +136,136 @@ class TestSimulationResult:
         assert len(curve) == 3
         assert curve[0] == (50, cells[0].damage_stats)
         assert curve[2] == (70, cells[2].damage_stats)
+
+
+class TestElementDamage:
+    def test_defaults(self):
+        ed = ElementDamage()
+        assert ed.gross == 0.0
+        assert ed.net == 0.0
+        assert ed.prot == 0.0
+        assert ed.healed == 0.0
+        assert ed.absorbed == 0.0
+
+    def test_absorbed_is_gross_minus_net(self):
+        ed = ElementDamage(gross=100.0, net=70.0)
+        assert ed.absorbed == 30.0
+
+
+class TestElementalBreakdown:
+    def test_empty_breakdown(self):
+        eb = ElementalBreakdown()
+        assert eb.total_net == 0.0
+        assert eb.total_gross == 0.0
+        assert eb.net_dict() == {}
+        assert eb.gross_dict() == {}
+        assert eb.prot_dict() == {}
+
+    def test_single_element(self):
+        eb = ElementalBreakdown(elements={
+            "fire": ElementDamage(gross=20.0, net=14.0, prot=30.0),
+        })
+        assert eb.total_net == 14.0
+        assert eb.total_gross == 20.0
+        assert eb.net_dict() == {"fire": 14.0}
+        assert eb.gross_dict() == {"fire": 20.0}
+        assert eb.prot_dict() == {"fire": 30.0}
+
+    def test_multi_element(self):
+        eb = ElementalBreakdown(elements={
+            "fire": ElementDamage(gross=20.0, net=14.0, prot=30.0),
+            "water": ElementDamage(gross=10.0, net=10.0, prot=0.0),
+        })
+        assert eb.total_net == 24.0
+        assert eb.total_gross == 30.0
+
+    def test_net_dict_include_zero(self):
+        eb = ElementalBreakdown(elements={
+            "fire": ElementDamage(net=5.0),
+        })
+        d = eb.net_dict(include_zero=True)
+        assert d["fire"] == 5.0
+        assert d["water"] == 0.0
+        assert len(d) == 11  # all 11 elements
+
+    def test_healed_element(self):
+        eb = ElementalBreakdown(elements={
+            "fire": ElementDamage(gross=10.0, net=0.0, prot=150.0, healed=5.0),
+        })
+        assert eb.elements["fire"].healed == 5.0
+        assert eb.elements["fire"].absorbed == 10.0  # gross - net
+
+
+class TestAggregateCellElemental:
+    """Test elemental breakdown aggregation from HitResult.metrics."""
+
+    def _make_elemental_hit(self, entries: list[dict]) -> HitResult:
+        """Create a HitResult with elemental_applied metrics."""
+        return HitResult(
+            final_damage=10.0,
+            base_damage=15,
+            absorbed=5.0,
+            success=True,
+            metrics={"elemental_applied": entries},
+        )
+
+    def test_single_element_aggregation(self):
+        hits = [
+            self._make_elemental_hit([
+                {"attack_type": 0x0001, "dmg_gross": 20, "dmg_net": 14, "prot": 30},
+            ]),
+            self._make_elemental_hit([
+                {"attack_type": 0x0001, "dmg_gross": 20, "dmg_net": 14, "prot": 30},
+            ]),
+        ]
+        cell = aggregate_cell(hits)
+        eb = cell.elemental_breakdown
+        assert "fire" in eb.elements
+        assert eb.elements["fire"].gross == 20.0
+        assert eb.elements["fire"].net == 14.0
+        assert eb.elements["fire"].prot == 30.0
+
+    def test_multi_element_aggregation(self):
+        hits = [
+            self._make_elemental_hit([
+                {"attack_type": 0x0001, "dmg_gross": 10, "dmg_net": 7, "prot": 30},
+                {"attack_type": 0x0008, "dmg_gross": 10, "dmg_net": 10, "prot": 0},
+            ]),
+        ]
+        cell = aggregate_cell(hits)
+        eb = cell.elemental_breakdown
+        assert "fire" in eb.elements
+        assert "water" in eb.elements
+        assert eb.elements["fire"].net == 7.0
+        assert eb.elements["water"].net == 10.0
+        assert eb.total_net == 17.0
+
+    def test_healed_aggregation(self):
+        hits = [
+            self._make_elemental_hit([
+                {"attack_type": 0x0001, "prot": 150, "dmg_gross": 10, "healed": 5},
+            ]),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.elemental_breakdown.elements["fire"].healed == 5.0
+        assert cell.elemental_breakdown.elements["fire"].prot == 150.0
+
+    def test_no_elemental_metrics_empty_breakdown(self):
+        hits = [_make_hit(final_damage=10.0)]
+        cell = aggregate_cell(hits)
+        assert cell.elemental_breakdown.elements == {}
+        assert cell.elemental_breakdown.total_net == 0.0
+
+    def test_mean_across_iterations(self):
+        hits = [
+            self._make_elemental_hit([
+                {"attack_type": 0x0001, "dmg_gross": 20, "dmg_net": 10, "prot": 50},
+            ]),
+            self._make_elemental_hit([
+                {"attack_type": 0x0001, "dmg_gross": 20, "dmg_net": 20, "prot": 0},
+            ]),
+        ]
+        cell = aggregate_cell(hits)
+        # Mean: (10 + 20) / 2 = 15 net, (50 + 0) / 2 = 25 prot
+        assert cell.elemental_breakdown.elements["fire"].net == 15.0
+        assert cell.elemental_breakdown.elements["fire"].prot == 25.0

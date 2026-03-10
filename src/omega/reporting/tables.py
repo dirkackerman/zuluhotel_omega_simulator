@@ -169,8 +169,33 @@ def _get_stat(cell: CellResult, name: str) -> Any:
         "total": ds.count * ds.mean,
         "absorbed_mean": cell.absorbed_stats.mean,
         "errors": cell.error_count,
+        # Elemental totals
+        "elem_total_net": cell.elemental_breakdown.total_net,
+        "elem_total_gross": cell.elemental_breakdown.total_gross,
     }
-    return stat_map.get(name, "")
+
+    if name in stat_map:
+        return stat_map[name]
+
+    # Dynamic element stats: elem_<element>_<field>
+    # e.g. "elem_fire_net", "elem_fire_gross", "elem_fire_prot", "elem_fire_absorbed"
+    eb = cell.elemental_breakdown
+    if name.startswith("elem_"):
+        parts = name[5:].rsplit("_", 1)
+        if len(parts) == 2:
+            elem_name, field_name = parts
+            ed = eb.elements.get(elem_name)
+            if ed is not None:
+                ed_map = {"net": ed.net, "gross": ed.gross, "prot": ed.prot,
+                          "healed": ed.healed, "absorbed": ed.absorbed}
+                return ed_map.get(field_name, "")
+        # Bare element name defaults to net: "elem_fire" → fire.net
+        elem_name = name[5:]
+        ed = eb.elements.get(elem_name)
+        if ed is not None:
+            return ed.net
+
+    return ""
 
 
 def _fmt(val: Any) -> str:

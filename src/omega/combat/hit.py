@@ -175,6 +175,7 @@ def execute_hit(
         # Collect results from context
         result.final_damage = ctx.total_damage_dealt
         result.absorbed = float(ctx.metrics.get("absorbed", 0.0))
+        result.metrics = dict(ctx.metrics)
         result.side_effects = list(ctx.side_effects)
         result.defender_hp_after = defender.hp
 

@@ -8,10 +8,14 @@ from omega.reporting.plots import (
     damage_breakdown,
     damage_histogram,
     damage_vs_parameter,
+    elemental_breakdown_chart,
+    elemental_vs_parameter,
 )
 from omega.simulation.stats import (
     CellResult,
     DamageStats,
+    ElementDamage,
+    ElementalBreakdown,
     RatioStats,
     SimulationResult,
     aggregate_cell,
@@ -113,4 +117,52 @@ class TestComparisonOverlay:
     def test_single_scenario(self):
         cells = {"Solo": _make_cell(mean=20.0)}
         fig = comparison_overlay(cells)
+        assert type(fig).__name__ == "Figure"
+
+
+def _make_elemental_cell(**kw) -> CellResult:
+    cell = _make_cell(**kw)
+    cell.elemental_breakdown = ElementalBreakdown(elements={
+        "fire": ElementDamage(gross=20.0, net=14.0, prot=30.0),
+        "water": ElementDamage(gross=10.0, net=10.0, prot=0.0),
+    })
+    return cell
+
+
+class TestElementalBreakdownChart:
+    def test_returns_figure(self):
+        cell = _make_elemental_cell()
+        fig = elemental_breakdown_chart(cell)
+        assert type(fig).__name__ == "Figure"
+
+    def test_custom_title(self):
+        cell = _make_elemental_cell()
+        fig = elemental_breakdown_chart(cell, title="Element Test")
+        assert fig.axes[0].get_title() == "Element Test"
+
+    def test_empty_breakdown(self):
+        cell = _make_cell()
+        fig = elemental_breakdown_chart(cell)
+        assert type(fig).__name__ == "Figure"
+
+
+class TestElementalVsParameter:
+    def test_returns_figure(self):
+        cells = [
+            _make_elemental_cell(variable_values={"prot": 0}),
+            _make_elemental_cell(variable_values={"prot": 50}),
+        ]
+        result = SimulationResult(cells=cells)
+        fig = elemental_vs_parameter(result, "prot")
+        assert type(fig).__name__ == "Figure"
+
+    def test_no_data(self):
+        result = SimulationResult(cells=[])
+        fig = elemental_vs_parameter(result, "x")
+        assert type(fig).__name__ == "Figure"
+
+    def test_no_elemental_data(self):
+        cells = [_make_cell(variable_values={"x": 1})]
+        result = SimulationResult(cells=cells)
+        fig = elemental_vs_parameter(result, "x")
         assert type(fig).__name__ == "Figure"

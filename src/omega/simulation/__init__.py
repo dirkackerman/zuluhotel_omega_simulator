@@ -9,13 +9,22 @@ from omega.simulation.scenario import (
     Variable,
     WeaponSpec,
 )
-from omega.simulation.stats import CellResult, DamageStats, RatioStats, SimulationResult
+from omega.simulation.stats import (
+    CellResult,
+    DamageStats,
+    ElementDamage,
+    ElementalBreakdown,
+    RatioStats,
+    SimulationResult,
+)
 
 __all__ = [
     "ArmorSpec",
     "CellResult",
     "CombatantSpec",
     "DamageStats",
+    "ElementDamage",
+    "ElementalBreakdown",
     "ParameterSweep",
     "RatioStats",
     "Scenario",

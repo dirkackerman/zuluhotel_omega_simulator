@@ -41,6 +41,9 @@ class HitResult:
     # Debug: execution log messages
     hit_log: list[str] = field(default_factory=list)
 
+    # All metrics recorded by __RecordSimulatorMetric during this hit
+    metrics: dict[str, Any] = field(default_factory=dict)
+
     # Whether the script executed successfully
     success: bool = True
     error: str | None = None

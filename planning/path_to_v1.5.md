@@ -51,17 +51,19 @@ Elemental damage flows inline through `RecalcPhysicalDmg()` in hitscriptinc.inc.
 **Goal**: Surface per-element damage breakdown in results and reporting.
 
 **Deliverables**:
-- [ ] Add elemental damage fields to `HitResult` (or collect from metrics)
-- [ ] Add `ElementalBreakdown` dataclass: per-element mean damage (fire, air, earth, water, necro, holy, poison, acid, physical, magic, astral)
-- [ ] Add `elemental_breakdown` field to `CellResult`
-- [ ] Aggregate per-element stats across iterations in `aggregate_cell()`
-- [ ] Add `elemental_breakdown_chart()` plot function — stacked bar or pie showing damage by element
-- [ ] Add element columns to `summary_table()` (opt-in via stats list)
-- [ ] Test: sweep with mixed-element weapon shows correct per-element breakdown
+- [x] `HitResult.metrics` — propagates all `ctx.metrics` (including `elemental_applied`) to the result layer
+- [x] `ElementDamage` dataclass — per-element struct with `gross`, `net`, `prot`, `healed`, `absorbed` fields
+- [x] `ElementalBreakdown` dataclass — holds `dict[str, ElementDamage]` with `total_net`, `total_gross`, `net_dict()`, `gross_dict()`, `prot_dict()` accessors
+- [x] `elemental_breakdown` field on `CellResult`
+- [x] `aggregate_cell()` computes mean gross/net/prot/healed per element from `HitResult.metrics`
+- [x] `elemental_breakdown_chart()` — horizontal stacked bar showing net damage by element
+- [x] `elemental_vs_parameter()` — stacked bar chart of element breakdown across a sweep
+- [x] Element stat columns in `summary_table()` — `elem_<name>`, `elem_<name>_net`, `elem_<name>_gross`, `elem_<name>_prot`, `elem_<name>_absorbed`, `elem_total_net`, `elem_total_gross`
+- [x] `dmg_gross` added to `elemental_applied` metric (spelldata.inc) — captures pre-protection damage
 
 **Depends on**: M13
 
-**Acceptance**: Notebooks can visualize which portion of total damage comes from each element. Sweep tables include elemental columns when requested.
+**Acceptance**: Notebooks can visualize which portion of total damage comes from each element, including gross vs net and protection percentage. Sweep tables include elemental columns when requested.
 
 ## Phase 2: Sub-Script Execution (start_script infrastructure)
 
@@ -226,7 +228,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 |----|-----------|-------|------------|--------|
 | M12 | Elemental Protection Stubs | 1 | — | **Done** |
 | M13 | Elemental Damage Application | 1 | M12 | **Done** |
-| M14 | Elemental Damage Reporting | 1 | M13 | Not started |
+| M14 | Elemental Damage Reporting | 1 | M13 | **Done** |
 | M15 | Sub-Script Executor | 2 | — | Not started |
 | M16 | Fixture Sync for Enchantment Scripts | 2 | M15 | Not started |
 | M17 | Reactive Armor | 2 | M15, M16 | Not started |
