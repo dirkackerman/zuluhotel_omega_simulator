@@ -351,7 +351,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M7 — Combat Integration
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Wire everything together: parse `mainhit.src` with all includes, load config files, create combatants, and execute a single hit through the interpreter.
 

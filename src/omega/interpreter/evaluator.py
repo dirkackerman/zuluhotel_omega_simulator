@@ -1126,6 +1126,26 @@ def _set_index(obj: Any, index: Any, value: Any) -> None:
         obj[idx] = value
 
 
+# eScript member name → Python attribute name mapping for common aliases
+_MEMBER_ALIASES: dict[str, str] = {
+    "maxhp": "max_hp",
+    "max_hp": "max_hp",
+    "maxmana": "max_mana",
+    "max_mana": "max_mana",
+    "maxstamina": "max_stamina",
+    "max_stamina": "max_stamina",
+    "npctemplate": "npctemplate",
+    "str_mod": "str_mod",
+    "int_mod": "int_mod",
+    "dex_mod": "dex_mod",
+    "is_npc": "is_npc",
+    "isnpc": "is_npc",
+    "cmdlevel": "cmdlevel",
+    "two_handed": "two_handed",
+    "twohanded": "two_handed",
+}
+
+
 def _get_member(obj: Any, name: str) -> Any:
     """Get a member/property from an object."""
     if isinstance(obj, EStruct):
@@ -1138,6 +1158,13 @@ def _get_member(obj: Any, name: str) -> Any:
     if obj is None or obj is UNINIT:
         return UNINIT
     lower_name = name.lower()
+    # Check alias mapping first (eScript name → Python name)
+    alias = _MEMBER_ALIASES.get(lower_name)
+    if alias is not None:
+        try:
+            return getattr(obj, alias, UNINIT)
+        except Exception:
+            pass
     # Try direct attribute
     try:
         return getattr(obj, lower_name, getattr(obj, name, UNINIT))

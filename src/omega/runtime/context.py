@@ -71,6 +71,10 @@ class SimulationContext:
     # Config file cache for ReadConfigFile
     _config_cache: dict[str, Any] = field(default_factory=dict)
 
+    # Config path resolver: maps ":pkg:name" → filesystem Path
+    # Set by combat runner when a shard is loaded
+    _config_resolver: Any = None
+
     def record_side_effect(
         self, kind: str, target_serial: int, value: Any = None, detail: str = ""
     ) -> None:

@@ -331,3 +331,59 @@ Built a complete tree-walking eScript interpreter using ANTLR4's visitor pattern
 - [ ] All combat-path language patterns work: foreach+SplitWords, case with string labels, bitwise & for damage types
 - [ ] User-defined functions with defaults and recursion execute correctly
 - [ ] Built-in function dispatch bridges to M6 stubs (CInt, TypeOf, Len, ApplyRawDamage, etc.)
+
+---
+
+## M7 — Combat Integration
+
+**Date**: 2026-03-10
+
+### Summary
+
+Wired the eScript interpreter, runtime stubs, config system, and game object model together into a working combat integration layer. The system can now parse the real `mainhit.src` from the Zuluhotel Omega shard, execute it through the tree-walking interpreter with all includes resolved, and produce structured damage results.
+
+### New Files
+
+- **`src/omega/shard.py`** — Shard loader: scans `pkg/` for packages (reads `pkg.cfg` Name fields), builds package map for include resolution, loads/caches config files, resolves `:package:name` config paths.
+- **`src/omega/combat/__init__.py`** — Package exports for `execute_hit`, `execute_hit_from_shard`, `HitResult`.
+- **`src/omega/combat/result.py`** — `HitResult` dataclass: base_damage, raw_damage, final_damage, absorbed, side_effects, defender HP before/after, success/error.
+- **`src/omega/combat/damage.py`** — `roll_base_damage()`: rolls weapon dice via `DiceSpec`, clamps to minimum 1.
+- **`src/omega/combat/hit.py`** — `execute_hit()`: sets up SimulationContext + RNG, builds Executor from pre-parsed trees, binds mainhit parameters, runs program, collects HitResult from context. `execute_hit_from_shard()` convenience wrapper.
+- **`src/omega/parser/em_parser.py`** — Parser for POL `.em` module files: extracts `const NAME := value;` declarations. `load_em_modules()` loads constants from multiple modules.
+- **`tests/test_combat/test_result.py`** — 4 tests for HitResult construction.
+- **`tests/test_combat/test_damage.py`** — 5 tests for roll_base_damage (determinism, range, flat, minimum, default).
+- **`tests/test_combat/test_shard.py`** — 9 tests for ShardData (loading, package map, config resolution, script parsing).
+- **`tests/test_combat/test_hit.py`** — 13 tests for execute_hit (basic damage, multiplier, zero damage, error handling, AR absorption, PvP scaling, slayer check, class bonus, parms array, poison side effect, cursed armor).
+- **`tests/test_combat/test_real_scripts.py`** — 3 smoke tests executing actual `mainhit.src` from the shard submodule (damage application, determinism, slayer weapon).
+
+### Modified Files
+
+- **`src/omega/interpreter/executor.py`**:
+  - Executor no longer skips files with include-resolution errors (tree is still valid).
+  - Added `em_modules_dir` parameter for loading `.em` module constants.
+  - New `_load_em_constants()` method loads constants from `use` declaration modules.
+- **`src/omega/interpreter/evaluator.py`**:
+  - Added `_MEMBER_ALIASES` dict mapping eScript member names to Python attribute names (e.g., `maxhp` → `max_hp`, `isnpc` → `is_npc`).
+- **`src/omega/model/game_object.py`**:
+  - `.isa()` now accepts integer POLCLASS constants (1-16) in addition to string names.
+  - Added `_POLCLASS_INT_MAP` for integer → string mapping.
+- **`src/omega/runtime/context.py`**:
+  - Added `_config_resolver` field for resolving `:package:name` config paths.
+- **`src/omega/runtime/structural_stubs.py`**:
+  - `ReadConfigFile` now uses `_config_resolver` for package paths like `:combat:settings`.
+
+### Key Decisions
+
+1. **Lenient include handling**: Files with include-resolution errors are still processed by the Executor since their parse trees are valid. This is critical for `classes.inc` which includes `:staff:include/staff` (non-existent) but contains essential combat functions.
+2. **`.em` module constant loading**: POL `.em` files define constants like `POLCLASS_NPC := 4` that scripts depend on via `use uo;`. The Executor loads these from the shard's `scripts/modules/` directory.
+3. **Member name aliasing**: eScript uses `maxhp`, `isnpc`, `twohanded` while Python uses `max_hp`, `is_npc`, `two_handed`. A static alias map in the evaluator bridges this gap.
+4. **Integer POLCLASS support**: Real scripts pass integer constants (e.g., `POLCLASS_NPC = 4`) to `.isa()`, not strings. Added integer→string mapping.
+5. **Pre-parsed trees**: `execute_hit()` accepts pre-parsed trees rather than re-parsing on each call, enabling caching for simulation runs.
+
+### Test Criteria
+
+- 571 tests total (32 new M7 tests + 539 existing)
+- All 32 combat tests pass including 3 real-shard smoke tests
+- Real `mainhit.src` executes successfully: player (STR 100) with sword (3d6+2) deals 120 damage to NPC with no class/armor
+- Slayer weapons produce 2× multiplier against matching creature type
+- Deterministic execution: same seed → same result

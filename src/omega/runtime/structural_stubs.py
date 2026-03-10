@@ -42,9 +42,17 @@ def read_config_file(path: Any = None) -> Any:
 
     # Lazy import to avoid circular deps
     from omega.config.accessor import RuntimeConfigFile
-    from omega.config.cfg_parser import parse_config_file
 
+    # Try to resolve package paths (":combat:settings") via shard resolver
     resolved = Path(path_str)
+    if path_str.startswith(":") and ctx._config_resolver is not None:
+        fs_path = ctx._config_resolver(path_str)
+        if fs_path is not None:
+            resolved = fs_path
+        else:
+            logger.warning("Config path not resolved", path=path_str)
+            return None
+
     if not resolved.exists():
         logger.warning("Config file not found", path=path_str)
         return None

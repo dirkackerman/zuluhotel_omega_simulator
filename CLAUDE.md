@@ -111,9 +111,8 @@ These occur in the real scripts but need careful handling in simulation:
 Build a general-purpose eScript interpreter but only stub the POL built-ins that the combat call path exercises. When an un-stubbed built-in is hit, raise a clear `NotImplemented: module::function` error. Expand stubs incrementally.
 
 ### Parser Strategy
-- **Primary**: ANTLR4 with Python target generated from `submodules/escript-antlr4/*.g4`
-- **Alternative**: Lark grammar (may be simpler for Python-native approach)
-- Decision pending based on prototyping both approaches
+- **Using**: ANTLR4 with Python target generated from `submodules/escript-antlr4/*.g4`
+- **Note**: The POL server grammar (`submodules/polserver/lib/Parser/EscriptGrammar/`) is newer and has features the ANTLR4 grammar lacks: `uninit` literal keyword, interpolated strings (`$"..."`), class declarations (CLASS/ENDCLASS), destructuring assignments, lambdas, spread operator (`...`), `is` operator, regex literals. None of these are used in the combat scripts for V1. If future versions need these features, either patch the ANTLR4 grammar or port the POL server grammar to a Python target.
 
 ### Required Parsers (V1 deliverables)
 1. **eScript parser** — main deliverable, from ANTLR4 grammar or Lark

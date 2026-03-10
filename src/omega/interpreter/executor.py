@@ -53,20 +53,35 @@ class Executor:
     3. Return result
     """
 
-    def __init__(self, parse_results: dict[Path, ParseResult]) -> None:
+    def __init__(
+        self,
+        parse_results: dict[Path, ParseResult],
+        *,
+        em_modules_dir: Path | None = None,
+    ) -> None:
         self.scopes = ScopeStack()
         self.functions = FunctionRegistry()
         self._program: tuple[str, list[ParamDef], Any] | None = None
         self._interpreter = EscriptInterpreter(self.scopes, self.functions)
+        self._em_modules_dir = em_modules_dir
 
         self._load(parse_results)
 
     def _load(self, parse_results: dict[Path, ParseResult]) -> None:
         """Load all parsed files: extract functions, constants, program."""
         for path, result in parse_results.items():
-            if not result.success:
-                logger.warning("Skipping file with parse errors", file=str(path))
+            if result.tree is None:
+                logger.warning("Skipping file with no parse tree", file=str(path))
                 continue
+
+            # Process files even with include-resolution errors —
+            # the tree itself is valid and contains useful functions/constants
+            if not result.success:
+                logger.debug(
+                    "File has warnings, processing anyway",
+                    file=str(path),
+                    error_count=len(result.errors),
+                )
 
             tree = result.tree
 
@@ -104,6 +119,31 @@ class Executor:
                         new=prog[0],
                     )
                 self._program = prog
+
+        # Load .em module constants if modules dir is provided
+        if self._em_modules_dir is not None:
+            self._load_em_constants()
+
+    def _load_em_constants(self) -> None:
+        """Load constants from .em module files for all USE declarations."""
+        from omega.parser.em_parser import load_em_modules
+
+        module_names = list(self.functions.module_names)
+        if not module_names:
+            return
+
+        constants = load_em_modules(self._em_modules_dir, module_names)
+        for name, value in constants.items():
+            # Don't overwrite constants already defined by scripts
+            existing = self.scopes.get(name)
+            if existing is UNINIT:
+                self.scopes.define_global(name, value, const=True)
+
+        logger.debug(
+            "Loaded .em module constants",
+            modules=len(module_names),
+            constants=len(constants),
+        )
 
     def run_program(self, program_args: dict[str, Any] | list[Any] | None = None) -> Any:
         """Execute the program entry point with given arguments.

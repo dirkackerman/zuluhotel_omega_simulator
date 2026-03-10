@@ -80,8 +80,37 @@ class GameObject:
     # Type checking (.isa / .IsA)
     # ------------------------------------------------------------------
 
-    def isa(self, polclass: str) -> bool:
-        """Check if this object matches a POLCLASS constant."""
+    # Integer POLCLASS constant → string name mapping
+    _POLCLASS_INT_MAP: dict[int, str] = {
+        1: "UObject",
+        2: "Item",
+        3: "Mobile",
+        4: "NPC",
+        5: "Lockable",
+        6: "Container",
+        7: "Corpse",
+        8: "Door",
+        9: "Spellbook",
+        10: "Map",
+        11: "Multi",
+        12: "Boat",
+        13: "House",
+        14: "Equipment",
+        15: "Armor",
+        16: "Weapon",
+    }
+
+    def isa(self, polclass: str | int) -> bool:
+        """Check if this object matches a POLCLASS constant.
+
+        Accepts both string names ("Mobile", "NPC") and integer constants
+        (3 for POLCLASS_MOBILE, 4 for POLCLASS_NPC, etc.).
+        """
+        if isinstance(polclass, int):
+            name = self._POLCLASS_INT_MAP.get(polclass)
+            if name is None:
+                return False
+            return name in self._polclasses
         return polclass in self._polclasses
 
     # Alias matching eScript's case-insensitive method name
