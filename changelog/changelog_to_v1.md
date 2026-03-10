@@ -382,8 +382,61 @@ Wired the eScript interpreter, runtime stubs, config system, and game object mod
 
 ### Test Criteria
 
-- 571 tests total (32 new M7 tests + 539 existing)
-- All 32 combat tests pass including 3 real-shard smoke tests
-- Real `mainhit.src` executes successfully: player (STR 100) with sword (3d6+2) deals 120 damage to NPC with no class/armor
-- Slayer weapons produce 2× multiplier against matching creature type
-- Deterministic execution: same seed → same result
+- [ ] `execute_hit()` with a plain weapon (3d6+2) vs unarmored NPC produces non-zero `final_damage` and reduces `defender.hp`
+- [ ] `execute_hit()` with AR 30 armor absorbs damage: `final_damage < base_damage`
+- [ ] Slayer weapon vs matching creature type (Undead) deals strictly more damage than non-slayer weapon with same stats
+- [ ] Deterministic: calling `execute_hit()` twice with the same seed, combatants, and weapon produces identical `final_damage`
+- [ ] Real `mainhit.src` from the shard submodule executes end-to-end without errors (parse → interpret → result)
+- [ ] `.em` module constants load correctly: scripts using `POLCLASS_NPC` (from `use uo;`) don't fail on `.isa()` checks
+- [ ] Files with include-resolution warnings (e.g., `classes.inc` missing `:staff:include/staff`) still parse and their functions are available
+- [ ] Integer POLCLASS constants work: `defender.isa(4)` returns True for NPCs (not just `defender.isa("NPC")`)
+- [ ] eScript member names without underscores (e.g., `weapon.maxhp`) resolve to Python snake_case attributes (e.g., `weapon.max_hp`) via underscore normalisation, with a DEBUG log when this fallback fires
+
+---
+
+## M8 — Simulation Runner
+
+**Date**: 2026-03-10
+
+### Summary
+
+Added the simulation engine: declarative scenario definitions, a runner that executes N iterations of `execute_hit()` with state reset and deterministic seeding, and statistical aggregation (mean, median, percentiles, ratios). Supports parameter sweeps across combatant attributes with Cartesian product grid execution.
+
+### New files
+
+- `src/omega/simulation/scenario.py` — `WeaponSpec`, `ArmorSpec`, `CombatantSpec`, `Scenario`, `Variable`, `ParameterSweep` dataclasses; `build_combatant()`, `build_weapon()`, `build_armor()` materialization; `apply_variable()` for parameter sweeps
+- `src/omega/simulation/stats.py` — `DamageStats`, `RatioStats`, `CellResult`, `SimulationResult` dataclasses; `aggregate_cell()` function using stdlib `statistics`
+- `src/omega/simulation/runner.py` — `run_scenario()` (single scenario, N iterations) and `run_sweep()` (parameter sweep with Cartesian grid); progress logging with ETA
+- `tests/test_simulation/test_scenario.py` — 19 tests for specs, materialization, variable application
+- `tests/test_simulation/test_stats.py` — 15 tests for aggregation, percentiles, ratios
+- `tests/test_simulation/test_runner.py` — 8 tests for runner with mock `execute_hit`
+- `tests/test_simulation/test_runner_shard.py` — 4 shard integration tests (basic, deterministic, monotonicity, performance)
+
+### Modified files
+
+- `src/omega/simulation/__init__.py` — public API exports
+- `path_to_v1.md` — M8 status → Complete
+
+### Key decisions
+
+- **Frozen specs, fresh objects**: `CombatantSpec` is immutable; runner builds new game objects per cell, snapshot/restore per iteration
+- **Parse once**: Script `parse_results` computed once and shared across all cells/iterations
+- **Deterministic seeding**: `base_seed XOR iteration_index` per hit
+- **No numpy**: stdlib `statistics` module for all aggregation (sufficient for ~1000 values)
+### Bug fix: `GetAttribute` precision parameter
+
+POL's `GetAttribute(mob, attr, precision)` defaults to `ATTRIBUTE_PRECISION_NORMAL` (0), returning display-scale values (0-200 for skills). Our stub was ignoring the precision parameter and always returning tenths (0-2000), which inflated damage multipliers ~10x and masked skill-based damage variation. Fixed: default precision=0 now divides by 10.
+
+### Test Criteria
+
+- [ ] Define a Warrior (class level 5) with sword (3d6+2), Tactics 100, vs NPC (STR 50, AR 30). Run 10 iterations. Verify: all `HitResult.success == True`, `mean(final_damage) > 0`, `std_dev > 0` (damage should vary due to dice rolls)
+- [ ] Run the same scenario twice with `base_seed=42`. Verify: identical mean damage both times (deterministic)
+- [ ] Sweep Tactics skill from 50 to 130 (step 40) with 50 iterations per cell. Verify: mean damage strictly increases across cells — higher Tactics = higher damage (this is the warrior damage formula: `basedamage *= 1 + (averageSkill * 0.005)` where averageSkill = (Anatomy + Tactics) / 2)
+- [ ] Note: sweeping Swordsmanship (weapon skill) does NOT affect warrior damage — the formula uses Anatomy and Tactics. If a designer sweeps the wrong skill and sees flat damage, this is expected, not a bug
+- [ ] `GetAttribute(mob, "Tactics")` with default precision returns display value (e.g., 100 for a mob with internal skill 1000). `GetAttribute(mob, "Tactics", 1)` returns tenths (1000)
+- [ ] Run 9 cells × 100 iterations against real shard scripts in under 60 seconds
+- [ ] `CellResult` exposes raw `HitResult` list for custom analysis, `DamageStats` has mean/median/min/max/std_dev/p5/p25/p75/p95, `RatioStats` has hit_rate/poison_rate/equipment_break_rate
+- [ ] `SimulationResult.damage_curve("attacker.skills.27")` returns `(value, DamageStats)` pairs suitable for plotting
+- [ ] `build_combatant(CombatantSpec(skills={27: 100}))` stores skill as internal value 1000 (display × 10)
+
+---

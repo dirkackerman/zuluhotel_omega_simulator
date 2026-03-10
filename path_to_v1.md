@@ -397,7 +397,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M8 — Simulation Runner
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Run N iterations of `execute_hit()` across parameter variations and collect statistical results.
 

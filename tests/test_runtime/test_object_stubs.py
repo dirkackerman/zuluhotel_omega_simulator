@@ -111,13 +111,29 @@ class TestSkillAccessors:
     def test_get_attribute_by_name(self):
         m = Mobile()
         m.str_base = 100
+        # Default precision=0 (ATTRIBUTE_PRECISION_NORMAL) → display value
         result = call_builtin("", "GetAttribute", [m, "strength"])
-        assert result == 1000  # tenths
+        assert result == 100
+
+    def test_get_attribute_by_name_tenths(self):
+        m = Mobile()
+        m.str_base = 100
+        # precision=1 (ATTRIBUTE_PRECISION_TENTHS) → tenths
+        result = call_builtin("", "GetAttribute", [m, "strength", 1])
+        assert result == 1000
 
     def test_get_attribute_skill(self):
         m = Mobile()
-        m.set_skill(SKILLID_TACTICS, 800)
+        m.set_skill(SKILLID_TACTICS, 800)  # internal: 800 (display: 80)
+        # Default precision → display value
         result = call_builtin("", "GetAttribute", [m, "Tactics"])
+        assert result == 80
+
+    def test_get_attribute_skill_tenths(self):
+        m = Mobile()
+        m.set_skill(SKILLID_TACTICS, 800)
+        # precision=1 → tenths (raw internal)
+        result = call_builtin("", "GetAttribute", [m, "Tactics", 1])
         assert result == 800
 
     def test_get_attribute_id_by_skill_id(self):

@@ -199,12 +199,26 @@ def get_effective_skill(mobile: Any = None, skill_id: Any = None) -> int:
 
 @pol_function("", "GetAttribute")
 @pol_function("attributes", "GetAttribute")
-def get_attribute(mobile: Any = None, attr_name: Any = None) -> int:
-    """Get attribute value by string name (returns tenths)."""
+def get_attribute(
+    mobile: Any = None, attr_name: Any = None, precision: Any = 0
+) -> int:
+    """Get attribute value by string name.
+
+    Parameters
+    ----------
+    precision:
+        0 = ATTRIBUTE_PRECISION_NORMAL (display value, 0-200 for skills)
+        1 = ATTRIBUTE_PRECISION_TENTHS (internal tenths, 0-2000 for skills)
+    """
     if mobile is None or attr_name is None:
         return 0
     if hasattr(mobile, "get_attribute"):
-        return mobile.get_attribute(str(attr_name))
+        tenths = mobile.get_attribute(str(attr_name))
+        if int(precision) == 0:
+            # ATTRIBUTE_PRECISION_NORMAL: return display value
+            return tenths // 10
+        # ATTRIBUTE_PRECISION_TENTHS: return raw tenths
+        return tenths
     return 0
 
 
