@@ -1,0 +1,9 @@
+[submodule "submodules/zuluhotel_omega_2.5"]
+	path = submodules/zuluhotel_omega_2.5
+	url = https://github.com/dirkackerman/zuluhotel_omega_2.5.git
+[submodule "submodules/polserver"]
+	path = submodules/polserver
+	url = https://github.com/polserver/polserver.git
+[submodule "submodules/escript-antlr4"]
+	path = submodules/escript-antlr4
+	url = https://github.com/polserver/escript-antlr4.git
