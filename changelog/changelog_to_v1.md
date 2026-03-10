@@ -135,3 +135,60 @@ Built POL config file parsers, package path resolver, dice notation parser, and 
 - [ ] 129 packages discovered from shard `pkg/` directories
 - [ ] `cfg[0x13BB].Name == "ChainmailCoif"` — int objtype lookup works
 - [ ] `cfg["Weapons"].WearChance.startswith("8")` — runtime accessor dot access works
+
+---
+
+## M4 — Game Object Model
+
+**Date**: 2026-03-10
+
+### Summary
+
+Built the in-memory game object model: base `GameObject` with property bag, `Mobile` with stats/skills/vitals/equipment, `Weapon` and `Armor` items, factory functions for creating objects from config or inline specs, and snapshot/restore for stateless simulation iterations.
+
+**Files created**:
+- `src/omega/model/constants.py` — All POL constants: POLCLASS types, 24 equipment layers, 10 class IDs with bonus constants, 49 skill IDs, attribute name strings, SKILLID↔ATTRIBUTE bidirectional maps, vital IDs, caps, 12 damage type bitflags
+- `src/omega/model/game_object.py` — `GameObject` base class with auto-incrementing serial, intrinsic fields (objtype, graphic, name, color), property bag (get/set/erase/has), `.isa()` type checking
+- `src/omega/model/items.py` — `Weapon` (damage DiceSpec, speed, attribute skill ID, two_handed, quality, hitscript, durability) and `Armor` (AR, coverage zones, layer, durability). Both extend `GameObject` with correct POLCLASS tuples
+- `src/omega/model/mobile.py` — `Mobile` with base stats + mods (STR/INT/DEX), vitals (HP/Mana/Stamina), skill storage (internal ×10 representation), equipment slots by layer, computed `.ar` from equipped armor, `get_attribute()` supporting both stat names and skill names, dynamic `_polclasses` for NPC vs player
+- `src/omega/model/factories.py` — `create_mobile_from_template()` (full NPC chain: npcdesc→equip→itemdesc), `create_mobile_inline()` (direct spec), `create_weapon_from_config()`, `create_armor_from_config()`, `equip_from_template()`. Handles skill name normalization, CProp transfer, CustomHitsLevel override
+- `src/omega/model/snapshot.py` — `MobileSnapshot` frozen dataclass capturing vitals, stat mods, property bag (deep copy), equipment HP. `snapshot()` and `restore()` for stateless iteration reset
+- `src/omega/model/__init__.py` — Public API exports
+
+### Key decisions
+- Property bag is separate from member access — matches POL's distinction between `obj.field` and `GetObjProperty(obj, "name")`
+- Skills stored internally at ×10 precision (0-2000), display values 0-200, matching POL's `GetEffectiveSkill` behavior
+- Class levels stored in property bag (e.g., `"IsWarrior" → 5`), not as typed fields — matches eScript's `GetObjProperty(mob, CLASSEID_WARRIOR)` pattern
+- Stat mods stored in tenths (matching POL precision), effective stat = base + mod/10
+- `_polclasses` is a property on Mobile (dynamic based on `is_npc`) vs a class attribute on items
+- Equipment auto-layer assignment from armor coverage zones (Head→HELM, Body→CHEST, etc.)
+- Snapshot deep-copies the property bag to prevent shared state between iterations
+
+### Test Criteria
+
+- [ ] `uv run pytest -v` — all 256 tests pass (23 logging + 86 parser + 58 config + 89 model):
+  - `TestSerialAssignment` (2 tests) — unique serials, positive values
+  - `TestIntrinsicFields` (3 tests) — defaults, custom values, graphic fallback
+  - `TestPropertyBag` (7 tests) — CRUD, overwrite, any type support
+  - `TestIsa` (4 tests) — Item/Weapon/Mobile checks, IsA alias
+  - `TestRepr` (1 test) — string representation
+  - `TestWeapon` (6 tests) — defaults, custom, isa, desc, property bag, durability
+  - `TestArmor` (6 tests) — defaults, custom, isa, desc, property bag, layer
+  - `TestMobileBasics` (2 tests) — player vs NPC defaults
+  - `TestMobileIsa` (3 tests) — player/NPC POLCLASS checks
+  - `TestMobileStats` (4 tests) — defaults, custom, positive/negative mods
+  - `TestMobileVitals` (2 tests) — defaults, modify
+  - `TestMobileSkills` (7 tests) — set/get, effective skill, attribute by name, case insensitive
+  - `TestMobileEquipment` (4 tests) — equip, unequip, list
+  - `TestMobileAR` (4 tests) — no armor, single, sum, weapon excluded
+  - `TestMobileClassLevels` (2 tests) — via property bag
+  - `TestCreateMobileInline` (10 tests) — warrior creation, HP/mana/stamina defaults, armor equip, NPC flag, skill storage
+  - `TestWeaponFromConfig` (2 tests) — WispWeapon from itemdesc, hitscript detection
+  - `TestArmorFromConfig` (2 tests) — ChainmailCoif AR/coverage, CProps carried
+  - `TestMobileFromTemplate` (5 tests) — beckon NPC stats/skills/equipment, CProps, unknown template error
+  - `TestSnapshotWithRealNPC` (1 test) — snapshot→damage→restore cycle
+  - `TestSnapshot` (5 tests) — captures vitals, stat mods, properties, equipment HP, frozen
+  - `TestRestore` (7 tests) — restores vitals/mods/dead/properties/equipment HP, independence from snapshot
+- [ ] `create_mobile_from_template("beckon")` → STR 200, INT 200, DEX 175, skills populated
+- [ ] `Weapon.isa(POLCLASS_WEAPON)` → True, `Mobile.isa(POLCLASS_NPC)` → True for NPCs
+- [ ] Snapshot→modify→restore cycle preserves original state

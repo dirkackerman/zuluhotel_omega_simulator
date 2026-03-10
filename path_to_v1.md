@@ -181,7 +181,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M4 — Game Object Model
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Define the in-memory data model for combatants, weapons, armor, and the property-bag system that eScript interacts with via GetObjProperty/SetObjProperty.
 
@@ -312,7 +312,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
   - Type queries: `TypeOf(v)`, `Len(v)`
   - String: `SplitWords(s, delim)`, `Lower(s)`, `Upper(s)`, `SubStr()`
   - Time: `ReadGameClock()` → returns iteration counter or fixed value
-  - Messaging (no-ops with logging): `SendSysMessage()`, `PrintTextAbovePrivate()`, `PrintTextAbove()`
+  - Messaging: `SendSysMessage()`, `PrintTextAbovePrivate()`, `PrintTextAbove()` — when `DEBUG_MODE` is enabled in the simulation context, route message text through `omega.runtime.messaging` logger at INFO level (gives designers visibility into what scripts are "saying" during combat calculations); silent no-ops when `DEBUG_MODE` is off
   - Actions (no-ops): `PerformAction()`, `PlaySoundEffect()`
 
 - **Batch 2 — object model stubs** (`src/omega/runtime/object_stubs.py`):
@@ -405,7 +405,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 **Deliverables**:
 - **Scenario definition** (`src/omega/simulation/scenario.py`):
   - `Combatant` spec: class, skills dict, stats dict, weapon spec, armor spec — OR — NPC template name
-  - `Scenario`: attacker spec, defender spec, N iterations (default 1000)
+  - `Scenario`: attacker spec, defender spec, N iterations (default 1000), `debug_mode: bool` (default False) — when True, enables `SendSysMessage` logging output via `omega.runtime.messaging` logger so designers can see script-level messages during simulation runs
   - `Variable`: parameter name, range (start, stop, step) or list of discrete values
   - `ParameterSweep`: scenario + one or more variables → generates a grid of scenarios
 
