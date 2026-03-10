@@ -58,12 +58,19 @@ class Executor:
         parse_results: dict[Path, ParseResult],
         *,
         em_modules_dir: Path | None = None,
+        shard_root: Path | None = None,
+        package_map: Any | None = None,
     ) -> None:
         self.scopes = ScopeStack()
         self.functions = FunctionRegistry()
         self._program: tuple[str, list[ParamDef], Any] | None = None
         self._interpreter = EscriptInterpreter(self.scopes, self.functions)
         self._em_modules_dir = em_modules_dir
+        self._shard_root = shard_root
+        self._package_map = package_map
+
+        # Sub-script program cache: script path key → (name, params, body)
+        self._sub_programs: dict[str, tuple[str, list[ParamDef], Any]] = {}
 
         self._load(parse_results)
         # Snapshot the global scope after loading so we can cheaply
@@ -224,6 +231,152 @@ class Executor:
             return ret.value
 
         return None
+
+    def run_sub_program(self, script_path: str, args: list[Any]) -> Any:
+        """Execute a sub-script program (e.g., from ``start_script``).
+
+        Resolves the script path, parses the ``.src`` file on first use,
+        and runs its program block with scope isolation.  The args list
+        is passed as positional arguments — POL convention passes the
+        array as the first (and only) positional argument.
+
+        Parameters
+        ----------
+        script_path:
+            Script path in ``:package:name`` format
+            (e.g., ``":combat:reactivearmoronhit"``).
+        args:
+            List of arguments.  Passed as positional args to the program.
+
+        Returns
+        -------
+        Any:
+            The return value of the sub-script program (if any).
+        """
+        # Normalize key for cache lookup
+        key = script_path.strip().lower()
+
+        if key not in self._sub_programs:
+            self._load_sub_script(script_path, key)
+
+        prog_name, params, body = self._sub_programs[key]
+
+        # Scope isolation: save depth, push new scope, run, pop back
+        saved_depth = self.scopes.depth
+
+        # Bind program parameters — POL passes the array as positional args
+        self.scopes.push()
+        try:
+            for i, param in enumerate(params):
+                if param.unused:
+                    self.scopes.define(param.name, UNINIT)
+                elif i < len(args):
+                    self.scopes.define(param.name, args[i])
+                elif param.default_ctx is not None:
+                    self.scopes.define(param.name, self._interpreter.visit(param.default_ctx))
+                else:
+                    self.scopes.define(param.name, UNINIT)
+
+            logger.info("Executing sub-program", name=prog_name, script=script_path)
+
+            try:
+                self._interpreter.visitBlock(body)
+            except ExitSignal:
+                pass
+            except ReturnSignal as ret:
+                return ret.value
+        finally:
+            # Pop back to saved depth (handles any scopes pushed by
+            # function calls within the sub-script that didn't clean up)
+            while self.scopes.depth > saved_depth:
+                self.scopes.pop()
+
+        return None
+
+    def _load_sub_script(self, script_path: str, cache_key: str) -> None:
+        """Parse a sub-script .src file and cache its program block."""
+        resolved = self._resolve_script_path(script_path)
+
+        from omega.parser.parser import parse_file
+
+        result = parse_file(resolved)
+        if result.tree is None:
+            raise RuntimeError(
+                f"Failed to parse sub-script: {script_path} "
+                f"(resolved to {resolved})"
+            )
+
+        # Extract USE declarations (usually already registered)
+        for module in extract_use_declarations(result.tree):
+            self.functions.add_module(module)
+
+        # Extract any functions defined in the sub-script
+        for func_def in extract_functions(result.tree, source_file=str(resolved)):
+            if not self.functions.has(func_def.name):
+                self.functions.register(func_def)
+
+        # Extract the program block
+        prog = extract_program(result.tree)
+        if prog is None:
+            raise RuntimeError(
+                f"No program declaration in sub-script: {script_path} "
+                f"(resolved to {resolved})"
+            )
+
+        self._sub_programs[cache_key] = prog
+        logger.info(
+            "Loaded sub-script",
+            script=script_path,
+            program=prog[0],
+            param_count=len(prog[1]),
+        )
+
+    def _resolve_script_path(self, script_path: str) -> Path:
+        """Resolve a script path like ``:combat:reactivearmoronhit`` to a .src file."""
+        if self._shard_root is None or self._package_map is None:
+            raise RuntimeError(
+                f"Cannot resolve sub-script path {script_path!r}: "
+                "Executor was created without shard_root/package_map"
+            )
+
+        path = script_path.strip().strip('"').strip("'")
+
+        if path.startswith(":"):
+            # Package path: ":combat:reactivearmoronhit" → pkg/.../reactivearmoronhit.src
+            parts = path.lstrip(":").split(":", 1)
+            if len(parts) != 2:
+                raise ValueError(f"Invalid script path: {script_path!r}")
+
+            pkg_name, file_name = parts
+            pkg_dir = self._package_map.resolve(pkg_name)
+            if pkg_dir is None:
+                raise FileNotFoundError(f"Unknown package: {pkg_name!r}")
+
+            # Try .src extension first, then without
+            for candidate in [
+                pkg_dir / f"{file_name}.src",
+                pkg_dir / file_name,
+            ]:
+                if candidate.exists():
+                    return candidate.resolve()
+
+            raise FileNotFoundError(
+                f"Sub-script not found: {script_path!r} "
+                f"(tried {pkg_dir / f'{file_name}.src'})"
+            )
+        else:
+            # Relative path
+            scripts_dir = self._shard_root / "scripts"
+            for candidate in [
+                scripts_dir / f"{path}.src",
+                scripts_dir / path,
+                self._shard_root / f"{path}.src",
+                self._shard_root / path,
+            ]:
+                if candidate.exists():
+                    return candidate.resolve()
+
+            raise FileNotFoundError(f"Sub-script not found: {script_path!r}")
 
     def call_function(self, name: str, args: list[Any] | None = None) -> Any:
         """Call a named function directly (for testing/integration).

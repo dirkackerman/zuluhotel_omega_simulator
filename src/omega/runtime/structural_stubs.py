@@ -217,17 +217,36 @@ def find_guild(guild_id: Any = None) -> Any:
 @pol_function("", "start_script")
 @pol_function("", "Start_Script")
 def start_script(path: Any = None, *args: Any) -> Any:
-    """Launch a sub-script. V1: logs warning and returns None.
+    """Launch a sub-script via the executor.
 
-    Sub-scripts include enchantment effects, reactive armor, elemental
-    damage dispatchers. Skipped in V1 (physical-only path).
+    POL convention: ``start_script(":combat:script", {arg1, arg2, ...})``
+    passes the array as the single first argument to the program.
+
+    Falls back to a no-op warning if no executor is available on the
+    simulation context.
     """
-    logger.warning(
-        "start_script skipped (V1: no sub-script execution)",
+    from omega.runtime.context import get_context
+
+    ctx = get_context()
+    if ctx.executor is None:
+        logger.warning(
+            "start_script skipped (no executor on context)",
+            script=str(path),
+            arg_count=len(args),
+        )
+        return None
+
+    # Convert args to a list for the sub-program.
+    # POL passes the array as the first positional argument.
+    args_list = list(args)
+
+    logger.info(
+        "start_script dispatching",
         script=str(path),
-        arg_count=len(args),
+        arg_count=len(args_list),
     )
-    return None
+
+    return ctx.executor.run_sub_program(str(path), args_list)
 
 
 # ---------------------------------------------------------------------------

@@ -231,7 +231,7 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 
 ### Running tests
 ```bash
-pytest                    # everything (764 tests, ~57s)
+pytest                    # everything (777 tests, ~57s)
 ```
 
 All tests run unconditionally — no markers, no skips, no submodule dependency.
@@ -273,7 +273,7 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **[Path to V1](./planning/path_to_v1.md)** — Milestone plan (M0-M11) with dependency graph, deliverables, and acceptance criteria per milestone
 - **[Changelog to V1](./changelog/changelog_to_v1.md)** — Per-milestone change summaries with test criteria
 - **V1 status**: All milestones (M0–M11) complete. 374 hits/sec, submodule-independent fixtures.
-- **V1.5 status**: M12–M14 complete (elemental protection, damage application, reporting). 764 tests. Phase 1 done.
+- **V1.5 status**: M12–M15 complete (elemental damage + sub-script executor). 777 tests. Phase 1 done, Phase 2 started.
 - **[Path to V1.5](./planning/path_to_v1.5.md)** — Elemental & Enchanted Weapons roadmap (M12–M22), three phases: elemental damage, sub-script execution, polish
 - **[Changelog to V1.5](./changelog/changelog_to_v1.5.md)** — Per-milestone change summaries for V1.5
 

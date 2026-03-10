@@ -44,6 +44,8 @@ def execute_hit(
     config_resolver: Any = None,
     em_modules_dir: Path | None = None,
     executor: Executor | None = None,
+    shard_root: Path | None = None,
+    package_map: Any = None,
 ) -> HitResult:
     """Execute a single combat hit through the eScript interpreter.
 
@@ -74,6 +76,12 @@ def execute_hit(
         Pre-built :class:`Executor` to reuse across multiple hits.
         If provided, ``parse_results`` and ``em_modules_dir`` are ignored.
         The executor is reset before each run.
+    shard_root:
+        Root directory of the shard.  Needed for sub-script path resolution
+        (``start_script``).  Passed to :class:`Executor` if creating one.
+    package_map:
+        Package name → directory mapping for resolving ``:pkg:name`` script
+        paths in ``start_script`` calls.
 
     Returns
     -------
@@ -120,9 +128,17 @@ def execute_hit(
     try:
         # Build executor or reuse cached one
         if executor is None:
-            executor = Executor(parse_results, em_modules_dir=em_modules_dir)
+            executor = Executor(
+                parse_results,
+                em_modules_dir=em_modules_dir,
+                shard_root=shard_root,
+                package_map=package_map,
+            )
         else:
             executor.reset()
+
+        # Make executor available to start_script() stub
+        ctx.executor = executor
 
         # Inject Python override for __RecordSimulatorMetric so the
         # eScript no-op is replaced with actual metric recording.
@@ -214,5 +230,11 @@ def execute_hit_from_shard(
 
     if "em_modules_dir" not in kwargs:
         kwargs["em_modules_dir"] = shard.root / "scripts" / "modules"
+
+    if "shard_root" not in kwargs:
+        kwargs["shard_root"] = shard.root
+
+    if "package_map" not in kwargs:
+        kwargs["package_map"] = shard.package_map
 
     return execute_hit(parse_results, attacker, defender, weapon, armor, **kwargs)

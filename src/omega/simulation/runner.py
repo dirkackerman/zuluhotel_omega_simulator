@@ -64,6 +64,8 @@ def run_scenario(
         when they are not provided explicitly.
     """
     # Derive shard-based defaults
+    shard_root: Path | None = None
+    package_map: Any = None
     if shard is not None:
         if parse_results is None:
             parse_results = shard.parse_combat_scripts()
@@ -71,6 +73,8 @@ def run_scenario(
             config_resolver = shard.resolve_config_path
         if em_modules_dir is None:
             em_modules_dir = shard.root / "scripts" / "modules"
+        shard_root = shard.root
+        package_map = shard.package_map
 
     if parse_results is None:
         raise ValueError(
@@ -82,7 +86,12 @@ def run_scenario(
     defender, _def_weapon, armor = build_combatant(scenario.defender)
 
     # Build executor once — reused across all iterations
-    cached_executor = _executor or Executor(parse_results, em_modules_dir=em_modules_dir)
+    cached_executor = _executor or Executor(
+        parse_results,
+        em_modules_dir=em_modules_dir,
+        shard_root=shard_root,
+        package_map=package_map,
+    )
 
     # Snapshot for per-iteration reset
     atk_snap = snapshot(attacker)
@@ -105,6 +114,8 @@ def run_scenario(
             debug=scenario.debug_mode,
             config_resolver=config_resolver,
             executor=cached_executor,
+            shard_root=shard_root,
+            package_map=package_map,
         )
         results.append(result)
 
@@ -135,6 +146,8 @@ def run_sweep(
         See :func:`run_scenario`.
     """
     # Derive shard-based defaults once for all cells
+    shard_root: Path | None = None
+    package_map: Any = None
     if shard is not None:
         if parse_results is None:
             parse_results = shard.parse_combat_scripts()
@@ -142,6 +155,8 @@ def run_sweep(
             config_resolver = shard.resolve_config_path
         if em_modules_dir is None:
             em_modules_dir = shard.root / "scripts" / "modules"
+        shard_root = shard.root
+        package_map = shard.package_map
 
     if parse_results is None:
         raise ValueError(
@@ -149,7 +164,12 @@ def run_sweep(
         )
 
     # Build executor once for all cells in the sweep
-    shared_executor = Executor(parse_results, em_modules_dir=em_modules_dir)
+    shared_executor = Executor(
+        parse_results,
+        em_modules_dir=em_modules_dir,
+        shard_root=shard_root,
+        package_map=package_map,
+    )
 
     # Build the Cartesian product grid
     if not sweep.variables:

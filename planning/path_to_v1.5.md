@@ -74,16 +74,16 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Extend the `Executor` to find and run sub-scripts by path.
 
 **Deliverables**:
-- [ ] Parse enchantment/reactive armor `.src` files and add their program blocks to the executor's program registry
-- [ ] Implement `run_sub_program(script_path, args)` on `Executor` — binds arguments, executes program block, returns result
-- [ ] Isolated scope for sub-scripts (push/pop on `ScopeStack`, don't pollute main script globals)
-- [ ] Script path resolution: map `:combat:scriptname` to the parsed program block
-- [ ] Update `start_script()` stub to dispatch to `run_sub_program()` instead of returning None
-- [ ] Unit tests: sub-script runs, receives arguments, returns value
-- [ ] Unit tests: sub-script scope is isolated (doesn't leak variables)
-- [ ] Unit tests: sub-script can call the same user-defined functions as the main script
+- [x] Parse enchantment/reactive armor `.src` files and add their program blocks to the executor's program registry
+- [x] Implement `run_sub_program(script_path, args)` on `Executor` — binds arguments, executes program block, returns result
+- [x] Isolated scope for sub-scripts (push/pop on `ScopeStack`, don't pollute main script globals)
+- [x] Script path resolution: map `:combat:scriptname` to the parsed program block
+- [x] Update `start_script()` stub to dispatch to `run_sub_program()` instead of returning None
+- [x] Unit tests: sub-script runs, receives arguments, returns value
+- [x] Unit tests: sub-script scope is isolated (doesn't leak variables)
+- [x] Unit tests: sub-script can call the same user-defined functions as the main script
 
-**Key files**: `executor.py`, `structural_stubs.py`, `parser.py`
+**Key files**: `executor.py`, `structural_stubs.py`, `context.py`, `hit.py`, `runner.py`
 
 **Acceptance**: `start_script(":combat:somescript", {arg1, arg2})` parses and executes the referenced program with correct argument binding.
 
@@ -229,7 +229,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 | M12 | Elemental Protection Stubs | 1 | — | **Done** |
 | M13 | Elemental Damage Application | 1 | M12 | **Done** |
 | M14 | Elemental Damage Reporting | 1 | M13 | **Done** |
-| M15 | Sub-Script Executor | 2 | — | Not started |
+| M15 | Sub-Script Executor | 2 | — | **Done** |
 | M16 | Fixture Sync for Enchantment Scripts | 2 | M15 | Not started |
 | M17 | Reactive Armor | 2 | M15, M16 | Not started |
 | M18 | Spell Strike Enchantments | 2 | M15, M16, M12 | Not started |

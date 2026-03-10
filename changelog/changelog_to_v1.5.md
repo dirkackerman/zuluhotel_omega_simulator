@@ -76,3 +76,36 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Verify `elem_total_net` sums across all elements
 - Verify `elemental_breakdown_chart` and `elemental_vs_parameter` return Figure objects
 - Verify empty/missing elemental data handled gracefully in both plots and tables
+
+---
+
+## M15 — Sub-Script Executor
+
+**Summary**: Extended the `Executor` to find, parse, and run sub-scripts (`.src` program files) by path. The `start_script()` POL stub now dispatches to `Executor.run_sub_program()` with scope isolation. Sub-scripts share the main script's function registry and global constants but get an isolated local scope that is cleaned up on return.
+
+**Changes**:
+- **`Executor.run_sub_program(script_path, args)`** (`executor.py`): New method — resolves a `:package:name` script path, lazily parses the `.src` file, caches the program block, and executes it with scope isolation (push/pop). Args are passed as positional parameters per POL convention.
+- **`Executor._resolve_script_path()`** (`executor.py`): Resolves `:combat:scriptname` → `pkg/.../scriptname.src` using the package map. Tries `.src` extension first, then bare name.
+- **`Executor._load_sub_script()`** (`executor.py`): Parses a sub-script `.src` file, extracts its program block, registers any new functions, and caches the result. Shared function registry means sub-scripts can call functions from the main include chain.
+- **`Executor` constructor**: New optional `shard_root` and `package_map` parameters for sub-script path resolution.
+- **`SimulationContext.executor`** (`context.py`): New field — gives `start_script()` access to the executor for dispatch.
+- **`start_script()` stub** (`structural_stubs.py`): Updated from V1 no-op to dispatch via `ctx.executor.run_sub_program()`. Falls back to no-op warning if no executor is set.
+- **`execute_hit()`** (`hit.py`): Now passes `shard_root`/`package_map` to the Executor and sets `ctx.executor` before script execution.
+- **`run_scenario()`/`run_sweep()`** (`runner.py`): Pass `shard_root`/`package_map` through to `execute_hit()` when a shard is provided.
+
+**Testing**:
+- Verify sub-script runs and returns computed values from array arguments
+- Verify POL convention: args array passed as single first positional argument, program unpacks via indexing
+- Verify named-param programs with `TypeOf(attacker) == "array"` self-unpack pattern
+- Verify scope isolation: sub-script variables don't leak to main program
+- Verify global constants from main script are accessible in sub-scripts
+- Verify scope depth is restored after sub-script returns
+- Verify sub-scripts can call shared user-defined functions from the main include chain
+- Verify missing shard_root raises RuntimeError
+- Verify unknown package raises FileNotFoundError
+- Verify missing .src file raises FileNotFoundError
+- Verify sub-script program blocks are cached across calls
+- Verify `start_script()` stub dispatches to executor and returns result
+- Verify `start_script()` with no executor returns None gracefully
+
+**Key insight**: Sub-scripts share the same function registry and global scope as the main program. This is critical because shard sub-scripts (`reactivearmoronhit.src`, `piercingscript.src`, etc.) include the same files as `mainhit.src` and call the same functions (`ApplyTheDamage`, `RecalcDmg`). Parsing just the `.src` file (without re-parsing includes) is sufficient since all functions are already registered.

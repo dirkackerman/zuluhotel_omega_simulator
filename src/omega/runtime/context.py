@@ -78,6 +78,9 @@ class SimulationContext:
     # Metrics recorded by __RecordSimulatorMetric from eScript
     metrics: dict[str, Any] = field(default_factory=dict)
 
+    # Executor reference for start_script() sub-program dispatch
+    executor: Any = None
+
     def record_side_effect(
         self, kind: str, target_serial: int, value: Any = None, detail: str = ""
     ) -> None:
