@@ -142,7 +142,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M3 — Config File Parsers
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Parse POL `.cfg` files and dice notation so the simulator can load NPC templates, weapon/armor definitions, equipment sets, and combat settings.
 

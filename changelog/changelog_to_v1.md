@@ -83,3 +83,55 @@ Built a complete eScript parser using ANTLR4 with Python target, capable of pars
 - [ ] `parse_with_includes("mainhit.src")` parses 53 files with zero errors
 - [ ] Case-insensitive: `IF`, `if`, `If` all parse identically
 - [ ] `:combat:hitscriptinc` resolves to `pkg/systems/combat/include/hitscriptinc.inc`
+
+---
+
+## M3 — Config File Parsers
+
+**Date**: 2026-03-10
+
+### Summary
+
+Built POL config file parsers, package path resolver, dice notation parser, and runtime-compatible config accessors. All shard config files parse correctly — 748 NPC templates from `npcdesc.cfg`, 129 packages discovered, weapon damage dice parsed and rollable.
+
+**Files created**:
+- `src/omega/config/cfg_parser.py` — `ConfigElement` (property bag with `get()`, `get_int()`, `get_float()`, `get_all()` for multi-value keys, `get_cprop()` for type-prefixed CProps, `__getattr__` for dot access) and `ConfigFile` (element container with `__getitem__` supporting string names and int objtypes). `parse_config_file(path)` auto-detects flat key=value vs block-based formats
+- `src/omega/config/package_resolver.py` — `PackageResolver` scans all `pkg.cfg` files, builds `name → Path` map, resolves `:combat:settings` → filesystem path, handles `:*:itemdesc` wildcard search across all packages. Implements `PackageMap` protocol for include resolver
+- `src/omega/config/dice.py` — `DiceSpec` frozen dataclass with `min_value`, `max_value`, `mean_value` properties. `parse_dice("3d5+2")` → `DiceSpec(3, 5, 2)`. `roll_dice(spec, rng)` for deterministic simulation
+- `src/omega/config/accessor.py` — `RuntimeConfigFile` and `RuntimeConfigElement` wrappers matching POL's `ReadConfigFile()` API: `cfg["Weapons"].WearChance` dot-style access
+- `src/omega/config/__init__.py` — public API exports
+
+**Config formats handled**:
+- Flat key=value (`combat.cfg`) — `#` line comments
+- Block-based (`npcdesc.cfg`, `equip.cfg`, `itemdesc.cfg`, `settings.cfg`, `hitscriptdesc.cfg`) — `//` line and inline comments, tab/space separators, multi-value keys, CProp entries with `i`/`s` type prefixes, hex objtype names (e.g., `0x13BB`)
+
+### Key decisions
+- Auto-detection over explicit format flag: scans for `{` outside comments to choose parser
+- `ConfigFile.__getitem__` accepts both string names and int objtypes, enabling `cfg[0x13BB]` for weapon/armor lookup matching eScript patterns
+- `PackageResolver` reads `Name` field from `pkg.cfg` (not directory name), matching POL's behavior
+- CProps stored raw with type prefix stripped; `get_cprop()` handles `i`→int, `s`→str conversion
+
+### Test Criteria
+
+- [ ] `uv run pytest -v` — all 167 tests pass (23 logging + 86 parser + 58 config):
+  - `TestFlatFormat` (2 tests) — combat.cfg parsing, key presence
+  - `TestBlockFormat` (5 tests) — npcdesc.cfg parsing, property access, multi-value keys, CProps, specific NPC lookup
+  - `TestItemdescFormat` (5 tests) — itemdesc.cfg parsing, objtype int/string lookup, coverage multi-value, armor CProps
+  - `TestSettingsFormat` (3 tests) — settings.cfg parsing, element access, wear chance values
+  - `TestEquipFormat` (2 tests) — equip.cfg parsing, nazgul equipment chain
+  - `TestHitscriptdescFormat` (2 tests) — hitscriptdesc.cfg parsing, enchantment access
+  - `TestConfigElement` (3 tests) — get_int, get_float, contains
+  - `TestPackageDiscovery` (4 tests) — finds 100+ packages, combat/karmafame/spells present
+  - `TestPackageResolve` (3 tests) — resolve combat, case-insensitive, unknown returns None
+  - `TestConfigPathResolve` (4 tests) — `:combat:settings`, `:combat:hitscriptdesc`, `:*:itemdesc` wildcard, unknown package
+  - `TestPackageMapProtocol` (1 test) — protocol compliance
+  - `TestParseDice` (8 tests) — all notation formats, whitespace handling, invalid input errors
+  - `TestDiceSpecProperties` (5 tests) — min/max/mean values, flat damage, string representation
+  - `TestRollDice` (4 tests) — deterministic seeded rolls, flat damage, bounds checking
+  - `TestNpcLookupChain` (1 test) — NPC → equip template resolution
+  - `TestRuntimeAccessorPatterns` (5 tests) — combat settings, armor settings, objtype lookup, package resolver path, wildcard resolution
+  - `TestWeaponDamageParsing` (1 test) — weapon damage dice parse and validate
+- [ ] 748 NPC templates parsed from `npcdesc.cfg`
+- [ ] 129 packages discovered from shard `pkg/` directories
+- [ ] `cfg[0x13BB].Name == "ChainmailCoif"` — int objtype lookup works
+- [ ] `cfg["Weapons"].WearChance.startswith("8")` — runtime accessor dot access works
