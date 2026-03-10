@@ -1,4 +1,18 @@
-"""Smoke tests executing real combat scripts from the shard submodule."""
+"""Smoke tests executing real combat scripts from the shard submodule.
+
+These tests depend on the pinned shard submodule commit and WILL break if
+the shard's combat scripts change (new formulas, renamed functions, etc.).
+
+Run strategy:
+  - ``pytest``                      → runs everything including these
+  - ``pytest -m "not shard"``       → skips these, runs only self-contained tests
+  - ``pytest -m shard``             → runs ONLY shard-dependent tests
+
+When the shard submodule is updated:
+  1. Run ``pytest -m shard`` to see what broke
+  2. Fix assertions to match new behavior
+  3. Commit the submodule update + test fixes together
+"""
 
 from pathlib import Path
 
@@ -12,10 +26,11 @@ from omega.shard import ShardData
 
 SHARD_ROOT = Path(__file__).resolve().parents[2] / "submodules" / "zuluhotel_omega_2.5"
 
-pytestmark = pytest.mark.skipif(
-    not SHARD_ROOT.exists(),
-    reason="Shard submodule not available",
-)
+# Skip all tests if the submodule isn't checked out; mark all as shard-dependent
+pytestmark = [
+    pytest.mark.skipif(not SHARD_ROOT.exists(), reason="Shard submodule not available"),
+    pytest.mark.shard,
+]
 
 
 @pytest.fixture
@@ -26,6 +41,10 @@ def shard():
 @pytest.fixture
 def combat_trees(shard):
     return shard.parse_combat_scripts()
+
+
+def _em_dir(shard):
+    return shard.root / "scripts" / "modules"
 
 
 @pytest.fixture
@@ -79,19 +98,20 @@ class TestRealMainhit:
             basic_armor,
             base_damage=20,
             config_resolver=shard.resolve_config_path,
-            em_modules_dir=shard.root / "scripts" / "modules",
+            em_modules_dir=_em_dir(shard),
         )
 
         if not result.success:
             pytest.skip(f"mainhit.src execution failed: {result.error}")
 
-        assert result.final_damage > 0
-        assert basic_defender.hp < 500
+        # Property-based: any non-zero damage means the pipeline works
+        assert result.final_damage > 0, "Expected non-zero damage from mainhit"
+        assert basic_defender.hp < basic_defender.max_hp
 
     def test_mainhit_deterministic(
         self, shard, combat_trees, basic_weapon, basic_armor
     ):
-        """Same seed produces same damage result."""
+        """Same seed + same inputs produces same damage result."""
         from omega.combat.hit import execute_hit
 
         damages = []
@@ -116,13 +136,13 @@ class TestRealMainhit:
                 base_damage=20,
                 rng_seed=42,
                 config_resolver=shard.resolve_config_path,
-            em_modules_dir=shard.root / "scripts" / "modules",
+                em_modules_dir=_em_dir(shard),
             )
             if not result.success:
                 pytest.skip(f"mainhit.src execution failed: {result.error}")
             damages.append(result.final_damage)
 
-        assert damages[0] == damages[1]
+        assert damages[0] == damages[1], "Same seed should produce identical damage"
 
     def test_mainhit_with_slayer_weapon(
         self, shard, combat_trees, basic_attacker, basic_armor
@@ -143,7 +163,7 @@ class TestRealMainhit:
             weapon_normal, basic_armor,
             base_damage=20,
             config_resolver=shard.resolve_config_path,
-            em_modules_dir=shard.root / "scripts" / "modules",
+            em_modules_dir=_em_dir(shard),
         )
 
         # Slayer hit
@@ -165,11 +185,13 @@ class TestRealMainhit:
             weapon_slayer, basic_armor,
             base_damage=20,
             config_resolver=shard.resolve_config_path,
-            em_modules_dir=shard.root / "scripts" / "modules",
+            em_modules_dir=_em_dir(shard),
         )
 
         if not r1.success or not r2.success:
             pytest.skip("Script execution failed")
 
-        # Slayer should deal more damage
-        assert r2.final_damage > r1.final_damage
+        # Property-based: slayer should deal strictly more damage
+        assert r2.final_damage > r1.final_damage, (
+            f"Slayer ({r2.final_damage}) should exceed non-slayer ({r1.final_damage})"
+        )

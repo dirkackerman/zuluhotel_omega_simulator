@@ -11,9 +11,10 @@ M1 (Project Setup)
  ├─► M2 (eScript Parser)
  │    └─► M5 (Interpreter)
  │         └─► M7 (Combat Integration)
- │              └─► M8 (Simulation Runner)
- │                   └─► M9 (Reporting & Notebooks)
- │                        └─► M10 (Validation & Polish)
+ │              ├─► M8 (Simulation Runner)
+ │              │    └─► M9 (Reporting & Notebooks)
+ │              │         └─► M10 (Validation & Polish)
+ │              └─► M11 (Test Fixture Independence)
  ├─► M3 (Config Parsers)
  │    └─► M4 (Game Object Model)
  │         └─► M6 (POL Runtime Stubs)
@@ -502,6 +503,59 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 
 ---
 
+## M11 — Test Fixture Independence
+**Status**: [ ] Not started
+
+**Goal**: Decouple all tests from the shard submodule by copying the required eScript files and config fragments into local test fixtures. Tests evolve independently from the shard — no more breakage when shard scripts change during balancing.
+
+**Context**: The shard submodule is the source of truth for live game scripts, and it will change frequently during balancing. Currently, `@pytest.mark.shard` tests execute real scripts from the submodule and break on any formula change. Instead, we should snapshot the specific files each test group needs into local copies under `tests/`, so tests are frozen against a known script version. The submodule remains as a read-only reference for importing new script versions when we choose to.
+
+**Deliverables**:
+- **Fixture file structure** — for each test group, a local directory containing only the eScript/config files that group needs:
+  ```
+  tests/
+    fixtures/
+      combat/
+        mainhit.src
+        include/
+          hitscriptinc.inc
+          damages.inc
+          classes.inc
+          attributes.inc
+          ...
+        config/
+          itemdesc.cfg   (relevant entries only)
+          combat.cfg
+          settings.cfg
+        modules/
+          uo.em           (relevant constants only)
+          attributes.em
+          vitals.em
+        pkg.cfg
+  ```
+- **Copy script** (`scripts/sync_fixtures.py` or similar):
+  - Reads the include dependency tree from a root script (e.g., `mainhit.src`)
+  - Copies all transitively-included files into the fixture directory, preserving the relative path structure needed by the include resolver
+  - Copies referenced config files and `.em` modules
+  - Run manually when you *want* to pull in shard changes — not automatic
+- **Migrate existing shard tests** — rewrite `test_real_scripts.py` and `test_shard.py` to use local fixture copies instead of `SHARD_ROOT`. Remove the `@pytest.mark.shard` marker since tests are now self-contained.
+- **Update test helpers** — fixture `shard()` and `combat_trees()` point at local fixture path instead of submodule path
+- **Remove pytest `shard` marker** — all tests become self-contained; `pytest` runs everything without skips
+
+**Workflow after M11**:
+1. Designer changes formulas in the live shard
+2. Shard submodule updated to new commit
+3. Run `python scripts/sync_fixtures.py` to pull new scripts into fixtures
+4. Run `pytest` — failures show exactly what changed
+5. Update test assertions, commit fixtures + test fixes together
+6. Between syncs, all tests pass regardless of shard state
+
+**Files**: `scripts/sync_fixtures.py`, `tests/fixtures/`, updates to existing test files
+
+**Acceptance**: `pytest` passes with the shard submodule at *any* commit (or even absent). All combat integration tests use local fixture files. `sync_fixtures.py` correctly copies the full transitive include tree for `mainhit.src`.
+
+---
+
 ## Milestone Summary
 
 | Milestone | Description | Depends On | Parallelizable With |
@@ -516,7 +570,8 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 | M7 | Combat Integration | M2-M6 | — |
 | M8 | Simulation Runner | M7 | M9 (partial) |
 | M9 | Reporting & Notebooks | M8 | — |
-| M10 | Validation & Polish | M7-M9 | — |
+| M10 | Validation & Polish | M7-M9 | M11 |
+| M11 | Test Fixture Independence | M7 | M8-M10 |
 
 **Critical path**: M1 → M2 → M5 → M7 → M8 → M9 → M10
 

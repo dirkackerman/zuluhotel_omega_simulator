@@ -8,11 +8,11 @@ from omega.shard import ShardData
 
 SHARD_ROOT = Path(__file__).resolve().parents[2] / "submodules" / "zuluhotel_omega_2.5"
 
-# Skip all tests if the submodule isn't checked out
-pytestmark = pytest.mark.skipif(
-    not SHARD_ROOT.exists(),
-    reason="Shard submodule not available",
-)
+# Skip if submodule missing; mark as shard-dependent
+pytestmark = [
+    pytest.mark.skipif(not SHARD_ROOT.exists(), reason="Shard submodule not available"),
+    pytest.mark.shard,
+]
 
 
 class TestShardLoading:

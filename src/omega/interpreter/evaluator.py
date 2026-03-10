@@ -1126,28 +1126,14 @@ def _set_index(obj: Any, index: Any, value: Any) -> None:
         obj[idx] = value
 
 
-# eScript member name → Python attribute name mapping for common aliases
-_MEMBER_ALIASES: dict[str, str] = {
-    "maxhp": "max_hp",
-    "max_hp": "max_hp",
-    "maxmana": "max_mana",
-    "max_mana": "max_mana",
-    "maxstamina": "max_stamina",
-    "max_stamina": "max_stamina",
-    "npctemplate": "npctemplate",
-    "str_mod": "str_mod",
-    "int_mod": "int_mod",
-    "dex_mod": "dex_mod",
-    "is_npc": "is_npc",
-    "isnpc": "is_npc",
-    "cmdlevel": "cmdlevel",
-    "two_handed": "two_handed",
-    "twohanded": "two_handed",
-}
-
-
 def _get_member(obj: Any, name: str) -> Any:
-    """Get a member/property from an object."""
+    """Get a member/property from an object.
+
+    Handles the naming mismatch between eScript (no underscores, e.g.
+    ``maxhp``, ``isnpc``) and the Python model (snake_case, e.g.
+    ``max_hp``, ``is_npc``) by normalising both sides — stripping
+    underscores — when a direct lookup misses.
+    """
     if isinstance(obj, EStruct):
         return obj.get_member(name)
     if isinstance(obj, EError):
@@ -1158,18 +1144,34 @@ def _get_member(obj: Any, name: str) -> Any:
     if obj is None or obj is UNINIT:
         return UNINIT
     lower_name = name.lower()
-    # Check alias mapping first (eScript name → Python name)
-    alias = _MEMBER_ALIASES.get(lower_name)
-    if alias is not None:
-        try:
-            return getattr(obj, alias, UNINIT)
-        except Exception:
-            pass
-    # Try direct attribute
+    # 1. Direct attribute lookup (exact or lowered)
     try:
-        return getattr(obj, lower_name, getattr(obj, name, UNINIT))
+        val = getattr(obj, lower_name, UNINIT)
+        if val is not UNINIT:
+            return val
+        val = getattr(obj, name, UNINIT)
+        if val is not UNINIT:
+            return val
     except Exception:
-        return UNINIT
+        pass
+    # 2. Underscore-normalised fallback: strip underscores from both the
+    #    requested name and every attribute on the object, then match.
+    normalized = lower_name.replace("_", "")
+    for attr in dir(obj):
+        if attr.startswith("_"):
+            continue
+        if attr.lower().replace("_", "") == normalized:
+            logger.debug(
+                "Member resolved via underscore normalisation",
+                requested=name,
+                resolved=attr,
+                obj_type=type(obj).__name__,
+            )
+            try:
+                return getattr(obj, attr, UNINIT)
+            except Exception:
+                pass
+    return UNINIT
 
 
 def _set_member(obj: Any, name: str, value: Any) -> None:
@@ -1181,10 +1183,35 @@ def _set_member(obj: Any, name: str, value: Any) -> None:
     elif isinstance(obj, EDict):
         obj.set(name, value)
     elif obj is not None:
+        lower_name = name.lower()
+        # 1. Direct set
         try:
-            setattr(obj, name, value)
+            setattr(obj, lower_name, value)
+            return
         except AttributeError:
             pass
+        try:
+            setattr(obj, name, value)
+            return
+        except AttributeError:
+            pass
+        # 2. Underscore-normalised fallback
+        normalized = lower_name.replace("_", "")
+        for attr in dir(obj):
+            if attr.startswith("_"):
+                continue
+            if attr.lower().replace("_", "") == normalized:
+                logger.debug(
+                    "Member set via underscore normalisation",
+                    requested=name,
+                    resolved=attr,
+                    obj_type=type(obj).__name__,
+                )
+                try:
+                    setattr(obj, attr, value)
+                    return
+                except AttributeError:
+                    pass
 
 
 def _to_iterable(val: Any) -> list[Any]:

@@ -200,6 +200,32 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 - Group combat (1vN, NvN)
 - Skill progression modeling
 
+## Testing Strategy
+
+### Two test categories
+- **Self-contained tests** — use mock data and hand-built fixtures. Never break from shard changes. Run with `pytest -m "not shard"`.
+- **Shard-dependent tests** — marked with `@pytest.mark.shard`. Execute real eScript from the pinned submodule. Will break when shard scripts change (new formulas, renamed functions, etc.).
+
+### Running tests
+```bash
+pytest                    # everything
+pytest -m "not shard"     # fast — skips shard-dependent tests
+pytest -m shard           # only shard-dependent tests
+```
+
+### Submodule update workflow
+When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balancing:
+1. Update the submodule to the new commit
+2. Run `pytest -m shard` to see what broke
+3. Fix assertions to match new behavior (use property-based assertions where possible — e.g., "damage > 0", "slayer > non-slayer" — rather than exact values)
+4. Commit the submodule update + test fixes together in one commit
+
+### Writing shard-dependent tests
+- Use `@pytest.mark.shard` (or `pytestmark = [pytest.mark.shard]` for whole modules)
+- Prefer property-based assertions over exact value checks
+- Use `pytest.skip()` on execution failure rather than hard-failing — allows gradual coverage expansion
+- Document which shard scripts the test exercises
+
 ## Development Conventions
 - Python 3.14, type hints throughout
 - Use `uv` for dependency management if available, otherwise `pip`
