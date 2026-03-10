@@ -626,3 +626,39 @@ Decoupled all 104 shard-dependent tests from the submodule by snapshotting shard
 - [x] Zero tests skipped or deselected
 - [x] `sync_fixtures.py` correctly discovers 53 files in include tree
 - [x] `sync_fixtures.py --dry-run` shows what would be copied without writing
+
+---
+
+## Post-V1 — Notebook Documentation Wiki
+
+**Date**: 2026-03-10
+
+### Summary
+
+Created a comprehensive documentation wiki under `notebooks/docs/` targeting notebook authors and game designers doing shard balance work. The wiki covers the full simulation API, runtime internals, and provides copy-paste recipes for common balancing tasks.
+
+### New files
+
+- `notebooks/docs/README.md` — Entry point: project overview, audience, quick start, page index
+- `notebooks/docs/getting-started.md` — Environment setup, installing dependencies, launching JupyterLab, first simulation
+- `notebooks/docs/concepts.md` — Domain glossary: hits, iterations, damage pipeline stages, state lifecycle, V1 scope
+- `notebooks/docs/combatant-specs.md` — `CombatantSpec`, `WeaponSpec`, `ArmorSpec` field-by-field reference with defaults, dice notation, class IDs, complete examples
+- `notebooks/docs/scenarios.md` — `Scenario`, `Variable`, `Variable.from_range()`, `ParameterSweep`, `run_scenario()`, `run_sweep()` with parameter path reference and performance guide
+- `notebooks/docs/results.md` — `HitResult`, `DamageStats`, `RatioStats`, `CellResult`, `SimulationResult` with interpretation guide
+- `notebooks/docs/reporting.md` — `summary_table()`, `comparison_table()`, `format_table_html()`, and all 5 plot functions with signatures and usage
+- `notebooks/docs/runtime.md` — Architecture overview, Executor lifecycle, 3-tier function dispatch, POL stub system (`@pol_function` decorator, stub categories), `SimulationContext`, state resolution chain, `start_script()` behavior
+- `notebooks/docs/messages-and-metrics.md` — Three collection channels: (1) message capture via `SendSysMessage`/`PrintTextAbove`/`PrintTextAbovePrivate` → `omega.runtime.messaging` logger, (2) `__RecordSimulatorMetric` override mechanism for custom metrics, (3) structured side effect recording via `record_side_effect()`. Includes enable/capture examples.
+- `notebooks/docs/constants-reference.md` — Complete tables: 49 skill IDs (grouped by combat/magic/stealth/craft/other), 10 class IDs with bonus constants, 12 damage type bitflags, equipment layers, stat caps, POL class constants
+- `notebooks/docs/examples.md` — 10 cookbook recipes: basic damage check, skill sweep, AR sweep, weapon comparison, class comparison, slayer weapon test, PvP vs PvE scaling, STR scaling, multi-variable grid, single-hit debug
+
+### Modified files
+
+- `CLAUDE.md` — Added Documentation section linking to `notebooks/docs/README.md`
+
+### Key decisions
+
+1. **Wiki-style with cross-links**: Each page links to related pages, forming a navigable reference. README serves as the hub.
+2. **Two audiences**: Concepts/examples target game designers; runtime/messages-and-metrics target notebook authors who need to understand the execution model.
+3. **All code examples are self-contained**: Every recipe includes imports and can be copied directly into a notebook cell.
+4. **Runtime documentation exposes internals deliberately**: The 3-tier dispatch, override mechanism, and stub categories are documented so authors can extend the simulator or debug unexpected behavior.
+5. **Constants organized by use case**: Skill IDs grouped by role (combat, magic, stealth, crafting) rather than numeric order.

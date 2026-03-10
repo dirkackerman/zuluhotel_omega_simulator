@@ -183,7 +183,7 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 - Weapon vs armored target (AR absorption)
 - Class bonus scenarios (Warrior attacker bonus, Warrior defender penalty)
 - Slayer weapon vs matching creature type
-- PvP damage scaling (60% reduction)
+- PvP damage scaling (two-stage: 0.4 × 0.6 = 0.24 net)
 
 ## Scope & Roadmap
 
@@ -218,35 +218,32 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 
 ## Testing Strategy
 
-### Two test categories
-- **Self-contained tests** — use mock data and hand-built fixtures. Never break from shard changes. Run with `pytest -m "not shard"`.
-- **Shard-dependent tests** — marked with `@pytest.mark.shard`. Execute real eScript from the pinned submodule. Will break when shard scripts change (new formulas, renamed functions, etc.).
-
 ### Running tests
 ```bash
-pytest                    # everything
-pytest -m "not shard"     # fast — skips shard-dependent tests
-pytest -m shard           # only shard-dependent tests
+pytest                    # everything (670 tests, ~56s)
 ```
+
+All tests run unconditionally — no markers, no skips, no submodule dependency.
+
+### Test fixture locality principle
+- Tests **never** directly reference the shard submodule. All shard resources are snapshotted into `tests/fixtures/shard/` (209 files, 866 KB).
+- `tests/conftest.py` provides session-scoped fixtures: `fixture_shard` (ShardData), `fixture_parse_results` (parsed combat scripts).
+- `FIXTURE_SHARD_ROOT` from `tests/conftest.py` is the canonical path for all test files needing shard data.
 
 ### Submodule update workflow
 When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balancing:
 1. Update the submodule to the new commit
-2. Run `pytest -m shard` to see what broke
-3. Fix assertions to match new behavior (use property-based assertions where possible — e.g., "damage > 0", "slayer > non-slayer" — rather than exact values)
-4. Commit the submodule update + test fixes together in one commit
+2. Run `python scripts/sync_fixtures.py` to refresh fixtures from the updated submodule
+3. Run `pytest` to see what broke
+4. Fix assertions to match new behavior (prefer property-based assertions — e.g., "damage > 0", "slayer > non-slayer" — over exact values)
+5. Commit the fixture update + test fixes together
 
-### Writing shard-dependent tests
-- Use `@pytest.mark.shard` (or `pytestmark = [pytest.mark.shard]` for whole modules)
+### Writing new tests that use shard data
+- Import `FIXTURE_SHARD_ROOT` from `tests.conftest` or use `fixture_shard`/`fixture_parse_results` fixtures
+- Never reference `submodules/zuluhotel_omega_2.5` directly in test code
+- If a test needs shard resources not yet in fixtures, add them to `scripts/sync_fixtures.py` and re-run it
 - Prefer property-based assertions over exact value checks
 - Use `pytest.skip()` on execution failure rather than hard-failing — allows gradual coverage expansion
-- Document which shard scripts the test exercises
-
-### Test fixture locality principle
-- Tests should **not** directly reference the shard submodule for their test data. Instead, copy the required eScript files, config fragments, and `.em` modules into a local fixture directory close to the tests themselves (e.g., `tests/fixtures/combat/`).
-- During initial feature development, it's fine to use `@pytest.mark.shard` tests that read from the submodule. But once a feature stabilizes, the resources that family of tests depends on should be snapshotted into local fixtures so tests are decoupled from submodule state.
-- This ensures `pytest` passes regardless of submodule commit, and test failures reflect code changes rather than shard script changes.
-- A sync script (`scripts/sync_fixtures.py`) should be used to pull updated scripts from the submodule into fixtures when you intentionally want to adopt shard changes.
 
 ## Development Conventions
 - Python 3.14, type hints throughout
@@ -257,10 +254,16 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - Structured logging from day one — all subsystems use Python `logging` with named loggers
 - After completing each milestone, update `changelog/changelog_to_v1.md` with a summary and test criteria for the work done
 
+## Documentation
+- **[Notebook Documentation](./notebooks/docs/README.md)** — User-facing wiki for notebook authors and game designers. Covers the simulation API, combatant specs, scenarios, results, reporting, runtime internals, and cookbook examples.
+
 ## Planning
-- **[Path to V1](./path_to_v1.md)** — Milestone plan (M0-M10) with dependency graph, deliverables, and acceptance criteria per milestone
+- **[Path to V1](./planning/path_to_v1.md)** — Milestone plan (M0-M11) with dependency graph, deliverables, and acceptance criteria per milestone
 - **[Changelog to V1](./changelog/changelog_to_v1.md)** — Per-milestone change summaries with test criteria
+- **V1 status**: All milestones (M0–M11) complete. 670 tests, 374 hits/sec, submodule-independent fixtures.
 
 ## Commands
 - `uv run pytest` or `python -m pytest` - run tests
+- `python scripts/sync_fixtures.py` - sync shard files into test fixtures (run after submodule update)
+- `python scripts/sync_fixtures.py --dry-run` - preview what would be synced
 - `jupyter lab` - launch notebook interface

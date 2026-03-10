@@ -16,6 +16,7 @@ from omega.model.constants import (
     SKILLID_TACTICS,
 )
 from omega.model.factories import (
+    _resolve_item_ref,
     create_armor_from_config,
     create_mobile_from_template,
     create_weapon_from_config,
@@ -38,6 +39,33 @@ def equip_cfg():
 @pytest.fixture(scope="module")
 def itemdesc():
     return parse_config_file(SHARD_ROOT / "pkg/systems/combat/config/itemdesc.cfg")
+
+
+class TestResolveItemRef:
+    def test_resolve_by_name(self, itemdesc):
+        """Resolve an item by its Name property."""
+        elem = _resolve_item_ref("WispWeapon", itemdesc)
+        assert elem is not None
+        assert elem.get("Name") == "WispWeapon"
+        assert elem.block_type == "Weapon"
+
+    def test_resolve_by_objtype_hex(self, itemdesc):
+        """Resolve an item by hex objtype string."""
+        elem = _resolve_item_ref("0x13BB", itemdesc)
+        assert elem is not None
+        assert elem.get("Name") == "ChainmailCoif"
+
+    def test_resolve_unknown_returns_none(self, itemdesc):
+        """Unknown reference returns None."""
+        elem = _resolve_item_ref("NonexistentItem99999", itemdesc)
+        assert elem is None
+
+    def test_resolve_armor_by_name(self, itemdesc):
+        """Resolve an armor piece by Name."""
+        elem = _resolve_item_ref("ChainmailCoif", itemdesc)
+        assert elem is not None
+        assert elem.block_type == "Armor"
+        assert elem.get("Name") == "ChainmailCoif"
 
 
 class TestWeaponFromConfig:

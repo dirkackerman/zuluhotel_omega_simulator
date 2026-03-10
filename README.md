@@ -33,6 +33,10 @@ Open any notebook in `notebooks/` to run a simulation:
 | `03_class_comparison` | Side-by-side class damage comparison |
 | `04_weapon_comparison` | Compare two weapons on the same character |
 
+## Documentation
+
+The [Notebook Documentation](notebooks/docs/README.md) wiki covers everything needed to define and run simulations: combatant specs, scenarios, parameter sweeps, result interpretation, reporting plots/tables, runtime internals, and a [cookbook](notebooks/docs/examples.md) with copy-paste recipes for common balancing questions.
+
 ## Updating
 
 When new changes are published:

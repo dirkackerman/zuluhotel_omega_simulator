@@ -659,25 +659,25 @@ After migration:
 
 **Acceptance**: `pytest` passes with the shard submodule at *any* commit (or even absent). All 670 tests run unconditionally — zero skips, zero shard-marker tests. `sync_fixtures.py` correctly copies the full transitive include tree for `mainhit.src` plus all referenced configs and `.em` modules.
 
+**Result**: All acceptance criteria met. 670/670 tests pass with submodule present and with submodule working directory deleted.
+
 ---
 
 ## Milestone Summary
 
-| Milestone | Description | Depends On | Parallelizable With |
-|-----------|-------------|------------|---------------------|
-| M0 | Logging Framework | — | M1 |
-| M1 | Project Scaffolding | — | M0 |
-| M2 | eScript Parser | M0, M1 | M3, M4 |
-| M3 | Config File Parsers | M0, M1 | M2 |
-| M4 | Game Object Model | M0, M1 | M2, M3 |
-| M5 | eScript Interpreter | M0, M2 | M6 (partial) |
-| M6 | POL Runtime Stubs | M0, M4 | M5 (partial) |
-| M7 | Combat Integration | M2-M6 | — |
-| M8 | Simulation Runner | M7 | M9 (partial) |
-| M9 | Reporting & Notebooks | M8 | — |
-| M10 | Validation & Polish | M7-M9 | M11 |
-| M11 | Test Fixture Independence | M7 | M8-M10 |
+| Milestone | Description | Status |
+|-----------|-------------|--------|
+| M0 | Logging Framework | Complete |
+| M1 | Project Scaffolding | Complete |
+| M2 | eScript Parser | Complete |
+| M3 | Config File Parsers | Complete |
+| M4 | Game Object Model | Complete |
+| M5 | eScript Interpreter | Complete |
+| M6 | POL Runtime Stubs | Complete |
+| M7 | Combat Integration | Complete |
+| M8 | Simulation Runner | Complete |
+| M9 | Reporting & Notebooks | Complete |
+| M10 | Validation & Polish | Complete |
+| M11 | Test Fixture Independence | Complete |
 
-**Critical path**: M1 → M2 → M5 → M7 → M8 → M9 → M10
-
-**Parallel track**: M1 → M3 → M4 → M6 (converges at M7)
+**V1 complete.** 670 tests, 374 hits/sec, submodule-independent fixtures.

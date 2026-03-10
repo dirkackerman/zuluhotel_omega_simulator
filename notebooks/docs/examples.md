@@ -1,0 +1,483 @@
+# Examples
+
+Copy-paste recipes for common balancing questions. Each recipe is self-contained with all necessary imports.
+
+## Preamble
+
+Every recipe starts with this setup. Adjust the shard path if needed.
+
+```python
+from pathlib import Path
+from omega.model.constants import *
+from omega.shard import ShardData
+from omega.simulation import (
+    ArmorSpec, CombatantSpec, ParameterSweep, Scenario,
+    Variable, WeaponSpec, run_scenario, run_sweep,
+)
+from omega.reporting.plots import (
+    damage_histogram, damage_vs_parameter,
+    damage_breakdown, comparison_breakdown, comparison_overlay,
+)
+from omega.reporting.tables import summary_table, comparison_table, format_table_html
+from IPython.display import HTML, display
+
+shard = ShardData.from_path(Path("../submodules/zuluhotel_omega_2.5"))
+```
+
+---
+
+## Recipe 1: Basic damage check
+
+**Question**: "How much damage does a GM Warrior with a broadsword deal to a plate-armored target?"
+
+```python
+scenario = Scenario(
+    attacker=CombatantSpec(
+        name="GM Warrior",
+        skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100, SKILLID_ANATOMY: 100},
+        str_=100, dex_=100, int_=25,
+        class_levels={CLASSEID_WARRIOR: 5},
+        weapon=WeaponSpec(name="Broadsword", damage="3d6+2"),
+    ),
+    defender=CombatantSpec(
+        name="Plate Target",
+        is_npc=True,
+        str_=50, dex_=50, int_=50,
+        hp=500,
+        armor=ArmorSpec(name="Plate", ar=30),
+    ),
+    iterations=1000,
+    base_seed=42,
+)
+
+result = run_scenario(scenario, shard=shard)
+
+# Summary
+ds = result.damage_stats
+print(f"Mean:   {ds.mean:.1f}")
+print(f"Median: {ds.median:.1f}")
+print(f"Range:  {ds.min:.0f} – {ds.max:.0f}")
+print(f"p5-p95: {ds.p5:.0f} – {ds.p95:.0f}")
+
+# Plots
+damage_histogram(result, title="GM Warrior vs Plate (AR 30)")
+damage_breakdown(result)
+```
+
+---
+
+## Recipe 2: Skill sweep — damage vs Tactics
+
+**Question**: "How does Tactics skill affect damage output?"
+
+```python
+warrior = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_ANATOMY: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=WeaponSpec(name="Broadsword", damage="3d6+2"),
+)
+
+target = CombatantSpec(
+    name="Target",
+    is_npc=True,
+    str_=50, dex_=50, int_=50,
+    hp=500,
+    armor=ArmorSpec(ar=30),
+)
+
+sweep = ParameterSweep(
+    scenario=Scenario(attacker=warrior, defender=target, iterations=500, base_seed=42),
+    variables=(
+        Variable.from_range("attacker", f"skills.{SKILLID_TACTICS}", start=50, stop=130, step=10),
+    ),
+)
+
+result = run_sweep(sweep, shard=shard)
+
+# Damage curve
+damage_vs_parameter(result, f"attacker.skills.{SKILLID_TACTICS}",
+                    title="Damage vs Tactics (Warrior, AR 30)")
+
+# Table
+display(HTML(format_table_html(summary_table(result))))
+```
+
+---
+
+## Recipe 3: Armor Rating sweep — finding the breakpoint
+
+**Question**: "At what AR does armor start making a real difference?"
+
+```python
+sweep = ParameterSweep(
+    scenario=Scenario(
+        attacker=CombatantSpec(
+            name="Warrior",
+            skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+            str_=100, dex_=100, int_=25,
+            class_levels={CLASSEID_WARRIOR: 5},
+            weapon=WeaponSpec(damage="3d6+2"),
+        ),
+        defender=CombatantSpec(
+            name="Target", is_npc=True,
+            str_=50, dex_=50, int_=50, hp=500,
+            armor=ArmorSpec(ar=0),
+        ),
+        iterations=500,
+        base_seed=42,
+    ),
+    variables=(
+        Variable.from_range("defender", "armor.ar", start=0, stop=60, step=5),
+    ),
+)
+
+result = run_sweep(sweep, shard=shard)
+
+damage_vs_parameter(result, "defender.armor.ar",
+                    title="Damage vs Armor Rating")
+
+# Table with absorption stats
+rows = summary_table(result, stats=["mean", "absorbed_mean", "base_mean", "hit_rate"])
+display(HTML(format_table_html(rows)))
+```
+
+---
+
+## Recipe 4: Comparing two weapons
+
+**Question**: "Is a 4d5+3 mace better than a 3d6+2 sword for a Warrior?"
+
+```python
+base_warrior = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_TACTICS: 100, SKILLID_ANATOMY: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+)
+
+target = CombatantSpec(
+    name="Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(ar=30),
+)
+
+# Scenario A: Sword
+sword_warrior = CombatantSpec(
+    **{**{f.name: getattr(base_warrior, f.name)
+          for f in base_warrior.__dataclass_fields__.values()},
+       "skills": {**base_warrior.skills, SKILLID_SWORDSMANSHIP: 100},
+       "weapon": WeaponSpec(name="Broadsword", damage="3d6+2",
+                           attribute=SKILLID_SWORDSMANSHIP)},
+)
+
+# Scenario B: Mace
+mace_warrior = CombatantSpec(
+    **{**{f.name: getattr(base_warrior, f.name)
+          for f in base_warrior.__dataclass_fields__.values()},
+       "skills": {**base_warrior.skills, SKILLID_MACEFIGHTING: 100},
+       "weapon": WeaponSpec(name="War Hammer", damage="4d5+3",
+                           attribute=SKILLID_MACEFIGHTING)},
+)
+
+results = {}
+for name, attacker in [("Broadsword 3d6+2", sword_warrior), ("War Hammer 4d5+3", mace_warrior)]:
+    results[name] = run_scenario(
+        Scenario(attacker=attacker, defender=target, iterations=1000, base_seed=42),
+        shard=shard,
+    )
+
+# Compare
+comparison_overlay(results, title="Sword vs Mace")
+comparison_breakdown(results)
+display(HTML(format_table_html(comparison_table(results))))
+```
+
+---
+
+## Recipe 5: Class vs class comparison
+
+**Question**: "How does damage differ across character classes?"
+
+```python
+CLASS_CONFIGS = {
+    "Warrior": {
+        "class_levels": {CLASSEID_WARRIOR: 5},
+        "skills": {SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100, SKILLID_ANATOMY: 100},
+        "str_": 100, "dex_": 100, "int_": 25,
+    },
+    "Ranger": {
+        "class_levels": {CLASSEID_RANGER: 5},
+        "skills": {SKILLID_ARCHERY: 100, SKILLID_TACTICS: 100, SKILLID_ANATOMY: 80},
+        "str_": 90, "dex_": 100, "int_": 35,
+    },
+    "Paladin": {
+        "class_levels": {CLASSEID_PALADIN: 5},
+        "skills": {SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100, SKILLID_ANATOMY: 80},
+        "str_": 100, "dex_": 80, "int_": 50,
+    },
+    "Bladesinger": {
+        "class_levels": {CLASSEID_BLADESINGER: 5},
+        "skills": {SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100, SKILLID_MAGERY: 80},
+        "str_": 80, "dex_": 100, "int_": 50,
+    },
+}
+
+target = CombatantSpec(
+    name="Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(ar=30),
+)
+
+results = {}
+for class_name, cfg in CLASS_CONFIGS.items():
+    weapon_skill = next(
+        s for s in cfg["skills"]
+        if s in (SKILLID_SWORDSMANSHIP, SKILLID_ARCHERY, SKILLID_MACEFIGHTING)
+    )
+    attacker = CombatantSpec(
+        name=class_name,
+        skills=cfg["skills"],
+        str_=cfg["str_"], dex_=cfg["dex_"], int_=cfg["int_"],
+        class_levels=cfg["class_levels"],
+        weapon=WeaponSpec(name="Broadsword", damage="3d6+2", attribute=weapon_skill),
+    )
+    results[class_name] = run_scenario(
+        Scenario(attacker=attacker, defender=target, iterations=500, base_seed=42),
+        shard=shard,
+    )
+
+comparison_overlay(results, title="Class Comparison (AR 30)")
+comparison_breakdown(results)
+display(HTML(format_table_html(comparison_table(results))))
+```
+
+---
+
+## Recipe 6: Slayer weapon effectiveness
+
+**Question**: "How much extra damage does a slayer weapon deal against a matching creature type?"
+
+```python
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+)
+
+# Defender with a creature type
+undead_target = CombatantSpec(
+    name="Undead Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(ar=30),
+)
+
+# Normal weapon
+normal_scenario = Scenario(
+    attacker=CombatantSpec(
+        **{f.name: getattr(attacker, f.name)
+           for f in attacker.__dataclass_fields__.values()},
+        weapon=WeaponSpec(name="Normal Sword", damage="3d6+2"),
+    ),
+    defender=undead_target,
+    iterations=500,
+    base_seed=42,
+)
+
+# Slayer weapon
+slayer_scenario = Scenario(
+    attacker=CombatantSpec(
+        **{f.name: getattr(attacker, f.name)
+           for f in attacker.__dataclass_fields__.values()},
+        weapon=WeaponSpec(
+            name="Undead Slayer",
+            damage="3d6+2",
+            properties={"SlayType": "Undead"},
+        ),
+    ),
+    defender=undead_target,
+    iterations=500,
+    base_seed=42,
+)
+
+results = {
+    "Normal": run_scenario(normal_scenario, shard=shard),
+    "Slayer": run_scenario(slayer_scenario, shard=shard),
+}
+
+comparison_overlay(results, title="Normal vs Slayer Weapon (Undead target)")
+display(HTML(format_table_html(comparison_table(results))))
+```
+
+---
+
+## Recipe 7: PvP vs PvE damage scaling
+
+**Question**: "How much does PvP scaling reduce damage?"
+
+```python
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=WeaponSpec(damage="3d6+2"),
+)
+
+# PvE — defender is NPC
+pve = Scenario(
+    attacker=attacker,
+    defender=CombatantSpec(
+        name="NPC Target", is_npc=True,
+        str_=50, dex_=50, int_=50, hp=500,
+        armor=ArmorSpec(ar=30),
+    ),
+    iterations=500,
+    base_seed=42,
+)
+
+# PvP — defender is player
+pvp = Scenario(
+    attacker=attacker,
+    defender=CombatantSpec(
+        name="Player Target", is_npc=False,
+        str_=50, dex_=50, int_=50, hp=200,
+        armor=ArmorSpec(ar=30),
+    ),
+    iterations=500,
+    base_seed=42,
+)
+
+results = {
+    "PvE (vs NPC)": run_scenario(pve, shard=shard),
+    "PvP (vs Player)": run_scenario(pvp, shard=shard),
+}
+
+comparison_overlay(results, title="PvE vs PvP Damage")
+display(HTML(format_table_html(comparison_table(results))))
+
+# The PvP scaling factor is 0.4 * 0.6 = 0.24 net
+pvp_ratio = results["PvP (vs Player)"].damage_stats.mean / results["PvE (vs NPC)"].damage_stats.mean
+print(f"PvP/PvE ratio: {pvp_ratio:.2f} (expected ~0.24)")
+```
+
+---
+
+## Recipe 8: Strength scaling
+
+**Question**: "How does STR affect damage output?"
+
+```python
+sweep = ParameterSweep(
+    scenario=Scenario(
+        attacker=CombatantSpec(
+            name="Warrior",
+            skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+            str_=50, dex_=100, int_=25,
+            class_levels={CLASSEID_WARRIOR: 5},
+            weapon=WeaponSpec(damage="3d6+2"),
+        ),
+        defender=CombatantSpec(
+            name="Target", is_npc=True,
+            str_=50, dex_=50, int_=50, hp=500,
+            armor=ArmorSpec(ar=30),
+        ),
+        iterations=500,
+        base_seed=42,
+    ),
+    variables=(
+        Variable.from_range("attacker", "str_", start=50, stop=130, step=10),
+    ),
+)
+
+result = run_sweep(sweep, shard=shard)
+
+damage_vs_parameter(result, "attacker.str_", title="Damage vs Strength")
+display(HTML(format_table_html(summary_table(result))))
+```
+
+---
+
+## Recipe 9: Multi-variable grid — skill x AR
+
+**Question**: "How does weapon skill interact with armor rating?"
+
+```python
+sweep = ParameterSweep(
+    scenario=Scenario(
+        attacker=CombatantSpec(
+            name="Warrior",
+            skills={SKILLID_SWORDSMANSHIP: 50, SKILLID_TACTICS: 100},
+            str_=100, dex_=100, int_=25,
+            class_levels={CLASSEID_WARRIOR: 5},
+            weapon=WeaponSpec(damage="3d6+2"),
+        ),
+        defender=CombatantSpec(
+            name="Target", is_npc=True,
+            str_=50, dex_=50, int_=50, hp=500,
+            armor=ArmorSpec(ar=0),
+        ),
+        iterations=200,
+        base_seed=42,
+    ),
+    variables=(
+        Variable.from_range("attacker", f"skills.{SKILLID_SWORDSMANSHIP}", 50, 130, 20),
+        Variable.from_range("defender", "armor.ar", 0, 50, 10),
+    ),
+)
+
+result = run_sweep(sweep, shard=shard)
+
+# Full grid table
+rows = summary_table(result, stats=["mean", "std_dev", "hit_rate"])
+display(HTML(format_table_html(rows)))
+```
+
+---
+
+## Recipe 10: Debug a single hit
+
+**Question**: "What's happening step-by-step inside the script for one specific hit?"
+
+```python
+import logging
+
+# Enable verbose logging
+logging.getLogger("omega.runtime.messaging").setLevel(logging.INFO)
+logging.getLogger("omega.runtime").setLevel(logging.DEBUG)
+
+scenario = Scenario(
+    attacker=CombatantSpec(
+        name="Warrior",
+        skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+        str_=100, dex_=100, int_=25,
+        class_levels={CLASSEID_WARRIOR: 5},
+        weapon=WeaponSpec(damage="3d6+2"),
+    ),
+    defender=CombatantSpec(
+        name="Target", is_npc=True,
+        str_=50, dex_=50, int_=50, hp=500,
+        armor=ArmorSpec(ar=30),
+    ),
+    iterations=1,        # Just one hit
+    base_seed=42,
+    debug_mode=True,     # Enable script debug messages
+)
+
+result = run_scenario(scenario, shard=shard)
+
+hit = result.raw_results[0]
+print(f"Base damage:  {hit.base_damage}")
+print(f"Final damage: {hit.final_damage:.1f}")
+print(f"Absorbed:     {hit.absorbed:.1f}")
+print(f"HP: {hit.defender_hp_before} → {hit.defender_hp_after}")
+print(f"Side effects: {len(hit.side_effects)}")
+for se in hit.side_effects:
+    print(f"  {se.kind}: value={se.value}")
+
+# Reset logging when done
+logging.getLogger("omega.runtime.messaging").setLevel(logging.WARNING)
+logging.getLogger("omega.runtime").setLevel(logging.WARNING)
+```
