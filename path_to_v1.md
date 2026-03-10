@@ -235,7 +235,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M5 — eScript Interpreter
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Walk the parsed AST and execute eScript code. This is the core of the project — a tree-walking interpreter that can run the combat scripts.
 

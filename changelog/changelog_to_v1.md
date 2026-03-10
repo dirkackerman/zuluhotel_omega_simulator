@@ -253,3 +253,81 @@ Implemented ~60 POL built-in function stubs organized in 3 batches, plus a deter
 - [ ] `ApplyRawDamage(mob, 50)` → HP decreases by 50, side effect recorded
 - [ ] `Random`/`RandomInt` produce identical sequences for same seed
 - [ ] Unknown function → WARNING log, returns None (no crash)
+
+---
+
+## M5 — eScript Interpreter
+
+**Date**: 2026-03-10
+
+### Summary
+
+Built a complete tree-walking eScript interpreter using ANTLR4's visitor pattern. Handles all language constructs used by the combat scripts: expressions, control flow, functions with byref/default parameters, program entry points, and all eScript data types. Bridges to POL runtime stubs via `call_builtin()` dispatch.
+
+**Files created**:
+- `src/omega/interpreter/types.py` — eScript data types: `UNINIT` singleton sentinel, `EArray` (1-based indexing wrapping Python list), `EStruct` (case-insensitive named fields), `EDict` (with `.Exists()` returning 0/1), `EError` (falsy error objects). `is_truthy()` and `pol_typeof()` utility functions matching POL semantics
+- `src/omega/interpreter/scope.py` — `Scope` class with case-insensitive variable lookup, constant tracking (raises on reassignment), `ByRef` wrapper for pass-by-reference parameter propagation. `ScopeStack` manages global + function-local scope chain with proper push/pop
+- `src/omega/interpreter/evaluator.py` — `EscriptInterpreter` extending `EscriptParserVisitor` with 40+ visitor methods. Expression evaluation: all 15 operator precedence levels (arithmetic, bitwise, comparison, logical, assignment), short-circuit `&&`/`||`, string concatenation via `+`, elvis `?:`, `in` membership. Statement execution: `var`/`const`/`enum` declarations, `if`/`elseif`/`else`, `while`, `do/dowhile`, `repeat/until`, `for` (basic and C-style), `foreach`, `case/endcase`. Control flow via `ReturnSignal`/`BreakSignal`/`ContinueSignal`/`ExitSignal` exceptions. Expression suffixes: member access (`obj.prop`), method calls (`obj.method()`), indexing (`arr[i]`). Compound assignment (`+=`, `-=`, etc.) with lvalue resolution for variables, array indices, and struct members
+- `src/omega/interpreter/functions.py` — `FunctionDef`/`ParamDef` dataclasses, `FunctionRegistry` with case-insensitive lookup. `extract_functions()`, `extract_constants()`, `extract_use_declarations()`, `extract_program()` for loading declarations from parse trees
+- `src/omega/interpreter/executor.py` — `Executor` high-level API: loads parsed files (extracts functions, constants, USE declarations, program block), `run_program()` with dict or list argument binding, `call_function()` for direct function invocation
+
+**Bug fix**: Fixed `msg` parameter conflict in `omega.parser.parser._CollectingErrorListener.syntaxError()` — the logger's `warning()` method had `msg` as both positional and keyword argument. Renamed to `detail=msg`.
+
+### Key decisions
+- Tree-walking over compilation: correctness and traceability matter more than speed for V1
+- Control flow via exceptions: `ReturnSignal`, `BreakSignal`, `ContinueSignal`, `ExitSignal` — clean propagation through nested scopes
+- `UNINIT` is distinct from `None`: `None` is a valid return from stubs (e.g., `GetObjProperty` for missing props), `UNINIT` means "never assigned". Both are falsy, both `== None` (matching POL behavior)
+- 1-based `EArray`: `arr[1]` maps to `list[0]`, critical for all combat script array access
+- Case-insensitive everything: variable names, function names, method names — all lowercased on lookup
+- Error tolerance: unknown methods return `None`, unknown function calls go through `call_builtin()` which returns `None` with a WARNING
+- Function defaults evaluated lazily from `default_ctx` parse tree nodes, not pre-computed
+- Program supports both named parameters (`mainhit(attacker, defender, ...)`) and single-parms-array pattern (`deflectiononhit(parms)` where `parms[1..6]` are unpacked in the body)
+
+### Test Criteria
+
+- [ ] `uv run pytest -v` — all 539 tests pass (23 logging + 86 parser + 58 config + 89 model + 116 runtime + 167 interpreter):
+  - `TestUninit` (4 tests) — singleton, falsy, eq None, repr
+  - `TestEArray` (10 tests) — 1-based get/set, extend, append, iterate, contains, shrink
+  - `TestEStruct` (5 tests) — fields, case-insensitive, set, has, truthy
+  - `TestEDict` (7 tests) — set/get, exists, erase, iterate, contains, truthy
+  - `TestEError` (3 tests) — errortext, falsy, get/set member
+  - `TestTruthiness` (4 tests) — numbers, strings, None, collections
+  - `TestPolTypeof` (3 tests) — basic types, collections, game objects
+  - `TestScope` (6 tests) — define/get, case-insensitive, set, const, has, uninit default
+  - `TestByRef` (2 tests) — get/set, byref in scope
+  - `TestScopeStack` (6 tests) — global, shadowing, set routing, depth, pop error, local define
+  - `TestLiterals` (4 tests) — int, hex, float, string
+  - `TestArithmetic` (9 tests) — add, sub, mul, div, mod, precedence, parens, unary
+  - `TestStringConcat` (3 tests) — string+string, string+int, int+string
+  - `TestComparison` (7 tests) — ==, !=, <, >, <=, >=, <>
+  - `TestLogical` (8 tests) — &&, ||, !, and/or keywords, short-circuit
+  - `TestBitwise` (5 tests) — &, |, <<, >>, ~
+  - `TestAssignment` (5 tests) — :=, +=, -=, *=, /=
+  - `TestElvis` (2 tests) — truthy, falsy
+  - `TestInOperator` (2 tests) — in/not in array
+  - `TestInitializers` (6 tests) — bare array, explicit array, empty array, struct, dictionary, error
+  - `TestVarDeclaration` (5 tests) — init, no init, array keyword, multiple
+  - `TestConstDeclaration` (1 test) — const value
+  - `TestIfStatement` (4 tests) — true/false/elseif/nested
+  - `TestWhileLoop` (2 tests) — basic, false initial
+  - `TestDoWhile` (2 tests) — once, loops
+  - `TestForLoop` (2 tests) — basic for, C-style for
+  - `TestForeach` (2 tests) — array, inline array
+  - `TestCaseStatement` (4 tests) — integer, string, default, no match
+  - `TestRepeatUntil` (1 test) — basic
+  - `TestBreak` (3 tests) — while, for, foreach
+  - `TestContinue` (2 tests) — while, foreach
+  - `TestReturn` (3 tests) — value, early, no value
+  - `TestNestedControlFlow` (2 tests) — nested loops with break, loop with function call
+  - `TestMemberAccess` (8 tests) — array index/set, struct member, dict index, dict exists, array append, nested array, parms unpacking
+  - `TestUserFunctions` (4 tests) — simple, no return, nested calls, recursion
+  - `TestDefaultParams` (2 tests) — default used, default overridden
+  - `TestByRef` (1 test) — byref call doesn't crash
+  - `TestProgramParams` (3 tests) — dict args, list args, parms array pattern
+  - `TestBuiltinDispatch` (3 tests) — CInt, Len, TypeOf from eScript
+  - `TestCombatPatterns` (6 tests) — ArAbsorptionCalc, SlayerCheck, ElementalDamage parsing, case string labels, class level, PvP scaling
+  - `TestGameObjectInteraction` (4 tests) — mobile member access, GetObjProperty, .isa(), ApplyRawDamage
+  - `TestDeflectionOnHitPattern` (1 test) — full parms-array hitscript with Cursed doubling
+- [ ] All combat-path language patterns work: foreach+SplitWords, case with string labels, bitwise & for damage types
+- [ ] User-defined functions with defaults and recursion execute correctly
+- [ ] Built-in function dispatch bridges to M6 stubs (CInt, TypeOf, Len, ApplyRawDamage, etc.)

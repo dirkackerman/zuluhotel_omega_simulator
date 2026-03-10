@@ -63,7 +63,7 @@ class _CollectingErrorListener(ErrorListener):
     ) -> None:
         error = ParseError(line, column, msg, self._file)
         self.errors.append(error)
-        logger.warning("parse error", file=self._file, line=line, column=column, msg=msg)
+        logger.warning("parse error", file=self._file, line=line, column=column, detail=msg)
 
 
 class ParseResult:
