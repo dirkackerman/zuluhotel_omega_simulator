@@ -17,11 +17,11 @@ Elemental damage flows inline through `RecalcPhysicalDmg()` in hitscriptinc.inc.
 **Goal**: Implement the protection/resistance lookup functions so elemental damage reduction can be calculated.
 
 **Deliverables**:
-- [ ] `GetProtLevel(target, element)` — maps element bitflags to target properties (`FireProtection`, `AirProtection`, etc.) and returns protection percentage (0–100+)
-- [ ] `GetResultingElementalProt(target, element)` — wrapper that returns effective protection (currently delegates to `GetProtLevel`; future: complementary element cancellation)
-- [ ] `IsImmunedFromThisDamageType(target, element)` — immunity check from damages.inc
-- [ ] Unit tests for each protection level (0%, 50%, 100%, >100% healing case)
-- [ ] Test the "over-protection heals" mechanic (protection > 100%)
+- [x] `GetProtLevel(target, element)` — maps element bitflags to target properties (`FireProtection`, `AirProtection`, etc.) and returns protection percentage (0–100+)
+- [x] `GetResultingElementalProt(target, element)` — wrapper that returns effective protection (currently delegates to `GetProtLevel`; future: complementary element cancellation)
+- [x] `IsImmunedFromThisDamageType(target, element)` — immunity check from damages.inc
+- [x] Unit tests for each protection level (0%, 50%, 100%, >100% healing case)
+- [x] Test the "over-protection heals" mechanic (protection > 100%)
 
 **Key files**: `damages.inc`, `spelldata.inc`, `structural_stubs.py`
 
@@ -231,7 +231,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 
 | ID | Milestone | Phase | Depends on | Status |
 |----|-----------|-------|------------|--------|
-| M12 | Elemental Protection Stubs | 1 | — | Not started |
+| M12 | Elemental Protection Stubs | 1 | — | **Done** |
 | M13 | Elemental Damage Application | 1 | M12 | Not started |
 | M14 | Elemental Damage Reporting | 1 | M13 | Not started |
 | M15 | Sub-Script Executor | 2 | — | Not started |

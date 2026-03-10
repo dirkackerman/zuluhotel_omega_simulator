@@ -175,6 +175,33 @@ def set_stamina(mobile: Any = None, value: Any = 0) -> None:
         mobile.stamina = int(value)
 
 
+@pol_function("vitals", "HealDamage")
+@pol_function("uo", "HealDamage")
+@pol_function("", "HealDamage")
+def heal_damage(mobile: Any = None, amount: Any = 0) -> None:
+    """Heal a mobile by restoring HP, capped at max_hp.
+
+    Records as a side effect for tracking over-protection healing.
+    """
+    if mobile is None:
+        return
+    amt = int(amount) if amount is not None else 0
+    if amt <= 0:
+        return
+    old_hp = mobile.hp
+    mobile.hp = min(getattr(mobile, "max_hp", mobile.hp + amt), mobile.hp + amt)
+
+    from omega.runtime.context import get_context
+
+    ctx = get_context()
+    ctx.record_side_effect(
+        kind="heal",
+        target_serial=getattr(mobile, "serial", 0),
+        value=amt,
+    )
+    logger.debug("HealDamage", target=getattr(mobile, "name", "?"), amount=amt, hp=mobile.hp)
+
+
 @pol_function("vitals", "SetHpRegenRate")
 @pol_function("", "SetHpRegenRate")
 def set_hp_regen_rate(mobile: Any = None, rate: Any = None) -> None:

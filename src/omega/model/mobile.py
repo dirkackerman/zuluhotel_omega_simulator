@@ -57,6 +57,8 @@ class Mobile(GameObject):
         self.npctemplate: str = npctemplate
         self.cmdlevel: int = 0
         self.dead: bool = False
+        self.hidden: bool = False
+        self.master: Any = None
 
         # Base stats
         self.str_base: int = 10

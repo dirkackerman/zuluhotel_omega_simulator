@@ -346,7 +346,10 @@ class EscriptInterpreter(EscriptParserVisitor):
                     matched = True
                     break
             if matched:
-                return self.visitBlock(group.block())
+                try:
+                    return self.visitBlock(group.block())
+                except BreakSignal:
+                    return None
         return None
 
     def _eval_switch_label(self, ctx: EscriptParser.SwitchLabelContext) -> Any:

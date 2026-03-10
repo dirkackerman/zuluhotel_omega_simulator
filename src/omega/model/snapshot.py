@@ -26,6 +26,7 @@ class MobileSnapshot:
     stamina: int
     max_stamina: int
     dead: bool
+    hidden: bool
     str_mod: int
     int_mod: int
     dex_mod: int
@@ -52,6 +53,7 @@ def snapshot(mobile: Mobile) -> MobileSnapshot:
         stamina=mobile.stamina,
         max_stamina=mobile.max_stamina,
         dead=mobile.dead,
+        hidden=mobile.hidden,
         str_mod=mobile.str_mod,
         int_mod=mobile.int_mod,
         dex_mod=mobile.dex_mod,
@@ -72,6 +74,7 @@ def restore(mobile: Mobile, snap: MobileSnapshot) -> None:
     mobile.stamina = snap.stamina
     mobile.max_stamina = snap.max_stamina
     mobile.dead = snap.dead
+    mobile.hidden = snap.hidden
     mobile.str_mod = snap.str_mod
     mobile.int_mod = snap.int_mod
     mobile.dex_mod = snap.dex_mod
