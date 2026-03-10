@@ -126,15 +126,37 @@ def execute_hit(
 
         # Inject Python override for __RecordSimulatorMetric so the
         # eScript no-op is replaced with actual metric recording.
+        #
+        # Protocol:
+        #   Single KVP:   __RecordSimulatorMetric("key", value)
+        #   Struct merge:  __RecordSimulatorMetric(struct{ ... })
+        #   List append:   __RecordSimulatorMetric("list:name", struct{ ... })
+        #     → appends the struct dict to ctx.metrics["name"] (a list)
+
         def _record_metric(key_or_metrics: Any = "", value: Any = 0) -> None:
-            if isinstance(key_or_metrics, EStruct):
-                for k in key_or_metrics.keys():
-                    ctx.metrics[str(k)] = key_or_metrics.get_member(k)
-            elif isinstance(key_or_metrics, dict):
-                for k, v in key_or_metrics.items():
-                    ctx.metrics[str(k)] = v
+            key_str = str(key_or_metrics) if not isinstance(key_or_metrics, (EStruct, dict)) else ""
+
+            if key_str.startswith("list:"):
+                # List accumulation: append struct/value to a named list
+                list_name = key_str[5:]
+                entry = (
+                    {str(k): value.get_member(k) for k in value.keys()}
+                    if isinstance(value, EStruct)
+                    else {str(k): v for k, v in value.items()}
+                    if isinstance(value, dict)
+                    else value
+                )
+                ctx.metrics.setdefault(list_name, []).append(entry)
+            elif isinstance(key_or_metrics, (EStruct, dict)):
+                # Struct merge: flatten into metrics dict
+                items = (
+                    {str(k): key_or_metrics.get_member(k) for k in key_or_metrics.keys()}
+                    if isinstance(key_or_metrics, EStruct)
+                    else {str(k): v for k, v in key_or_metrics.items()}
+                )
+                ctx.metrics.update(items)
             else:
-                ctx.metrics[str(key_or_metrics)] = value
+                ctx.metrics[key_str] = value
 
         executor.functions.set_override("__RecordSimulatorMetric", _record_metric)
 

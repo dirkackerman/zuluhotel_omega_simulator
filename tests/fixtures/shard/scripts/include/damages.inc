@@ -39,6 +39,9 @@ function ApplyTheDamage( who, by_who, dmg, attack_type := DMGID_PHYSICAL )
 	var newdmg := 0;
 
 	dmg := Cint(dmg);
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric("list:damage_applied", struct{ "type" := attack_type, "amount" := dmg });
+	endif
 	if( !who.IsA(POLCLASS_MOBILE) )
 		return 0;
 	elseif( dmg <= 0 )

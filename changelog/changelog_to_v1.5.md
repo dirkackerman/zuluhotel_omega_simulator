@@ -22,3 +22,30 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Confirm existing combat tests still pass (the `case`/`break` fix is a behavioral change)
 
 **Key insight**: The protection functions are eScript user-defined functions in spelldata.inc/damages.inc (not POL built-ins). They're already in the parsed include chain (`hitscriptinc.inc → dotempmods.inc → spelldata.inc`). M12 was about verifying they work and filling infrastructure gaps.
+
+---
+
+## M13 — Elemental Damage Application
+
+**Summary**: Verified that the full elemental damage path works end-to-end through the interpreter. Instrumented the shard scripts with `__RecordSimulatorMetric` calls using a new `list:` protocol for per-element metric accumulation. No Python stubs were needed — `ApplyElementalDamageNoResist` and `ApplyTheDamage` are eScript functions already in the include chain.
+
+**Changes**:
+- **`list:` metric protocol**: `__RecordSimulatorMetric("list:name", struct{...})` appends the struct to a named list in `ctx.metrics["name"]`. Explicit and self-documenting — controlled from the eScript side, no Python-side prefix detection.
+- **Shard instrumentation** (3 locations, all inside `if(DEBUG_MODE)` guards):
+  - `hitscriptinc.inc` — `list:elemental`: per-element base damage, pct, element name, element ID
+  - `spelldata.inc` — `list:elemental_applied`: net damage after protection (or healed amount for over-protection)
+  - `damages.inc` — `list:damage_applied`: per-`ApplyTheDamage` call with attack type and amount
+- **`_record_metric` override** (`hit.py`): Updated to detect the `list:` prefix on the key argument and accumulate struct values into named lists. Struct-merge and single-KVP modes unchanged.
+- **`client.inc` docstring**: Updated `__RecordSimulatorMetric` comment to document the 3 calling conventions (single KVP, struct merge, list append).
+
+**Testing**:
+- Verify a `FIRE:50 PHYSICAL:50` weapon splits damage into both fire and physical portions, with correct proportional base damage
+- Verify pure physical weapon (no `ElementalDamage` property) produces no elemental metrics and deals damage as before
+- Verify fire protection (30%) reduces total damage compared to no protection
+- Verify 100% fire protection blocks all fire damage (net = 0)
+- Verify over-protection (150%) causes healing instead of damage, records a `heal` side effect
+- Verify `list:` protocol produces actual lists in `ctx.metrics` (not scalar overwrites)
+- Verify `damage_applied` list tracks all `ApplyTheDamage` calls with type and amount
+- Verify scalar metrics (like `absorbed`) remain unaffected by the `list:` protocol
+
+**Key insight**: Like the protection functions in M12, `ApplyElementalDamageNoResist` and `ApplyTheDamage` are eScript user-defined functions — not POL built-ins. The entire elemental damage path runs through the interpreter without any Python wrapping. The `list:` metric protocol solves the per-element accumulation problem cleanly from the eScript side.

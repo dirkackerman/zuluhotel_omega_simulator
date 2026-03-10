@@ -165,16 +165,20 @@ function ApplyElementalDamageNoResist( on_who, by_who, dmg, element )
 	var resultprot := GetResultingElementalProt( on_who, element );
 
 	if( resultprot < 100 )
-		dmg := dmg - Cint(dmg * resultprot / 100);	
+		dmg := dmg - Cint(dmg * resultprot / 100);
 		if(DEBUG_MODE)
 			PrintTextAbovePrivate( by_who , "I've dealt this much Elemental damage: " +dmg, by_who );
 			PrintTextAbovePrivate( on_who , "I received this much Elemental damage: " +dmg, on_who );
+			__RecordSimulatorMetric("list:elemental_applied", struct{ "attack_type" := element, "prot" := resultprot, "dmg_net" := dmg });
 		endif
 		ApplyTheDamage( on_who , by_who ,dmg, element );
 	else
 		// Toadstool - heals x% of the damage that;s over 100. so 120% protection heals 20% of the damage
 		var amt := CDbl(resultprot)/100.0;
 		HealDamage( on_who , Cint(dmg * CDbl(amt-1)) );
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("list:elemental_applied", struct{ "attack_type" := element, "prot" := resultprot, "healed" := Cint(dmg * CDbl(amt-1)) });
+		endif
 	endif
 	
 endfunction

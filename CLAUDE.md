@@ -142,6 +142,17 @@ Build a general-purpose eScript interpreter but only stub the POL built-ins that
 - Deterministic RNG with seed support for reproducible simulations
 - State reset between iterations (each hit is independent in V1)
 
+### eScript Functions vs POL Built-ins
+Many combat functions (e.g., `GetProtLevel`, `ApplyElementalDamageNoResist`, `ApplyTheDamage`, `IsImmunedFromThisDamageType`) are **eScript user-defined functions** in the shard scripts — NOT POL built-ins. They're already in the parsed include chain and execute through the interpreter directly. **Do not wrap them in Python overrides** (`set_override`) — function names may change when the shard is updated. Prefer instrumenting the shard scripts with `__RecordSimulatorMetric` calls to capture pipeline values.
+
+### `__RecordSimulatorMetric` Protocol
+No-op function in `client.inc`, overridden by Python in `execute_hit` via `set_override`. Three calling conventions:
+- **Single KVP**: `__RecordSimulatorMetric("key", value)` → `ctx.metrics["key"] = value`
+- **Struct merge**: `__RecordSimulatorMetric(struct{...})` → flattened into `ctx.metrics`
+- **List append**: `__RecordSimulatorMetric("list:name", struct{...})` → appended to `ctx.metrics["name"]` (a list)
+
+All calls must be inside `if(DEBUG_MODE)` guards, single-line, using structs for multi-KVP. The `list:` prefix protocol is explicit and self-documenting — controlled from the eScript side.
+
 ### POL Built-in Stub Strategy
 ~60 distinct built-in calls on the combat path, grouped by implementation effort:
 - **Batch 1 — trivial (~30)**: Type casts (CInt, CDbl), math (Random, RandomInt, Pow, Max), messaging no-ops (SendSysMessage, PrintTextAbovePrivate), utilities (TypeOf, SplitWords, ReadGameClock)
@@ -220,7 +231,7 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 
 ### Running tests
 ```bash
-pytest                    # everything (670 tests, ~56s)
+pytest                    # everything (737 tests, ~57s)
 ```
 
 All tests run unconditionally — no markers, no skips, no submodule dependency.
@@ -250,9 +261,10 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - Use `uv` for dependency management if available, otherwise `pip`
 - Source code in `src/` with package structure
 - Tests alongside source or in `tests/`
-- Keep submodules read-only; never modify them
+- Keep submodules read-only; never modify them — **exception**: the shard submodule (`zuluhotel_omega_2.5`) may be instrumented with `__RecordSimulatorMetric` calls for metric capture. These are no-ops in POL and live behind `if(DEBUG_MODE)` guards.
 - Structured logging from day one — all subsystems use Python `logging` with named loggers
-- After completing each milestone, update `changelog/changelog_to_v1.md` with a summary and test criteria for the work done
+- After completing each milestone, update the relevant changelog with a summary and test criteria for the work done
+- Changelog test sections describe **critical test scenarios for testers**, not unit test counts
 
 ## Documentation
 - **[Notebook Documentation](./notebooks/docs/README.md)** — User-facing wiki for notebook authors and game designers. Covers the simulation API, combatant specs, scenarios, results, reporting, runtime internals, and cookbook examples.
@@ -260,7 +272,8 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 ## Planning
 - **[Path to V1](./planning/path_to_v1.md)** — Milestone plan (M0-M11) with dependency graph, deliverables, and acceptance criteria per milestone
 - **[Changelog to V1](./changelog/changelog_to_v1.md)** — Per-milestone change summaries with test criteria
-- **V1 status**: All milestones (M0–M11) complete. 670 tests, 374 hits/sec, submodule-independent fixtures.
+- **V1 status**: All milestones (M0–M11) complete. 374 hits/sec, submodule-independent fixtures.
+- **V1.5 status**: M12–M13 complete (elemental protection + elemental damage application). 737 tests.
 - **[Path to V1.5](./planning/path_to_v1.5.md)** — Elemental & Enchanted Weapons roadmap (M12–M22), three phases: elemental damage, sub-script execution, polish
 - **[Changelog to V1.5](./changelog/changelog_to_v1.5.md)** — Per-milestone change summaries for V1.5
 

@@ -30,9 +30,10 @@ const DEBUG_MODE	:= 1; // Set to 1 to enable debug output, 0 to disable
 //
 // In POL this function does nothing. Only call it inside if(DEBUG_MODE) guards.
 //
-// Accepts either a single key-value pair or a struct of multiple metrics:
-//   __RecordSimulatorMetric("absorbed", absorbed);
-//   __RecordSimulatorMetric(struct{ "absorbed" := absorbed, "ar" := ar });
+// Accepts either a single key-value pair, a struct (merged), or a list append:
+//   __RecordSimulatorMetric("absorbed", absorbed);                          // single KVP
+//   __RecordSimulatorMetric(struct{ "absorbed" := absorbed, "ar" := ar });  // struct merge
+//   __RecordSimulatorMetric("list:name", struct{ ... });                    // list append
 // ---------------------------------------------------------------------------
 function __RecordSimulatorMetric(key_or_metrics, value := 0)
 	// No-op in POL — the simulator injects its own implementation.

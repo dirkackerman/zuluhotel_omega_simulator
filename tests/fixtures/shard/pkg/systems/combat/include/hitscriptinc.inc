@@ -162,6 +162,9 @@ function RecalcPhysicalDmg( attacker, defender, weapon, armor, byref basedamage,
 			endcase
 			var dmg_amount := physdamage * Cint(split_element[2])/100.0;
 			totalelemental += dmg_amount; // add up to check if we'll still do physical later
+			if(DEBUG_MODE)
+				__RecordSimulatorMetric("list:elemental", struct{ "element" := split_element[1], "pct" := Cint(split_element[2]), "dmg_base" := dmg_amount, "id" := element_ID });
+			endif
 			if (element_ID == 0x0100)
 				basedamage := dmg_amount; // modify physical to pass onto the rest of hitscript
 				has_physical := 1;

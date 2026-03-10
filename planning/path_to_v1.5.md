@@ -32,20 +32,13 @@ Elemental damage flows inline through `RecalcPhysicalDmg()` in hitscriptinc.inc.
 **Goal**: Implement `ApplyElementalDamageNoResist()` and update `ApplyTheDamage()` to track damage type.
 
 **Deliverables**:
-- [ ] `ApplyElementalDamageNoResist(defender, attacker, dmg, element_ID)` stub — applies elemental damage after protection reduction
-- [ ] Update `ApplyTheDamage()` stub to accept and record the `attack_type` (4th parameter) in `SimulationContext`
-- [ ] Record per-element damage in `SimulationContext.metrics` (e.g., `fire_damage`, `air_damage`)
-- [ ] Add `__RecordSimulatorMetric` calls to track elemental damage pipeline values:
-  - `ElementalDamageBase` — total elemental damage before protection reduction
-  - `ElementalDamageReduction` — amount reduced by elemental protection per element
-  - `ElementalDamageNet` — net elemental damage after protection
-  - Per-element base/net values (e.g., `FireDamageBase`, `FireDamageNet`, `AirDamageBase`, etc.)
-  - `ElementalProtLevel` — protection level applied per element type
-  - `PhysicalPortion` / `ElementalPortion` — the damage split ratio from weapon properties
-- [ ] Integration test: weapon with `ElementalDamage` property (e.g., `"FIRE:50 PHYSICAL:50"`) produces correct split
-- [ ] Integration test: elemental damage reduced by matching protection
-- [ ] Integration test: pure physical weapon (no `ElementalDamage` prop) still works as before
-- [ ] Integration test: `__RecordSimulatorMetric` captures elemental pipeline values in `ctx.metrics`
+- [x] Elemental damage flows end-to-end: `RecalcPhysicalDmg` → element loop → `ApplyElementalDamageNoResist` → `ApplyTheDamage`
+- [x] `__RecordSimulatorMetric` calls added to shard scripts using the `list:` protocol:
+  - `list:elemental` — per-element base damage, percentage, element ID (hitscriptinc.inc)
+  - `list:elemental_applied` — per-element net damage after protection or healed amount (spelldata.inc)
+  - `list:damage_applied` — per-ApplyTheDamage call: attack type + amount (damages.inc)
+- [x] `_record_metric` override in `hit.py` updated to detect `list:` prefix and accumulate structs into named lists in `ctx.metrics`
+- [x] Integration tests: elemental weapon split, protection reduction, pure physical regression, over-protection healing, `list:` protocol verification
 
 **Key files**: `structural_stubs.py`, `context.py`, `hitscriptinc.inc`
 
@@ -232,7 +225,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 | ID | Milestone | Phase | Depends on | Status |
 |----|-----------|-------|------------|--------|
 | M12 | Elemental Protection Stubs | 1 | — | **Done** |
-| M13 | Elemental Damage Application | 1 | M12 | Not started |
+| M13 | Elemental Damage Application | 1 | M12 | **Done** |
 | M14 | Elemental Damage Reporting | 1 | M13 | Not started |
 | M15 | Sub-Script Executor | 2 | — | Not started |
 | M16 | Fixture Sync for Enchantment Scripts | 2 | M15 | Not started |
