@@ -5,9 +5,7 @@ from pathlib import Path
 import pytest
 
 from omega.parser.include_resolver import DictPackageMap, IncludeResolver
-
-
-SHARD_ROOT = Path("/home/saru/git/temp/zuluhotel_omega_simulator/submodules/zuluhotel_omega_2.5")
+from tests.conftest import FIXTURE_SHARD_ROOT as SHARD_ROOT
 
 
 def _make_resolver(pkg_map: dict[str, str] | None = None) -> IncludeResolver:

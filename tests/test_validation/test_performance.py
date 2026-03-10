@@ -9,30 +9,21 @@ functions and constants, yielding a 5x speedup (42 → 200+ hits/sec).
 """
 
 import time
-from pathlib import Path
 
 import pytest
 
 from omega.model.constants import SKILLID_ANATOMY, SKILLID_SWORDSMANSHIP, SKILLID_TACTICS
-from omega.shard import ShardData
 from omega.simulation import ArmorSpec, CombatantSpec, Scenario, WeaponSpec, run_scenario
 
-SHARD_ROOT = Path(__file__).resolve().parents[2] / "submodules" / "zuluhotel_omega_2.5"
 
-pytestmark = [
-    pytest.mark.skipif(not SHARD_ROOT.exists(), reason="Shard submodule not available"),
-    pytest.mark.shard,
-]
+@pytest.fixture(scope="module")
+def shard(fixture_shard):
+    return fixture_shard
 
 
 @pytest.fixture(scope="module")
-def shard():
-    return ShardData.from_path(SHARD_ROOT)
-
-
-@pytest.fixture(scope="module")
-def parse_results(shard):
-    return shard.parse_combat_scripts()
+def parse_results(fixture_parse_results):
+    return fixture_parse_results
 
 
 _SCENARIO = Scenario(

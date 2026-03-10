@@ -508,45 +508,146 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M11 — Test Fixture Independence
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
-**Goal**: Decouple all tests from the shard submodule by copying the required eScript files and config fragments into local test fixtures. Tests evolve independently from the shard — no more breakage when shard scripts change during balancing.
+**Goal**: Decouple all 104 shard-dependent tests (across 13 files) from the submodule by snapshotting the required shard resources into local test fixtures. After M11, `pytest` passes with the submodule at any commit — or entirely absent.
 
-**Context**: The shard submodule is the source of truth for live game scripts, and it will change frequently during balancing. Currently, `@pytest.mark.shard` tests execute real scripts from the submodule and break on any formula change. Instead, we should snapshot the specific files each test group needs into local copies under `tests/`, so tests are frozen against a known script version. The submodule remains as a read-only reference for importing new script versions when we choose to.
+**Context**: The shard submodule is the source of truth for live game scripts, and it will change frequently during balancing. Currently, 13 test files reference `submodules/zuluhotel_omega_2.5` directly — 6 use `@pytest.mark.shard` with `ShardData`, and 7 use hard-coded `SHARD_ROOT` paths without any marker or skip guard. A submodule update or removal breaks all of them.
 
-**Deliverables**:
-- **Fixture file structure** — for each test group, a local directory containing only the eScript/config files that group needs:
-  ```
-  tests/
-    fixtures/
+### Scope — 13 files, 104 tests
+
+**Group A — `@pytest.mark.shard` tests (6 files, 33 tests):**
+These use `ShardData.from_path(SHARD_ROOT)` and have `skipif` guards.
+
+| File | Tests | Shard resources used |
+|---|---|---|
+| `test_validation/test_formulas.py` | 10 | mainhit.src, full combat include chain, .em modules |
+| `test_validation/test_stub_coverage.py` | 5 | mainhit.src, full combat include chain |
+| `test_validation/test_performance.py` | 2 | mainhit.src, full combat include chain |
+| `test_combat/test_real_scripts.py` | 3 | mainhit.src, full combat include chain, .em modules |
+| `test_combat/test_shard.py` | 9 | ShardData package map, config resolution, script parsing |
+| `test_simulation/test_runner_shard.py` | 4 | mainhit.src, full combat include chain |
+
+**Group B — Hard-coded SHARD_ROOT (7 files, 71 tests):**
+These have no `@pytest.mark.shard` marker and no skip guard — they simply fail if the submodule is missing.
+
+| File | Tests | Shard resources used |
+|---|---|---|
+| `test_parser/test_parse_shard.py` | 10 | mainhit.src, hitscriptinc.inc, damages.inc, classes.inc, attributes.inc, client.inc |
+| `test_parser/test_include_resolver.py` | 10 | damages.inc, attributes.inc, classes.inc, hitscriptinc.inc, package paths |
+| `test_config/test_cfg_parser.py` | 22 | combat.cfg, npcdesc.cfg, equip.cfg, itemdesc.cfg, hitscriptdesc.cfg, settings.cfg |
+| `test_config/test_package_resolver.py` | 12 | All pkg.cfg files (~129 packages) |
+| `test_config/test_config_integration.py` | 7 | npcdesc.cfg, equip.cfg, itemdesc.cfg, settings.cfg |
+| `test_model/test_model_integration.py` | 10 | npcdesc.cfg, equip.cfg, itemdesc.cfg |
+
+### Deliverables
+
+#### 1. Fixture directory structure
+A single `tests/fixtures/shard/` tree mirroring the shard layout with only the files these tests need:
+
+```
+tests/fixtures/shard/
+  scripts/
+    include/
+      damages.inc
+      attributes.inc
+      classes.inc
+      client.inc
+      dotempmods.inc
+      skillpoints.inc
+      math.inc
+      astralfights.inc
+      constants/
+        skillids.inc
+    modules/
+      uo.em
+      attributes.em
+      vitals.em
+      cfgfile.em
+      os.em
+      math.em
+      basicio.em
+      util.em
+  pkg/
+    systems/
       combat/
+        pkg.cfg
         mainhit.src
         include/
           hitscriptinc.inc
-          damages.inc
-          classes.inc
-          attributes.inc
-          ...
         config/
-          itemdesc.cfg   (relevant entries only)
-          combat.cfg
+          itemdesc.cfg
           settings.cfg
-        modules/
-          uo.em           (relevant constants only)
-          attributes.em
-          vitals.em
+          hitscriptdesc.cfg
+      karmafame/
         pkg.cfg
-  ```
-- **Copy script** (`scripts/sync_fixtures.py` or similar):
-  - Reads the include dependency tree from a root script (e.g., `mainhit.src`)
-  - Copies all transitively-included files into the fixture directory, preserving the relative path structure needed by the include resolver
-  - Copies referenced config files and `.em` modules
-  - Run manually when you *want* to pull in shard changes — not automatic
-- **Migrate existing shard tests** — rewrite `test_real_scripts.py` and `test_shard.py` to use local fixture copies instead of `SHARD_ROOT`. Remove the `@pytest.mark.shard` marker since tests are now self-contained.
-- **Update test helpers** — fixture `shard()` and `combat_trees()` point at local fixture path instead of submodule path
-- **Remove pytest `shard` marker** — all tests become self-contained; `pytest` runs everything without skips
+        include/
+          karmafame.inc
+    (+ other referenced packages with their pkg.cfg)
+  config/
+    combat.cfg
+    npcdesc.cfg          (trimmed: ~20 representative templates, not all 748)
+    equip.cfg            (trimmed: templates referenced by the kept NPCs)
+```
 
-**Workflow after M11**:
+**Key decision — trimmed vs full configs**: `npcdesc.cfg` is 580KB with 748 templates. Copy only ~20 representative templates that existing tests reference (beckon, nazgul, skeleton, etc.) plus a handful covering edge cases. Same for `equip.cfg`. Full files like `combat.cfg` (small) and `itemdesc.cfg` (needed for objtype lookups) are copied in full.
+
+#### 2. Sync script — `scripts/sync_fixtures.py`
+
+```
+Usage: python scripts/sync_fixtures.py [--shard-root PATH] [--dry-run]
+```
+
+Steps:
+1. Parse `mainhit.src` with `parse_with_includes()` to get the full transitive include tree (53 files)
+2. Copy each included file into `tests/fixtures/shard/` preserving relative paths
+3. Copy all `pkg.cfg` files for referenced packages (needed by the include resolver and `PackageResolver`)
+4. Copy config files: `combat.cfg`, `npcdesc.cfg` (trimmed), `equip.cfg` (trimmed), `itemdesc.cfg`, `settings.cfg`, `hitscriptdesc.cfg`
+5. Copy `.em` module files for all `use` declarations found in the include chain
+6. Print a summary: files copied, sizes, packages included
+7. `--dry-run` lists what would be copied without doing it
+
+#### 3. Shared fixture helper — `tests/conftest.py` or `tests/fixtures/__init__.py`
+
+```python
+FIXTURE_SHARD_ROOT = Path(__file__).parent / "fixtures" / "shard"
+
+@pytest.fixture(scope="session")
+def fixture_shard():
+    """ShardData loaded from local fixture copy (no submodule needed)."""
+    return ShardData.from_path(FIXTURE_SHARD_ROOT)
+```
+
+All 13 test files migrated to use `FIXTURE_SHARD_ROOT` or the `fixture_shard` session fixture instead of `SHARD_ROOT`.
+
+#### 4. Migrate test files
+
+**For each of the 13 files:**
+- Replace `SHARD_ROOT = ... / "submodules" / "zuluhotel_omega_2.5"` with `FIXTURE_SHARD_ROOT` import
+- Replace `@pytest.mark.shard` / `skipif` guards with plain tests (no skip, no marker)
+- Replace `ShardData.from_path(SHARD_ROOT)` with the `fixture_shard` session fixture
+- Verify all tests pass against the fixture copy
+
+**Group B files** additionally need `@pytest.mark.shard` or skip guards added as an interim step, since they currently have none and will fail immediately if the submodule is missing.
+
+#### 5. Remove `shard` marker
+
+After migration:
+- Remove `pytest.mark.shard` from `pyproject.toml` markers config
+- Remove all `skipif(not SHARD_ROOT.exists())` guards
+- All tests run unconditionally — no more skipped tests
+
+### Implementation order
+
+1. **Create `scripts/sync_fixtures.py`** — the copy/trim tool
+2. **Run it** to populate `tests/fixtures/shard/`
+3. **Add shared fixture helper** in `tests/conftest.py`
+4. **Migrate Group B** (7 files, 71 tests) — these are simpler, just path changes
+5. **Migrate Group A** (6 files, 33 tests) — replace ShardData + marker pattern
+6. **Remove `shard` marker** and skip guards
+7. **Verify**: delete or `git stash` the submodule, run `pytest` — all 670 tests pass
+
+### Workflow after M11
 1. Designer changes formulas in the live shard
 2. Shard submodule updated to new commit
 3. Run `python scripts/sync_fixtures.py` to pull new scripts into fixtures
@@ -554,9 +655,9 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 5. Update test assertions, commit fixtures + test fixes together
 6. Between syncs, all tests pass regardless of shard state
 
-**Files**: `scripts/sync_fixtures.py`, `tests/fixtures/`, updates to existing test files
+**Files**: `scripts/sync_fixtures.py`, `tests/fixtures/shard/`, `tests/conftest.py`, updates to 13 test files
 
-**Acceptance**: `pytest` passes with the shard submodule at *any* commit (or even absent). All combat integration tests use local fixture files. `sync_fixtures.py` correctly copies the full transitive include tree for `mainhit.src`.
+**Acceptance**: `pytest` passes with the shard submodule at *any* commit (or even absent). All 670 tests run unconditionally — zero skips, zero shard-marker tests. `sync_fixtures.py` correctly copies the full transitive include tree for `mainhit.src` plus all referenced configs and `.em` modules.
 
 ---
 

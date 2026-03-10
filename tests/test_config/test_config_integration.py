@@ -6,8 +6,7 @@ import pytest
 
 from omega.config import PackageResolver, parse_config_file, parse_dice
 from omega.config.accessor import RuntimeConfigFile
-
-SHARD_ROOT = Path("/home/saru/git/temp/zuluhotel_omega_simulator/submodules/zuluhotel_omega_2.5")
+from tests.conftest import FIXTURE_SHARD_ROOT as SHARD_ROOT
 
 
 @pytest.fixture(scope="module")

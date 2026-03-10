@@ -22,8 +22,7 @@ from omega.model.factories import (
 )
 from omega.model.items import Armor, Weapon
 from omega.model.snapshot import restore, snapshot
-
-SHARD_ROOT = Path("/home/saru/git/temp/zuluhotel_omega_simulator/submodules/zuluhotel_omega_2.5")
+from tests.conftest import FIXTURE_SHARD_ROOT as SHARD_ROOT
 
 
 @pytest.fixture(scope="module")

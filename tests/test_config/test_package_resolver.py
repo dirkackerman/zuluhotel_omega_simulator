@@ -5,8 +5,7 @@ from pathlib import Path
 import pytest
 
 from omega.config.package_resolver import PackageResolver
-
-SHARD_ROOT = Path("/home/saru/git/temp/zuluhotel_omega_simulator/submodules/zuluhotel_omega_2.5")
+from tests.conftest import FIXTURE_SHARD_ROOT as SHARD_ROOT
 
 
 @pytest.fixture(scope="module")

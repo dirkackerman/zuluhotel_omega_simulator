@@ -1,20 +1,11 @@
-"""Smoke tests executing real combat scripts from the shard submodule.
+"""Smoke tests executing real combat scripts from local fixture copy.
 
-These tests depend on the pinned shard submodule commit and WILL break if
-the shard's combat scripts change (new formulas, renamed functions, etc.).
-
-Run strategy:
-  - ``pytest``                      → runs everything including these
-  - ``pytest -m "not shard"``       → skips these, runs only self-contained tests
-  - ``pytest -m shard``             → runs ONLY shard-dependent tests
-
+These tests exercise the shard's combat scripts through the interpreter.
 When the shard submodule is updated:
-  1. Run ``pytest -m shard`` to see what broke
-  2. Fix assertions to match new behavior
-  3. Commit the submodule update + test fixes together
+  1. Run ``python scripts/sync_fixtures.py`` to refresh fixtures
+  2. Run ``pytest`` to see what broke
+  3. Update assertions and commit fixtures + test fixes together
 """
-
-from pathlib import Path
 
 import pytest
 
@@ -22,25 +13,16 @@ from omega.config.dice import DiceSpec
 from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_TACTICS
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
-from omega.shard import ShardData
-
-SHARD_ROOT = Path(__file__).resolve().parents[2] / "submodules" / "zuluhotel_omega_2.5"
-
-# Skip all tests if the submodule isn't checked out; mark all as shard-dependent
-pytestmark = [
-    pytest.mark.skipif(not SHARD_ROOT.exists(), reason="Shard submodule not available"),
-    pytest.mark.shard,
-]
 
 
 @pytest.fixture
-def shard():
-    return ShardData.from_path(SHARD_ROOT)
+def shard(fixture_shard):
+    return fixture_shard
 
 
 @pytest.fixture
-def combat_trees(shard):
-    return shard.parse_combat_scripts()
+def combat_trees(fixture_parse_results):
+    return fixture_parse_results
 
 
 def _em_dir(shard):

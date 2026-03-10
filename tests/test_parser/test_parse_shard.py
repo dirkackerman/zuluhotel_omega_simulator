@@ -6,8 +6,7 @@ from pathlib import Path
 import pytest
 
 from omega.parser import parse_file, parse_with_includes
-
-SHARD_ROOT = Path("/home/saru/git/temp/zuluhotel_omega_simulator/submodules/zuluhotel_omega_2.5")
+from tests.conftest import FIXTURE_SHARD_ROOT as SHARD_ROOT
 
 
 def _build_package_map() -> dict[str, Path]:

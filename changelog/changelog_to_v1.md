@@ -555,3 +555,74 @@ Profile breakdown (200 iterations, before → after full optimization):
 - [ ] Parse caching: second parse no slower than 2× first + 1s
 
 ---
+
+## M11 — Test Fixture Independence
+
+**Date**: 2026-03-10
+
+### Summary
+
+Decoupled all 104 shard-dependent tests from the submodule by snapshotting shard resources into local test fixtures. All 670 tests now pass with the shard submodule at any commit — or entirely absent. Zero skips, zero deselections.
+
+### New files
+
+- `scripts/sync_fixtures.py` — Fixture sync tool that:
+  - Uses `parse_with_includes()` to discover the full transitive include tree (53 files)
+  - Copies all included eScript files preserving relative paths
+  - Copies all 129 `pkg.cfg` files for package resolution
+  - Copies config files: `combat.cfg` (full), `itemdesc.cfg` (full), `settings.cfg` (full), `hitscriptdesc.cfg` (full)
+  - Trims `npcdesc.cfg` to 6 representative NPC templates (beckon, dracoliche, skeleton, earthelementalsummons, airelemental, earthelemental)
+  - Trims `equip.cfg` to 6 equipment templates referenced by those NPCs
+  - Copies all 21 `.em` module files
+  - Supports `--dry-run` and `--shard-root PATH` options
+- `tests/conftest.py` — Session-scoped fixtures: `FIXTURE_SHARD_ROOT`, `fixture_shard` (ShardData), `fixture_parse_results` (parsed combat scripts)
+- `tests/fixtures/__init__.py` — Package marker
+- `tests/fixtures/shard/` — 209 files, 866 KB total fixture data
+
+### Modified files (12 test files migrated)
+
+**Group B — Hard-coded paths (6 files, 71 tests):**
+- `tests/test_parser/test_parse_shard.py` — `SHARD_ROOT` → `FIXTURE_SHARD_ROOT` import
+- `tests/test_parser/test_include_resolver.py` — `SHARD_ROOT` → `FIXTURE_SHARD_ROOT` import
+- `tests/test_config/test_cfg_parser.py` — `SHARD_ROOT` → `FIXTURE_SHARD_ROOT` import; relaxed count assertions for trimmed configs (`> 0` instead of `> 100`)
+- `tests/test_config/test_package_resolver.py` — `SHARD_ROOT` → `FIXTURE_SHARD_ROOT` import
+- `tests/test_config/test_config_integration.py` — `SHARD_ROOT` → `FIXTURE_SHARD_ROOT` import
+- `tests/test_model/test_model_integration.py` — `SHARD_ROOT` → `FIXTURE_SHARD_ROOT` import
+
+**Group A — @pytest.mark.shard tests (6 files, 33 tests):**
+- `tests/test_validation/test_formulas.py` — Removed `pytestmark`, `SHARD_ROOT`, `ShardData` import; local `shard`/`parse_results` fixtures delegate to session-scoped conftest fixtures
+- `tests/test_validation/test_stub_coverage.py` — Same pattern
+- `tests/test_validation/test_performance.py` — Same pattern
+- `tests/test_combat/test_real_scripts.py` — Same pattern; updated module docstring
+- `tests/test_combat/test_shard.py` — Removed `pytestmark`; all `SHARD_ROOT` references → `FIXTURE_SHARD_ROOT`
+- `tests/test_simulation/test_runner_shard.py` — Same pattern as validation files
+
+**Other:**
+- `pyproject.toml` — Removed `shard` marker from `[tool.pytest.ini_options]`; added `pythonpath = ["src"]`
+
+### Key decisions
+
+1. **Trim large configs**: `npcdesc.cfg` (580KB, 748 templates) trimmed to 6 templates that tests reference. `equip.cfg` similarly trimmed. Small configs copied in full.
+2. **All pkg.cfg files included**: PackageResolver tests discover 100+ packages, so all 129 `pkg.cfg` files are copied. These are tiny (~50 bytes each).
+3. **Session-scoped conftest fixtures**: `fixture_shard` and `fixture_parse_results` are session-scoped to avoid re-parsing 53 files per test module.
+4. **Module-scoped aliases**: Group A tests define module-scoped `shard`/`parse_results` fixtures that delegate to the session fixtures, minimizing changes to test method signatures.
+5. **No more @pytest.mark.shard**: All tests run unconditionally. The marker and associated `skipif` guards are removed entirely.
+
+### Workflow after M11
+
+1. Designer changes formulas in the live shard
+2. Update shard submodule: `cd submodules/zuluhotel_omega_2.5 && git pull`
+3. Sync fixtures: `python scripts/sync_fixtures.py`
+4. Run tests: `pytest` — failures show exactly what changed
+5. Update assertions, commit fixtures + test fixes together
+6. Between syncs, all tests pass regardless of shard state
+
+### Test Criteria
+
+- [x] All 670 tests pass with submodule present
+- [x] All 670 tests pass with submodule working directory deleted (only `.git` file remains)
+- [x] Zero `@pytest.mark.shard` markers in test code
+- [x] Zero `skipif(not SHARD_ROOT.exists())` guards in test code
+- [x] Zero tests skipped or deselected
+- [x] `sync_fixtures.py` correctly discovers 53 files in include tree
+- [x] `sync_fixtures.py --dry-run` shows what would be copied without writing

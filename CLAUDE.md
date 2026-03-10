@@ -242,6 +242,12 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - Use `pytest.skip()` on execution failure rather than hard-failing — allows gradual coverage expansion
 - Document which shard scripts the test exercises
 
+### Test fixture locality principle
+- Tests should **not** directly reference the shard submodule for their test data. Instead, copy the required eScript files, config fragments, and `.em` modules into a local fixture directory close to the tests themselves (e.g., `tests/fixtures/combat/`).
+- During initial feature development, it's fine to use `@pytest.mark.shard` tests that read from the submodule. But once a feature stabilizes, the resources that family of tests depends on should be snapshotted into local fixtures so tests are decoupled from submodule state.
+- This ensures `pytest` passes regardless of submodule commit, and test failures reflect code changes rather than shard script changes.
+- A sync script (`scripts/sync_fixtures.py`) should be used to pull updated scripts from the submodule into fixtures when you intentionally want to adopt shard changes.
+
 ## Development Conventions
 - Python 3.14, type hints throughout
 - Use `uv` for dependency management if available, otherwise `pip`

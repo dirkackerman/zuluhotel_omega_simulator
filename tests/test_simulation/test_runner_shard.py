@@ -1,15 +1,13 @@
-"""Shard-dependent integration tests for the simulation runner.
+"""Integration tests for the simulation runner.
 
 Exercises the full pipeline: scenario → runner → real mainhit.src → stats.
 """
 
 import time
-from pathlib import Path
 
 import pytest
 
 from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_TACTICS
-from omega.shard import ShardData
 from omega.simulation import (
     ArmorSpec,
     CombatantSpec,
@@ -21,22 +19,15 @@ from omega.simulation import (
     run_sweep,
 )
 
-SHARD_ROOT = Path(__file__).resolve().parents[2] / "submodules" / "zuluhotel_omega_2.5"
 
-pytestmark = [
-    pytest.mark.skipif(not SHARD_ROOT.exists(), reason="Shard submodule not available"),
-    pytest.mark.shard,
-]
+@pytest.fixture(scope="module")
+def shard(fixture_shard):
+    return fixture_shard
 
 
 @pytest.fixture(scope="module")
-def shard():
-    return ShardData.from_path(SHARD_ROOT)
-
-
-@pytest.fixture(scope="module")
-def parse_results(shard):
-    return shard.parse_combat_scripts()
+def parse_results(fixture_parse_results):
+    return fixture_parse_results
 
 
 WARRIOR_ATTACKER = CombatantSpec(

@@ -5,8 +5,7 @@ from pathlib import Path
 import pytest
 
 from omega.config.cfg_parser import ConfigElement, ConfigFile, parse_config_file
-
-SHARD_ROOT = Path("/home/saru/git/temp/zuluhotel_omega_simulator/submodules/zuluhotel_omega_2.5")
+from tests.conftest import FIXTURE_SHARD_ROOT as SHARD_ROOT
 
 
 class TestFlatFormat:
@@ -45,7 +44,7 @@ class TestBlockFormat:
 
     def test_parse_npcdesc_cfg(self):
         cfg = parse_config_file(SHARD_ROOT / "config/npcdesc.cfg")
-        assert len(cfg) > 100  # Hundreds of NPC templates
+        assert len(cfg) > 0  # Trimmed fixture has representative templates
 
     def test_npc_beckon_properties(self):
         cfg = parse_config_file(SHARD_ROOT / "config/npcdesc.cfg")
@@ -160,7 +159,7 @@ class TestEquipFormat:
 
     def test_parse_equip(self):
         cfg = parse_config_file(SHARD_ROOT / "config/equip.cfg")
-        assert len(cfg) > 10
+        assert len(cfg) > 0
 
     def test_nazgul_equipment(self):
         cfg = parse_config_file(SHARD_ROOT / "config/equip.cfg")

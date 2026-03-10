@@ -18,6 +18,4 @@ packages = ["src/omega"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-markers = [
-    "shard: tests that execute real shard scripts (may break on shard updates)",
-]
+pythonpath = ["src"]
