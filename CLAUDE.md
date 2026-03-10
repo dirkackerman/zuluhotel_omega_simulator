@@ -208,9 +208,11 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 - Tests alongside source or in `tests/`
 - Keep submodules read-only; never modify them
 - Structured logging from day one — all subsystems use Python `logging` with named loggers
+- After completing each milestone, update `changelog_to_v1.md` with a summary and test criteria for the work done
 
 ## Planning
 - **[Path to V1](./path_to_v1.md)** — Milestone plan (M0-M10) with dependency graph, deliverables, and acceptance criteria per milestone
+- **[Changelog to V1](./changelog_to_v1.md)** — Per-milestone change summaries with test criteria
 
 ## Commands
 - `uv run pytest` or `python -m pytest` - run tests

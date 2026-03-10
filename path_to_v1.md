@@ -26,7 +26,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M0 — Logging Framework
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Establish structured logging as the foundation for all other milestones. Every subsystem will use this from day one.
 
@@ -50,7 +50,7 @@ M2 and M3/M4 can be developed in parallel. They converge at M7.
 ---
 
 ## M1 — Project Scaffolding
-**Status**: [ ] Not started
+**Status**: [x] Complete
 
 **Goal**: Set up the Python project structure, dependency management, and dev tooling so all subsequent milestones have a working foundation.
 
