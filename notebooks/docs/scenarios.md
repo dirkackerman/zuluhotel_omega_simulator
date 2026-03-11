@@ -124,6 +124,7 @@ class Variable:
 | `"class_levels.<id>"` | `"class_levels.IsWarrior"` | Class level (1–5) |
 | `"weapon.<field>"` | `"weapon.damage"` | Any WeaponSpec field |
 | `"armor.<field>"` | `"armor.ar"` | Any ArmorSpec field |
+| `"properties.<name>"` | `"properties.ReactiveArmor"` | Mobile CProps (V1.5) |
 
 ### Creating variables
 
@@ -233,7 +234,7 @@ cell = result.get_cell(**{f"attacker.skills.{SKILLID_TACTICS}": 100})
 
 ### Performance
 
-The sweep shares a single `Executor` instance across all cells, avoiding redundant script parsing. Typical throughput is ~374 hits/second. Planning guide:
+The sweep shares a single `Executor` instance across all cells, avoiding redundant script parsing. Typical throughput is ~374 hits/second for physical-only scenarios. Enchanted weapons with sub-scripts (V1.5) have additional overhead from nested script execution — expect ~200-300 hits/second depending on enchantment complexity. Planning guide:
 
 | Grid | Iterations/cell | Total hits | Estimated time |
 |------|----------------|------------|----------------|

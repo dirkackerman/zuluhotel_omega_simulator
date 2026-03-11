@@ -53,19 +53,33 @@ def damage_histogram(
     """
     plt = _require_matplotlib()
 
-    damages = [r.final_damage for r in cell.raw_results if r.success]
+    # Filter to hits only — misses (0 damage) would create a spike at 0
+    # that distorts the distribution shape.  Hit rate is annotated instead.
+    damages = [r.final_damage for r in cell.raw_results if r.success and r.final_damage > 0]
 
     fig, ax = plt.subplots(figsize=figsize)
+
+    if not damages:
+        ax.text(0.5, 0.5, "No hits recorded", ha="center", va="center",
+                transform=ax.transAxes)
+        ax.set_title(title or "Damage Distribution")
+        plt.close(fig)
+        return fig
+
     ax.hist(damages, bins=bins, edgecolor="black", alpha=0.7)
 
-    # Overlay mean and median
-    ds = cell.damage_stats
-    ax.axvline(ds.mean, color="red", linestyle="--", linewidth=1.5, label=f"Mean: {ds.mean:.1f}")
-    ax.axvline(ds.median, color="orange", linestyle=":", linewidth=1.5, label=f"Median: {ds.median:.1f}")
+    # Overlay mean and median (on-hit stats)
+    ds = cell.damage_stats_on_hit
+    ax.axvline(ds.mean, color="red", linestyle="--", linewidth=1.5, label=f"Mean (on hit): {ds.mean:.1f}")
+    ax.axvline(ds.median, color="orange", linestyle=":", linewidth=1.5, label=f"Median (on hit): {ds.median:.1f}")
 
     ax.set_xlabel("Final Damage")
     ax.set_ylabel("Frequency")
-    ax.set_title(title or "Damage Distribution")
+
+    # Annotate hit rate in the title
+    hit_rate = cell.ratios.hit_rate
+    default_title = f"Damage Distribution (hit rate: {hit_rate:.1%})"
+    ax.set_title(title or default_title)
     ax.legend()
     fig.tight_layout()
     plt.close(fig)
@@ -275,13 +289,15 @@ def comparison_overlay(
     fig, ax = plt.subplots(figsize=figsize)
 
     for label, cell in cells.items():
-        damages = [r.final_damage for r in cell.raw_results if r.success]
+        damages = [r.final_damage for r in cell.raw_results if r.success and r.final_damage > 0]
         if damages:
+            hit_rate = cell.ratios.hit_rate
+            on_hit_mean = cell.damage_stats_on_hit.mean
             ax.hist(
                 damages,
                 bins=bins,
                 alpha=0.5,
-                label=f"{label} (μ={cell.damage_stats.mean:.1f})",
+                label=f"{label} (μ={on_hit_mean:.1f}, hit: {hit_rate:.0%})",
                 edgecolor="black",
                 linewidth=0.5,
             )
@@ -479,20 +495,34 @@ def enchantment_comparison(
     labels = list(cells.keys())
     finals = [cells[l].damage_stats.mean for l in labels]
     elementals = [cells[l].elemental_breakdown.total_net for l in labels]
+    drains = [cells[l].drain_stats.mean for l in labels]
     physicals = [f - e for f, e in zip(finals, elementals)]
 
+    has_drains = any(d > 0 for d in drains)
+
     x = np.arange(len(labels))
-    width = 0.3
 
     fig, ax = plt.subplots(figsize=figsize)
 
-    b1 = ax.bar(x - width / 2, physicals, width, label="Physical",
-                color="#78909C", edgecolor="black", linewidth=0.5)
-    b2 = ax.bar(x + width / 2, elementals, width, label="Elemental/Enchantment",
-                color="#E53935", edgecolor="black", linewidth=0.5)
+    if has_drains:
+        width = 0.25
+        b1 = ax.bar(x - width, physicals, width, label="Physical",
+                    color="#78909C", edgecolor="black", linewidth=0.5)
+        b2 = ax.bar(x, elementals, width, label="Elemental/Enchantment",
+                    color="#E53935", edgecolor="black", linewidth=0.5)
+        b3 = ax.bar(x + width, drains, width, label="Drain (mana/hp/stam)",
+                    color="#7B1FA2", edgecolor="black", linewidth=0.5)
+        bar_groups = (b1, b2, b3)
+    else:
+        width = 0.3
+        b1 = ax.bar(x - width / 2, physicals, width, label="Physical",
+                    color="#78909C", edgecolor="black", linewidth=0.5)
+        b2 = ax.bar(x + width / 2, elementals, width, label="Elemental/Enchantment",
+                    color="#E53935", edgecolor="black", linewidth=0.5)
+        bar_groups = (b1, b2)
 
     # Value labels
-    for bars in (b1, b2):
+    for bars in bar_groups:
         for bar in bars:
             h = bar.get_height()
             if h > 0:

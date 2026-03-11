@@ -227,22 +227,27 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Ensure all new tests use fixtures (not live submodule), and update documentation.
 
 **Deliverables**:
-- [ ] Run `python scripts/sync_fixtures.py` to capture any new shard files needed
-- [ ] Verify all tests pass with submodule working directory deleted
-- [ ] Update `notebooks/docs/combatant-specs.md` — document `ElementalDamage` weapon property, enchantment configuration
-- [ ] Update `notebooks/docs/concepts.md` — add elemental damage pipeline and enchantment system to damage flow diagram
-- [ ] Update `notebooks/docs/results.md` — document elemental breakdown fields, new side effect types
-- [ ] Update `notebooks/docs/reporting.md` — document new plot functions
-- [ ] Update `notebooks/docs/constants-reference.md` — add elemental protection property names
-- [ ] Update `notebooks/docs/examples.md` — add recipes: "Elemental weapon comparison", "Enchantment effectiveness", "Reactive armor test"
-- [ ] Update `notebooks/docs/runtime.md` — document sub-script execution, new stubs
-- [ ] Update `CLAUDE.md` with V1.5 status
-- [ ] Update `changelog/changelog_to_v1.5.md` with final summary
-- [ ] **UNINIT silent-fallthrough audit**: Walk through the interpreter (`evaluator.py`) and all runtime code paths that return `UNINIT` or `None` without logging. Add `logger.warning` to every case where the interpreter silently falls through to UNINIT — `_get_member`, `_get_index`, `_dispatch_call`, `visitPrimary`, `_call_method`, etc. This prevents silent data loss where a None/UNINIT propagates through eScript string concatenation or arithmetic and produces wrong results (e.g., the `GetScript` bug where `cfg[id].Script` returned UNINIT because `_get_index` didn't handle `RuntimeConfigFile`).
+- [x] Run `python scripts/sync_fixtures.py` to capture any new shard files needed
+- [x] Verify all 964 tests pass with fixture set
+- [x] Update `notebooks/docs/combatant-specs.md` — document `ElementalDamage` weapon property, enchantment configuration, `enchant_with()`, Spell/Enchantment enums, `CombatantSpec.properties`
+- [x] Update `notebooks/docs/concepts.md` — add elemental damage pipeline and enchantment system to damage flow diagram
+- [x] Update `notebooks/docs/results.md` — document elemental breakdown fields, new side effect types, RatioStats fields, metrics dict
+- [x] Update `notebooks/docs/reporting.md` — document new plot functions (elemental_breakdown_chart, elemental_vs_parameter, enchantment_comparison)
+- [x] Update `notebooks/docs/constants-reference.md` — add Enchantment enum (45 members), Spell enum (132 members), elemental protection properties
+- [x] Update `notebooks/docs/examples.md` — add recipes: "Elemental weapon comparison", "Enchantment effectiveness", "Reactive armor test"
+- [x] Update `notebooks/docs/runtime.md` — document sub-script execution, new stubs, SimulationContext executor field
+- [x] Update `notebooks/docs/messages-and-metrics.md` — document `list:` protocol, V1.5 metric keys
+- [x] Update `notebooks/docs/README.md` — V1.5 features in "What can you do?"
+- [x] Update `notebooks/docs/scenarios.md` — `properties.<name>` variable path, enchantment performance note
+- [x] Update `CLAUDE.md` with V1.5 status → Complete
+- [x] Update `changelog/changelog_to_v1.5.md` with M22 entry
+- [x] **UNINIT silent-fallthrough audit**: Added `logger.warning` to 10 locations in evaluator.py (7) and structural_stubs.py (3) that silently returned UNINIT/None
+- [x] Enrich notebooks 01–04 with V1.5 sections (enchantments, elemental sweeps, reactive armor)
+- [x] Create `05_enchantments.ipynb` — comprehensive V1.5 enchantment showcase (7 sections)
 
 **Depends on**: All prior milestones
 
-**Acceptance**: All tests pass without submodule. Documentation covers elemental damage, enchantments, and new API surface.
+**Acceptance**: All tests pass without submodule. Documentation covers elemental damage, enchantments, and new API surface. Notebooks demonstrate all V1.5 features with rich examples.
 
 ## Milestone Summary
 
@@ -258,7 +263,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 | M19 | Effect Enchantments | 2 | M15, M16 | **Done** |
 | M20 | Greater Enchantments | 2 | M15, M16, M12, M13 | **Done** |
 | M21 | Enchantment Reporting & WeaponSpec Integration | 3 | M14, M17–M20 | **Done** |
-| M22 | Test Fixture Independence & Documentation | 3 | All | Not started |
+| M22 | Test Fixture Independence & Documentation | 3 | All | **Done** |
 
 ## Dependency Graph
 

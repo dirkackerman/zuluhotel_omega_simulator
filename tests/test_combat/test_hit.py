@@ -2,12 +2,14 @@
 
 import omega.runtime  # noqa: F401
 
-from omega.combat.hit import execute_hit
+from omega.combat.hit import check_hit, execute_hit, _weapon_skill
 from omega.combat.result import HitResult
 from omega.interpreter.types import EArray
+from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_WRESTLING
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
 from omega.parser.parser import parse_text, ParseResult
+from omega.runtime.rng import SimulationRNG
 from pathlib import Path
 
 
@@ -36,7 +38,7 @@ class TestExecuteHitSimple:
         weapon = Weapon(name="Sword")
         armor = Armor(name="Shield", ar=10)
 
-        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=25)
+        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=25, core_hit_check=False)
 
         assert result.success
         assert result.base_damage == 25
@@ -62,7 +64,7 @@ class TestExecuteHitSimple:
         weapon = Weapon(name="Sword")
         armor = Armor(name="Shield")
 
-        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=20)
+        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=20, core_hit_check=False)
         assert result.final_damage == 40.0
         assert defender.hp == 60
 
@@ -83,7 +85,7 @@ class TestExecuteHitSimple:
         result = execute_hit(
             trees, attacker, defender,
             Weapon(name="W"), Armor(name="A"),
-            base_damage=10,
+            base_damage=10, core_hit_check=False,
         )
         assert result.final_damage == 0.0
         assert defender.hp == 100
@@ -105,7 +107,7 @@ class TestExecuteHitSimple:
         result = execute_hit(
             trees, attacker, defender,
             Weapon(name="W"), Armor(name="A"),
-            base_damage=10,
+            base_damage=10, core_hit_check=False,
         )
         assert not result.success
         assert result.error is not None
@@ -152,7 +154,7 @@ class TestExecuteHitWithFunctions:
         weapon = Weapon(name="Sword")
         armor = Armor(name="Plate", ar=50)
 
-        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=100)
+        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=100, core_hit_check=False)
 
         assert result.success
         # absorbed = CInt(100 * 0.158) = 15
@@ -189,7 +191,7 @@ class TestExecuteHitWithFunctions:
         result = execute_hit(
             trees, attacker, defender,
             Weapon(name="W"), Armor(name="A"),
-            base_damage=100,
+            base_damage=100, core_hit_check=False,
         )
         assert result.success
         # CInt(100 * 0.60) = 60
@@ -234,7 +236,7 @@ class TestExecuteHitWithFunctions:
         weapon.set_property("SlayType", "Undead Demon")
         armor = Armor(name="A")
 
-        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=30)
+        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=30, core_hit_check=False)
         assert result.success
         assert result.final_damage == 60.0  # 30 * 2
 
@@ -267,7 +269,7 @@ class TestExecuteHitWithFunctions:
         result = execute_hit(
             trees, attacker, defender,
             Weapon(name="W"), Armor(name="A"),
-            base_damage=100,
+            base_damage=100, core_hit_check=False,
         )
         assert result.success
         # bonus = 1.0 + 0.25 * 6 = 2.5
@@ -340,7 +342,7 @@ class TestExecuteHitSideEffects:
         result = execute_hit(
             trees, attacker, defender,
             Weapon(name="W"), Armor(name="A"),
-            base_damage=10,
+            base_damage=10, core_hit_check=False,
         )
         assert result.success
         assert any(se.kind == "poison" for se in result.side_effects)
@@ -371,7 +373,108 @@ class TestExecuteHitSideEffects:
         armor = Armor(name="Cursed Shield")
         armor.set_property("Cursed", 1)
 
-        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=25)
+        result = execute_hit(trees, attacker, defender, weapon, armor, base_damage=25, core_hit_check=False)
         assert result.success
         assert result.final_damage == 50.0  # 25 * 2
         assert defender.hp == 50
+
+
+class TestCoreHitCheck:
+    """Test POL's core hit/miss check.
+
+    Formula: hit_chance = (atk_skill + 50) / (2 * (def_skill + 50))
+    """
+
+    def test_weapon_skill_from_weapon_attribute(self):
+        mob = Mobile(name="Swordsman")
+        mob.set_skill(SKILLID_SWORDSMANSHIP, 1000)  # 100 display
+        weapon = Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP)
+        assert _weapon_skill(mob, weapon) == 100
+
+    def test_weapon_skill_fallback_to_wrestling(self):
+        mob = Mobile(name="Unarmed")
+        mob.set_skill(SKILLID_WRESTLING, 500)  # 50 display
+        weapon = Weapon(name="Fist", attribute=0)
+        assert _weapon_skill(mob, weapon) == 50
+
+    def test_weapon_skill_no_skills(self):
+        mob = Mobile(name="Dummy")
+        weapon = Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP)
+        assert _weapon_skill(mob, weapon) == 0
+
+    def test_equal_skill_50_percent(self):
+        """Equal skills → 50% hit chance."""
+        atk = Mobile(name="A")
+        atk.set_skill(SKILLID_SWORDSMANSHIP, 1000)
+        defn = Mobile(name="D")
+        defn.set_skill(SKILLID_SWORDSMANSHIP, 1000)
+        defn.equip(0x01, Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP))
+        weapon = Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP)
+
+        hits = sum(
+            check_hit(atk, defn, weapon, SimulationRNG(i))
+            for i in range(1000)
+        )
+        # Should be around 500 ± ~50
+        assert 350 < hits < 650
+
+    def test_high_attacker_skill_nearly_always_hits(self):
+        """Attacker skill >> defender skill → nearly 100% hit rate."""
+        atk = Mobile(name="A")
+        atk.set_skill(SKILLID_SWORDSMANSHIP, 1300)  # 130
+        defn = Mobile(name="D")
+        # Defender has no weapon skill (0)
+        weapon = Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP)
+
+        # hit_chance = (130 + 50) / (2 * (0 + 50)) = 180/100 = 1.8 → always hit
+        hits = sum(
+            check_hit(atk, defn, weapon, SimulationRNG(i))
+            for i in range(100)
+        )
+        assert hits == 100
+
+    def test_zero_attacker_skill_vs_high_defender(self):
+        """Unskilled attacker vs skilled defender → low hit rate."""
+        atk = Mobile(name="A")
+        # No skills
+        defn = Mobile(name="D")
+        defn.set_skill(SKILLID_SWORDSMANSHIP, 1300)  # 130
+        defn.equip(0x01, Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP))
+        weapon = Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP)
+
+        # hit_chance = (0 + 50) / (2 * (130 + 50)) = 50/360 ≈ 0.139
+        hits = sum(
+            check_hit(atk, defn, weapon, SimulationRNG(i))
+            for i in range(1000)
+        )
+        assert 50 < hits < 250  # ~14% expected
+
+    def test_miss_returns_zero_damage(self):
+        """A missed hit returns final_damage=0 without running the script."""
+        source = """
+        use uo;
+        program mainhit(attacker, defender, weapon, armor, basedamage, rawdamage)
+            ApplyRawDamage(defender, rawdamage);
+        endprogram
+        """
+        trees = _parse_source(source)
+        # Both have 0 skill → 50% hit rate. Use a seed that misses.
+        atk = Mobile(name="A")
+        defn = Mobile(name="D")
+        defn.hp = 100
+        defn.max_hp = 100
+        weapon = Weapon(name="Sword")
+        armor = Armor(name="A")
+
+        # Run many iterations — some should miss
+        misses = 0
+        for seed in range(50):
+            defn.hp = 100
+            result = execute_hit(
+                trees, atk, defn, weapon, armor,
+                base_damage=10, rng_seed=seed, core_hit_check=True,
+            )
+            if result.final_damage == 0.0 and defn.hp == 100:
+                misses += 1
+        # With 50% hit chance and 50 trials, should have some misses
+        assert misses > 5

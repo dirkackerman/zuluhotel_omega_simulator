@@ -24,7 +24,7 @@ program banishscript(attacker, defender, weapon, armor, basedamage, rawdamage)
 
         if( summoned )
             if(DEBUG_MODE)
-				__RecordSimulatorMetric(struct{ "effect_type" := "banish", "effect_target_type" := "summoned", "cursed" := cursed });
+				__RecordSimulatorMetric(struct{ "effect_type" := "banish", "effect_triggered" := 1, "effect_target_type" := "summoned", "cursed" := cursed });
 			endif
 			if( !cursed )
                 PlayObjectCenteredEffect( defender, FX_SPELL_MANA_VAMPIRE, 7,7);
@@ -39,7 +39,7 @@ program banishscript(attacker, defender, weapon, armor, basedamage, rawdamage)
             endif
         elseif( animated )
             if(DEBUG_MODE)
-				__RecordSimulatorMetric(struct{ "effect_type" := "banish", "effect_target_type" := "animated", "cursed" := cursed });
+				__RecordSimulatorMetric(struct{ "effect_type" := "banish", "effect_triggered" := 1, "effect_target_type" := "animated", "cursed" := cursed });
 			endif
 			if( !cursed )
                 PlayObjectCenteredEffect( defender, FX_SPELL_MANA_VAMPIRE, 7,7);
@@ -52,7 +52,7 @@ program banishscript(attacker, defender, weapon, armor, basedamage, rawdamage)
             endif
         else
 			if(DEBUG_MODE)
-				__RecordSimulatorMetric(struct{ "effect_type" := "banish", "effect_target_type" := "normal" });
+				__RecordSimulatorMetric(struct{ "effect_type" := "banish", "effect_triggered" := 1, "effect_target_type" := "normal" });
 			endif
 			rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage );
             DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );

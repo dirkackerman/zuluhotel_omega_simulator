@@ -37,13 +37,17 @@ program manadrainscript(attacker, defender, weapon, armor, basedamage, rawdamage
         endif
 		
 		if(DEBUG_MODE)
-			__RecordSimulatorMetric("effect_type", "manadrain");
+			__RecordSimulatorMetric(struct{ "effect_type" := "manadrain", "effect_triggered" := 1, "cursed" := cursed });
 		endif
 
 		if(GetObjProperty(defender, "InSafeArea"))
 			return 0;
 		endif
 		amount := rawdamage/2;
+
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric(struct{ "effect_drain_amount" := amount, "effect_drain_type" := "mana" });
+		endif
 
             if(cursed)
                 PlayObjectCenteredEffectEx( drained, 14154, 8, 15, 88);

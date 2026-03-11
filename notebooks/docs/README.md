@@ -17,6 +17,9 @@ This documentation is for **notebook authors and game designers** who want to de
 - Sweep a parameter (e.g., Tactics 50 to 130) and plot damage curves
 - Compare scenarios side by side (class vs class, weapon A vs weapon B)
 - Inspect the damage pipeline: base roll, armor absorption, final damage
+- Simulate elemental weapons with per-element resistance checks (V1.5)
+- Apply weapon enchantments (spell strike, slayer, effects, greaters) via `enchant_with()` (V1.5)
+- Test reactive armor damage reflection (V1.5)
 - Capture debug messages from the eScript execution for troubleshooting
 
 ## Quick start
@@ -88,3 +91,4 @@ The `notebooks/` directory ships with working examples:
 - `02_skill_sweep.ipynb` — Sweep a skill parameter, plot damage curves
 - `03_class_comparison.ipynb` — Compare damage output across character classes
 - `04_weapon_comparison.ipynb` — Side-by-side weapon comparison
+- `05_enchantments.ipynb` — Enchantments & elemental damage deep dive (V1.5)

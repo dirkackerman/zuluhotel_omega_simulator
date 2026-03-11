@@ -353,3 +353,180 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Planar damage (holy/necro from greater enchantments) appears in elemental breakdown
 - All enchantment rate columns accessible in summary_table
 - All existing tests continue to pass
+
+---
+
+## M22 — Test Fixture Independence & Documentation
+
+**Summary**: Final V1.5 milestone. Verified fixture independence (no submodule dependency in tests), added UNINIT silent-fallthrough warnings for debugging, and updated all documentation to reflect V1.5 capabilities.
+
+**Changes**:
+
+### Fixture sync & verification
+- Ran `sync_fixtures.py` — 246 files, 963.5 KB, all 964 tests pass
+- No test references the shard submodule directly
+
+### UNINIT silent-fallthrough audit
+Added `logger.warning` to 10 locations that previously returned UNINIT/None silently:
+
+**evaluator.py** (7 locations):
+- `visitVariableDeclarationInitializer`: no ARRAY or expression found
+- `_get_index`: list bounds check failure (includes index + list length context)
+- `visitPrimary`: unhandled primary context type
+- `visitLiteral`: unhandled literal child type
+- `_resolve_lvalue`: primary has no IDENTIFIER child
+- `_eval_switch_label`: unhandled label type
+- `_get_member`: member not found after all resolution strategies
+
+**structural_stubs.py** (3 locations):
+- `FindConfigElem`: cfg or name is None, element not found
+- `FindMobile`: serial is None, object not found or not a mobile
+- `GetGlobalProperty`: name is None
+
+### Documentation updates (11 files)
+
+**Critical** (3 files):
+- `concepts.md`: Added elemental damage and enchantment sub-script stages to damage pipeline diagram; updated "What the simulator covers" — V1.5 features now listed as current
+- `runtime.md`: Rewrote `start_script()` section with full sub-script execution docs, supported scripts table, V1.5 stubs list; added `executor` to SimulationContext table
+- `examples.md`: Added Recipe 11 (elemental weapon comparison), Recipe 12 (enchantment effectiveness), Recipe 13 (reactive armor test)
+
+**High priority** (3 files):
+- `combatant-specs.md`: Added `hitscript` field, `enchant_with()` method docs, Enchantment/Spell enum reference, elemental weapon properties, `CombatantSpec.properties` for ReactiveArmor/Type
+- `constants-reference.md`: Updated damage type intro (no longer "informational only"); added full Enchantment enum (45 members), Spell enum (132 members), elemental protection property names
+- `results.md`: Added `metrics` field to HitResult; new side effects (hp_set, mana_changed, stamina_changed, heal, reactive); new RatioStats fields (reactive_rate, spell_strike_rate, effect_rate); ElementalBreakdown/ElementDamage reference section
+
+**Medium priority** (4 files):
+- `reporting.md`: Added V1.5 plot imports, elemental_breakdown_chart(), elemental_vs_parameter(), enchantment_comparison() docs; new stat columns (reactive_rate, spell_strike_rate, effect_rate, elem_total_net/gross)
+- `messages-and-metrics.md`: Added `list:` prefix protocol, V1.5 metric keys table, per-hit metrics access pattern
+- `README.md`: Updated "What can you do?" with elemental damage, enchantments, reactive armor
+- `scenarios.md`: Added `properties.<name>` variable path; performance note for enchanted weapons
+
+### Notebook enrichment (5 notebooks)
+
+**Existing notebooks enriched with V1.5 sections**:
+- `01_basic_damage.ipynb`: Added enchanted weapon comparison (plain vs Daemon's Breath) with `enchant_with()`, overlaid histograms, comparison table with `spell_strike_rate`
+- `02_skill_sweep.ipynb`: Added elemental resistance sweep — fire protection 0→100 on a 50/50 fire/physical weapon, `elemental_vs_parameter()` plot, elemental summary table
+- `03_class_comparison.ipynb`: Added reactive armor comparison — same class grid re-run with `ReactiveArmor` enabled, comparison table with `reactive_rate`
+- `04_weapon_comparison.ipynb`: Added enchanted & elemental weapons section — plain vs Daemon's Breath vs Silver vs Vampiric vs Fire Elemental, `enchantment_comparison()` bar chart
+
+**New notebook**:
+- `05_enchantments.ipynb`: Deep dive into all V1.5 enchantment features across 7 sections:
+  1. Spell strike enchantments — C1 through C8 tier comparison
+  2. Slayer enchantments — Silver vs matching Undead / non-matching / plain baseline
+  3. Effect enchantments — all 7 effect types (piercing, bloody, vampiric, leech, poisoned, blinding)
+  4. Greater enchantments — Planar Fury, Void, Elemental Fury with elemental breakdown charts
+  5. Elemental damage splitting & protection — fire protection sweep with `elemental_vs_parameter()`
+  6. Reactive armor — with/without comparison, overlaid histograms
+  7. Per-hit metrics inspection — raw `HitResult.metrics` exploration, `list:elemental_applied` protocol
+
+**Final**:
+- `CLAUDE.md`: V1.5 status → Complete
+- `changelog/changelog_to_v1.5.md`: M22 entry
+- `planning/path_to_v1.5.md`: M22 marked Done
+
+### Test criteria
+- All 964 tests pass after all changes
+- No test references `submodules/zuluhotel_omega_2.5` directly
+- All doc files are internally consistent (no stale V1-only references)
+- UNINIT warnings fire on unexpected paths without breaking existing behavior
+
+---
+
+## Post-M22 — Interpreter Bug Fixes & Regression Tests
+
+**Summary**: Fixed three interpreter bugs discovered during notebook validation. Added comprehensive regression tests to prevent recurrence.
+
+### Bug fixes
+
+**1. eScript integer division** (`evaluator.py`):
+- **Bug**: `_div()` used Python float division for int/int operands. eScript (like C) truncates integer division toward zero.
+- **Impact**: The shard's custom PRNG (`BaseRandom()` in `random.inc`) computed `X / QQ` as float, corrupting the pseudo-random sequence. This caused `ChanceOfEffect=75` to produce 100% trigger rate.
+- **Fix**: `int(l_num / r_num)` when both operands are int.
+
+**2. eScript string slicing** (`evaluator.py`):
+- **Bug**: `str[start, end]` was interpreted as start/end positions. eScript uses `str[start, length]` (1-based start, second arg is length).
+- **Impact**: `RandomDiceStr("1d100")` parsed `"1d100"[3,3]` as `"1"` (chars 3-3) instead of `"100"` (3 chars starting at position 3). This caused the dice roller to always return `CInt("1d100")` = 1, making all chance checks succeed.
+- **Fix**: `obj[start - 1 : start - 1 + length]` for string two-index access.
+
+**3. Missing `effect_triggered` metric** (7 shard scripts):
+- **Bug**: 7 of 10 enchantment scripts recorded `effect_type` but not `effect_triggered := 1`. The stats aggregation counts `effect_triggered` for `effect_rate`.
+- **Impact**: Vampiric, Piercing, Poison, Life Drain, Mana Drain, Stamina Drain, Banish, and Void enchantments showed 0% `effect_rate` despite firing correctly.
+- **Fix**: Added `"effect_triggered" := 1` to all 7 scripts, synced fixtures.
+
+### Shard script changes
+- `manadrainscript.src` — added `effect_triggered := 1` to metric struct
+- `lifedrainscript.src` — added `effect_triggered := 1` to metric struct
+- `staminadrainscript.src` — added `effect_triggered := 1` to metric struct
+- `piercingscript.src` — added `effect_triggered := 1` to metric struct
+- `poisonhit.src` — added `effect_triggered := 1` to metric struct
+- `voidscript.src` — added `effect_triggered := 1` to metric struct
+- `banishscript.src` — added `effect_triggered := 1` to all 3 metric calls
+
+### Regression tests (`test_v15_integration.py`)
+
+New file with 12 test classes (62 tests total):
+
+- **TestIntegerDivision** (5 tests): int/int truncation, negative truncation toward zero, float division preserved, mixed int/float, division by zero
+- **TestStringSlicing** (6 tests): basic `str[start, length]`, start at 1, length exceeds string, length zero, Find+slice combination, RandomDiceStr-style parse
+- **TestSpellStrikeProperties** (9 tests): 100% chance triggers, 0% doesn't, ChanceOfEffect=75 produces < 100% rate, different spells, cursed reversal, class multipliers, rate aggregation
+- **TestProtectionPropertyNames** (2 tests): correct `FireProtection` naming, wrong `Protection_Fire` returns 0
+- **TestShardKwarg** (2 tests): `shard=shard` enables sub-scripts, individual kwargs don't
+- **TestUninitSafeAggregation** (2 tests): UNINIT metrics don't crash aggregation
+- **TestElementalDamageFormat** (2 tests): string format `"FIRE:50 PHYSICAL:50"`, integer format ignored
+- **TestReactiveArmorIntegration** (3 tests): player attacker 1/8 reduction, NPC full, no property = no trigger
+- **TestEffectEnchantmentsIntegration** (3 tests): piercing bypasses armor, poison records level, drain records effect
+- **TestGreaterEnchantmentsIntegration** (3 tests): dualplanar deals extra, void deals extra, trielemental deals extra
+- **TestEnchantedVsPlain** (2 tests): enchanted >= plain damage, spell enchant >= plain
+- **TestSafeFloat** (3 tests): normal float, UNINIT returns 0.0, non-numeric returns 0.0
+
+### Other test updates
+- `test_expressions.py`: `test_div` assertion updated from 3.333 to 3 (integer division)
+- `test_greater_enchantments.py`: `test_void_drain_amount` updated from `rawdmg / 2` to `int(rawdmg / 2)`
+
+### Test criteria
+- All 1026 tests pass (5 skipped), up from 964
+- `ChanceOfEffect=75` produces ~74% spell strike rate (not 100%)
+- `RandomDiceStr("1d100")` returns values in range 1-100 (not always 1)
+- All 10 enchantment scripts show non-zero `effect_rate` when triggered
+
+---
+
+## Post-M22b — Additional Interpreter Fixes & Wider Regression Tests
+
+**Summary**: Found and fixed two more interpreter bugs (single-index string access, C-style modulo) discovered while writing wider regression tests. Added 89 new tests across interpreter and integration layers.
+
+### Bug fixes
+
+**4. Single-index string access was 0-based** (`evaluator.py`):
+- **Bug**: `_get_index()` had no explicit string handler. Single-index `str[n]` fell through to the `__getitem__` fallback which used Python's 0-based indexing. `"hello"[1]` returned `"e"` instead of `"h"`.
+- **Impact**: Any shard code using `str[n]` for single-char access (e.g., after `Find()`) would get the wrong character. Not exercised on the current combat path but would break future scripts.
+- **Fix**: Added explicit `str` case in `_get_index()` with 1-based conversion: `obj[_to_int(index) - 1]`.
+
+**5. Modulo followed Python sign rules** (`evaluator.py`):
+- **Bug**: `%` operator used Python's modulo directly. Python's `%` returns a result with the sign of the divisor; C/C++ (and eScript) return the sign of the dividend (truncation toward zero).
+- **Impact**: `-7 % 2` returned `1` (Python) instead of `-1` (C/eScript). Would affect any shard code using modulo with negative numbers (e.g., time calculations).
+- **Fix**: New `_mod()` function: `l - int(l / r) * r` (C-style remainder). Used by both `%` operator and `%=` compound assignment.
+
+### New tests
+
+**Interpreter tests** (`test_expressions.py`, 53 new tests):
+- **TestIntegerDivisionEdgeCases** (13): truncation, exact, negative (toward zero), float preservation, div-by-zero, `/=` truncation, large ints, CInt wrapping, nested division
+- **TestModuloEdgeCases** (12): positive, negative dividend, negative divisor, both negative, by zero, `%=` compound, zero mod n, exact multiple, division-modulo identity (a == (a/b)*b + a%b)
+- **TestStringIndexing** (10): 1-based first/middle/last char, out-of-bounds, negative, two-index slice, length zero, exceeds, array index unaffected
+- **TestTypeCoercionArithmetic** (10): string operands, UNINIT in arithmetic, int+float promotion, `*=` with float (PvP scaling), CInt truncation on float
+- **TestCompoundAssignment** (8): `+=` string concat, mixed types, `-=` float, `*=` promotion, `/=` truncation, `%=` C-style
+- **TestStringConcatEdgeCases** (6): float+string, zero+string, `.+` operator, negative concat, int format, chain
+- **TestIncrementDecrement** (4): prefix ++/--, return value
+
+**Integration tests** (`test_v15_integration.py`, 36 new tests):
+- **TestSingleIndexString** (4): first/last char, out-of-bounds, combined with `Find()`
+- **TestModuloSemantics** (5): positive, negative dividend/divisor, zero-safe, division-modulo identity across multiple values
+- **TestShardArithmeticPatterns** (8): `CInt(x/10)` stat conversion, `CInt(x/100)` vitals, PvP two-stage scaling, AR absorption formula, avg skill division, warrior penalty fraction, class bonus multiplier, STR bonus
+- **TestEffectTriggeredMetric** (10): all 6 effect enchantments set `effect_triggered=1` with correct `effect_type`, greater enchantments (planar fury, elemental fury), void, banish
+
+### Test criteria
+- All 1115 tests pass (5 skipped), up from 1026
+- `"hello"[1]` returns `"h"` (not `"e"`)
+- `-7 % 2` returns `-1` (not `1`)
+- Division-modulo identity `a == (a/b)*b + (a%b)` holds for all sign combinations
+- All enchantment scripts set `effect_triggered=1` when they fire

@@ -36,16 +36,19 @@ program lifedrainscript(attacker, defender, weapon, armor, basedamage, rawdamage
 		endif
 
 		if(DEBUG_MODE)
-			__RecordSimulatorMetric("effect_type", "lifedrain");
+			__RecordSimulatorMetric(struct{ "effect_type" := "lifedrain", "effect_triggered" := 1, "cursed" := cursed });
 		endif
 
         var amount := rawdamage / 2;
         amount := amount * 0.75;
-        
+
         DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
 
         var rdm := Random(10000);
 		if(rdm < 5000)
+			if(DEBUG_MODE)
+				__RecordSimulatorMetric(struct{ "effect_drain_amount" := amount, "effect_drain_type" := "hp" });
+			endif
             SetHP(drainer,GetHP(drainer) + amount);
             if( GetHP(drainer) > GetMaxHP(drainer) )
                 SetHP(drainer,GetMaxHP(drainer));

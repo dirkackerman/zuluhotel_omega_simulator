@@ -159,6 +159,10 @@ __RecordSimulatorMetric("absorbed", 12);
 var metrics := struct{ absorbed := 12, bonus := 1.5 };
 __RecordSimulatorMetric(metrics);
 
+// List append — "list:" prefix appends to a list in ctx.metrics
+__RecordSimulatorMetric("list:elemental_applied", struct{ type := "fire", gross := 10, net := 7 });
+// Result: ctx.metrics["elemental_applied"] = [struct{type, gross, net}, ...]
+
 // The eScript function can be a no-op in the shard code:
 function __RecordSimulatorMetric(key := "", value := 0)
     // No-op in production — override active in simulator
@@ -174,27 +178,39 @@ Metrics are stored in `SimulationContext.metrics` (a `dict[str, Any]`). The `exe
 result.absorbed = float(ctx.metrics.get("absorbed", 0.0))
 ```
 
-Currently, `"absorbed"` is the only metric that's surfaced in `HitResult`. Additional metrics are available in the raw context but not yet aggregated into the result objects.
+Metrics are surfaced in `HitResult.metrics` — a dict containing all recorded values for that hit iteration.
+
+### Built-in V1.5 metric keys
+
+These metrics are recorded by the instrumented shard scripts:
+
+| Metric key | Type | Description |
+|-----------|------|-------------|
+| `"absorbed"` | `float` | Total armor absorption |
+| `"elemental_applied"` | `list[struct]` | Per-element damage breakdown (via `list:` prefix) |
+| `"planar_applied"` | `list[struct]` | Per-element planar damage breakdown |
+| `"resisted"` | `list[struct]` | Resistance application details |
+| `"damage_applied"` | `list[struct]` | Per-damage-type final amounts |
+| `"effect_type"` | `str` | Enchantment effect type that fired |
+| `"spell_strike_spell"` | `int` | Spell ID of spell strike that fired |
+| `"spell_strike_damage"` | `float` | Damage dealt by spell strike |
+| `"reactive_damage"` | `float` | Damage reflected by reactive armor |
+
+### Accessing metrics per hit
+
+```python
+result = run_scenario(scenario, shard=shard)
+
+for hit in result.raw_results[:3]:
+    print(f"Absorbed: {hit.metrics.get('absorbed', 0)}")
+    # Elemental breakdown (list of per-element records)
+    for elem in hit.metrics.get("elemental_applied", []):
+        print(f"  {elem.get_member('type')}: {elem.get_member('net')} net")
+```
 
 ### Adding custom metrics
 
-If you modify the shard scripts to call `__RecordSimulatorMetric()` with additional keys, those values will appear in `ctx.metrics`. To access them:
-
-```python
-# Run a single iteration to inspect
-scenario = Scenario(attacker=warrior, defender=target, iterations=1, base_seed=42)
-result = run_scenario(scenario, shard=shard)
-
-# Access raw hit results
-hit = result.raw_results[0]
-# Metrics aren't directly on HitResult yet, but you can inspect
-# the context during execution by adding logging
-```
-
-For systematic custom metric collection, you would:
-1. Add `__RecordSimulatorMetric("your_key", value)` calls to the shard's eScript
-2. After `execute_hit()`, read `ctx.metrics["your_key"]`
-3. Aggregate across iterations as needed
+Add `__RecordSimulatorMetric("your_key", value)` calls to the shard's eScript (inside `if(DEBUG_MODE)` guards). Values appear in `hit.metrics["your_key"]` on the Python side.
 
 ### Override mechanism details
 
@@ -271,9 +287,12 @@ execute_hit() collects:
 aggregate_cell() computes:
     ├─ damage_stats from [hit.final_damage for hit in results]
     └─ ratios from side_effect kind counts:
-         hit_rate     = count(final_damage > 0) / N
-         poison_rate  = count("poison_applied" in side_effects) / N
-         equip_break  = count("equipment_damaged" in side_effects) / N
+         hit_rate          = count(final_damage > 0) / N
+         poison_rate       = count("poison_applied" in side_effects) / N
+         equip_break       = count("equipment_damaged" in side_effects) / N
+         reactive_rate     = count("reactive" in side_effects) / N
+         spell_strike_rate = count("spell_strike" in metrics) / N
+         effect_rate       = count("effect_type" in metrics) / N
 ```
 
 ### Accessing side effects

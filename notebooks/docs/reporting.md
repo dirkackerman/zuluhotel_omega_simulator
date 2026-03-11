@@ -11,6 +11,10 @@ from omega.reporting.plots import (
     damage_breakdown,
     comparison_breakdown,
     comparison_overlay,
+    # V1.5 elemental and enchantment plots
+    elemental_breakdown_chart,
+    elemental_vs_parameter,
+    enchantment_comparison,
 )
 ```
 
@@ -59,6 +63,11 @@ def summary_table(
 | `"hit_rate"` | `ratios.hit_rate` | Fraction of hits dealing damage |
 | `"poison_rate"` | `ratios.poison_rate` | Fraction of hits applying poison |
 | `"equipment_break_rate"` | `ratios.equipment_break_rate` | Fraction of hits damaging equipment |
+| `"reactive_rate"` | `ratios.reactive_rate` | Fraction of hits triggering reactive armor (V1.5) |
+| `"spell_strike_rate"` | `ratios.spell_strike_rate` | Fraction of hits firing a spell strike (V1.5) |
+| `"effect_rate"` | `ratios.effect_rate` | Fraction of hits firing an effect/greater enchantment (V1.5) |
+| `"elem_total_net"` | `elemental_breakdown.total_net` | Total net elemental damage (V1.5) |
+| `"elem_total_gross"` | `elemental_breakdown.total_gross` | Total gross elemental damage (V1.5) |
 | `"errors"` | `error_count` | Number of failed iterations |
 
 **Example:**
@@ -279,6 +288,74 @@ Each scenario is shown as a semi-transparent histogram with its mean in the lege
 
 ```python
 comparison_overlay(results, bins=40, title="Warrior vs Ranger vs Mage")
+```
+
+### elemental_breakdown_chart() (V1.5)
+
+Stacked bar chart showing per-element damage (gross vs net) for a single cell.
+
+```python
+def elemental_breakdown_chart(
+    cell: CellResult,
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Figure
+```
+
+Shows each active element with gross damage, net damage (after protection), and absorbed amount.
+
+```python
+result = run_scenario(fire_weapon_scenario, shard=shard)
+elemental_breakdown_chart(result, title="Fire Sword Element Breakdown")
+```
+
+### elemental_vs_parameter() (V1.5)
+
+Line plot of per-element net damage vs. a swept parameter.
+
+```python
+def elemental_vs_parameter(
+    result: SimulationResult,
+    variable_name: str,
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Figure
+```
+
+Shows how each element's damage changes across the sweep, with one line per element.
+
+```python
+result = run_sweep(fire_resistance_sweep, shard=shard)
+elemental_vs_parameter(result, "defender.properties.FireProtection",
+                       title="Fire Damage vs Fire Resistance")
+```
+
+### enchantment_comparison() (V1.5)
+
+Bar chart comparing mean damage across different enchantments.
+
+```python
+def enchantment_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Figure
+```
+
+Each bar represents a named scenario (typically with a different enchantment), showing mean damage with error bars.
+
+```python
+from omega.config.enchantments import Enchantment
+
+results = {
+    "Plain": run_scenario(plain_scenario, shard=shard),
+    "Fireball": run_scenario(fireball_scenario, shard=shard),
+    "Silver": run_scenario(silver_scenario, shard=shard),
+}
+enchantment_comparison(results, title="Enchantment Effectiveness")
 ```
 
 ## Combining tables and plots

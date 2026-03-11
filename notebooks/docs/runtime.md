@@ -228,6 +228,7 @@ The `SimulationContext` is the central state container for each hit execution. A
 | `total_damage_dealt` | `float` | Cumulative damage from `ApplyRawDamage()` calls |
 | `damage_absorbed` | `float` | Cumulative armor absorption |
 | `metrics` | `dict[str, Any]` | Custom metrics from `__RecordSimulatorMetric` |
+| `executor` | `Executor \| None` | The script executor (used by `start_script()` for sub-scripts) |
 | `_object_registry` | `dict[int, Any]` | Objects by serial (for `SystemFindObjectBySerial`) |
 | `_config_cache` | `dict[str, Any]` | Cached parsed config files |
 | `_config_resolver` | callable | Resolves `:pkg:name` config paths to filesystem paths |
@@ -352,16 +353,46 @@ ApplyRawDamage(defender, damage);
 
 This is the critical stub — it's where damage is finalized. The `final_damage` in `HitResult` comes from `ctx.total_damage_dealt`, which accumulates all `ApplyRawDamage()` calls within one hit execution. In practice, `mainhit.src` calls `ApplyRawDamage()` exactly once per hit.
 
-## What `start_script()` does (V1)
+## Sub-script execution (`start_script()`)
 
-The shard's combat scripts call `start_script()` to launch sub-scripts for enchantments, reactive armor, and on-hit effects. In V1, this is stubbed as a no-op:
+The shard's combat scripts call `start_script()` to launch sub-scripts for enchantments, reactive armor, and on-hit effects. As of V1.5, these are fully executed by the simulator.
 
-```python
-@pol_function("os", "start_script")
-def start_script_stub(script_path, *args):
-    logger.warning("start_script skipped (V1: no sub-script execution)",
-                   script=str(script_path))
-    return None
-```
+### How it works
 
-This means weapon enchantments and spell-on-hit effects are not simulated in V1. They're planned for V1.5.
+When the interpreter encounters `start_script(":combat:spellstrikescript", attacker, defender, weapon)`, it:
+
+1. Resolves the package path to a parsed script file
+2. Creates a nested `Executor` with the sub-script's syntax tree
+3. Binds the arguments to the sub-script's program parameters
+4. Executes the sub-script in the same `SimulationContext` (shared state, same RNG)
+5. Records any side effects (spell damage, drains, reactive armor hits)
+
+### Supported sub-scripts
+
+| Script | Enchantment type | What it does |
+|--------|-----------------|--------------|
+| `spellstrikescript` | Spell (1–18) | Casts a spell on hit (e.g., Fireball, Lightning) |
+| `slayerscript` | Slayer (19–35) | Bonus damage vs matching creature type |
+| `piercingscript` | Effect | Ignores armor |
+| `banishscript` | Effect | Banishes summoned creatures |
+| `poisonhit` | Effect | Applies poison |
+| `lifedrainscript` | Effect | Drains HP |
+| `manadrainscript` | Effect | Drains mana |
+| `staminadrainscript` | Effect | Drains stamina |
+| `blindingscript` | Effect | Blinds target |
+| `dualplanarscript` | Greater | Dual-element damage |
+| `voidscript` | Greater | Void damage |
+| `trielementalscript` | Greater | Tri-element damage |
+| `reactivearmor` | Reactive | Reflects physical damage to attacker |
+
+### V1.5 stubs added for sub-scripts
+
+The following POL stubs were added to support sub-script execution:
+
+- `GetVital(mobile, vital_name)` / `SetVital(mobile, vital_name, value)` — read/write vitals by name
+- `SetHP(mobile, value)` — direct HP setter
+- `GetMaxMana(mobile)` / `GetMaxStamina(mobile)` — max vital accessors
+- `MoveObjectToLocation(obj, x, y, z)` — no-op (visual effect)
+- `Find(type, objtype, flags)` — returns empty array (no world search in simulation)
+- `PlayLightningBoltEffect(mobile)` — no-op (visual effect)
+- `send_attack(mobile, target)` — no-op (combat state)

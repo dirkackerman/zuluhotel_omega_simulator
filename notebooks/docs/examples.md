@@ -481,3 +481,151 @@ for se in hit.side_effects:
 logging.getLogger("omega.runtime.messaging").setLevel(logging.WARNING)
 logging.getLogger("omega.runtime").setLevel(logging.WARNING)
 ```
+
+---
+
+## Recipe 11: Elemental weapon comparison (V1.5)
+
+**Question**: "How does a fire weapon perform against targets with different fire resistance?"
+
+```python
+from omega.config.enchantments import Enchantment
+from omega.reporting.plots import elemental_breakdown_chart, elemental_vs_parameter
+
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=WeaponSpec(
+        name="Fire Sword", damage="3d6+2",
+        properties={"ElementalDamage": 0x01},  # FIRE
+    ),
+)
+
+sweep = ParameterSweep(
+    scenario=Scenario(
+        attacker=attacker,
+        defender=CombatantSpec(
+            name="Target", is_npc=True,
+            str_=50, dex_=50, int_=50, hp=500,
+            armor=ArmorSpec(ar=30),
+        ),
+        iterations=500,
+        base_seed=42,
+    ),
+    variables=(
+        Variable.from_range("defender", "properties.FireProtection", start=0, stop=5, step=1),
+    ),
+)
+
+result = run_sweep(sweep, shard=shard)
+
+# Elemental breakdown for one cell
+elemental_breakdown_chart(result.cells[0], title="Fire Sword Damage Breakdown")
+
+# How fire resistance reduces damage
+elemental_vs_parameter(result, "defender.properties.FireProtection",
+                       title="Fire Weapon vs Fire Resistance")
+```
+
+---
+
+## Recipe 12: Enchantment effectiveness (V1.5)
+
+**Question**: "How does a spell-strike enchantment compare to a slayer enchantment?"
+
+```python
+from omega.config.enchantments import Enchantment
+
+target = CombatantSpec(
+    name="Undead Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(ar=30),
+    properties={"Type": "Undead"},
+)
+
+base_attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+)
+
+# Plain weapon
+plain = WeaponSpec(name="Plain Sword", damage="3d6+2")
+
+# Spell strike (Fireball)
+fire_sword = WeaponSpec(name="Fire Sword", damage="3d6+2").enchant_with(
+    Enchantment.OF_DAEMONS_BREATH
+)
+
+# Slayer (Undead)
+slayer_sword = WeaponSpec(name="Silver Sword", damage="3d6+2").enchant_with(
+    Enchantment.SILVER
+)
+
+import dataclasses
+
+results = {}
+for label, wpn in [("Plain", plain), ("Spell Strike", fire_sword), ("Slayer", slayer_sword)]:
+    spec = dataclasses.replace(base_attacker, weapon=wpn)
+    results[label] = run_scenario(
+        Scenario(attacker=spec, defender=target, iterations=500, base_seed=42),
+        shard=shard,
+    )
+
+comparison_overlay(results, title="Enchantment Comparison vs Undead")
+display(HTML(format_table_html(comparison_table(results))))
+```
+
+---
+
+## Recipe 13: Reactive armor test (V1.5)
+
+**Question**: "How much damage does reactive armor reflect back to the attacker?"
+
+```python
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=WeaponSpec(name="Sword", damage="3d6+2"),
+)
+
+# Defender with reactive armor active
+reactive_defender = CombatantSpec(
+    name="Reactive Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(ar=30),
+    properties={"ReactiveArmor": 1},
+)
+
+# Defender without reactive armor
+normal_defender = CombatantSpec(
+    name="Normal Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(ar=30),
+)
+
+results = {
+    "No Reactive": run_scenario(
+        Scenario(attacker=attacker, defender=normal_defender, iterations=500, base_seed=42),
+        shard=shard,
+    ),
+    "Reactive Armor": run_scenario(
+        Scenario(attacker=attacker, defender=reactive_defender, iterations=500, base_seed=42),
+        shard=shard,
+    ),
+}
+
+comparison_overlay(results, title="Effect of Reactive Armor")
+display(HTML(format_table_html(comparison_table(results))))
+
+# Check reflected damage on attacker
+reactive_result = results["Reactive Armor"]
+reactive_hits = [h for h in reactive_result.raw_results
+                 if any(se.kind == "reactive" for se in h.side_effects)]
+print(f"Reactive triggered: {len(reactive_hits)}/{len(reactive_result.raw_results)} hits")
+```

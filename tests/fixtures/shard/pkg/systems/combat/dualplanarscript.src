@@ -1,12 +1,12 @@
 //////////////////////////////////////////////////////////////////////////////////////////
-//											
-//	trielementalscript :								
-//											
-//	Make the special weapon to ramdomly cast a lightning on the defender.		
-//	The % of chance that lightning will be cast is included in the itemdesc.	
-//	The lightning follow the normal spell damages and use the wielder magery	
-//	and eval int to determine it.								
-//											
+//
+//	trielementalscript :
+//
+//	Make the special weapon to ramdomly cast a lightning on the defender.
+//	The % of chance that lightning will be cast is included in the itemdesc.
+//	The lightning follow the normal spell damages and use the wielder magery
+//	and eval int to determine it.
+//
 //////////////////////////////////////////////////////////////////////////////////////////
 
 use uo;
@@ -42,7 +42,8 @@ program dualplanarscript(attacker, defender, weapon, armor, basedamage, rawdamag
     if(RandomDiceStr("1d100") <= chance)
     
         var targ;
-        if( GetObjProperty( weapon , "Cursed" ) )
+        var cursed := GetObjProperty( weapon , "Cursed" );
+        if( cursed )
             targ := attacker;
         else
             targ := defender;
@@ -88,7 +89,8 @@ program dualplanarscript(attacker, defender, weapon, armor, basedamage, rawdamag
         Sleepms( 250 );
 
         if(DEBUG_MODE)
-            __RecordSimulatorMetric(struct{ "effect_type" := "dualplanar", "effect_triggered" := 1, "cursed" := GetObjProperty(weapon, "Cursed"), "dualplanar_spelldmg_base" := spelldmg_before_resist, "dualplanar_spelldmg" := spelldmg, "dualplanar_class_nerf" := class_nerf });
+            PrintTextAbovePrivate( attacker , "I'm dealing this much spell damage: " +spelldmg, attacker );
+            __RecordSimulatorMetric(struct{ "effect_type" := "dualplanar", "effect_triggered" := 1, "cursed" := cursed, "dualplanar_spelldmg_base" := spelldmg_before_resist, "dualplanar_spelldmg" := spelldmg, "dualplanar_class_nerf" := class_nerf });
         endif
     endif
 

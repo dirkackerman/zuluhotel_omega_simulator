@@ -158,6 +158,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         expr = ctx.expression()
         if expr is not None:
             return self.visit(expr)
+        logger.warning("variableDeclarationInitializer: no ARRAY or expression, returning UNINIT")
         return UNINIT
 
     def visitConstStatement(self, ctx: EscriptParser.ConstStatementContext) -> None:
@@ -362,6 +363,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         str_lit = ctx.STRING_LITERAL()
         if str_lit is not None:
             return _strip_quotes(str_lit.getText())
+        logger.warning("_eval_switch_label: unhandled label type, returning None")
         return None
 
     # ------------------------------------------------------------------
@@ -485,7 +487,7 @@ class EscriptInterpreter(EscriptParserVisitor):
         if op == "/":
             return _div(left, right)
         if op == "%":
-            return _to_int(left) % _to_int(right) if _to_int(right) != 0 else 0
+            return _mod(left, right)
 
         # Bitwise
         if op == "&":
@@ -626,6 +628,7 @@ class EscriptInterpreter(EscriptParserVisitor):
             if ident is not None:
                 return ("var", ident.getText())
 
+        logger.warning("_resolve_lvalue: primary has no IDENTIFIER child, returning None")
         return None
 
     def _get_lvalue_name(self, ctx: EscriptParser.ExpressionContext) -> str:
@@ -652,11 +655,11 @@ class EscriptInterpreter(EscriptParserVisitor):
         idx = suffix.indexingSuffix()
         if idx is not None:
             indices = [self.visitExpression(e) for e in idx.expressionList().expression()]
-            # eScript string slicing: str[start, end] → substring (1-based)
+            # eScript string slicing: str[start, length] → substring (1-based)
             if isinstance(obj, str) and len(indices) == 2:
                 start = max(1, _to_int(indices[0]))
-                end = _to_int(indices[1])
-                return obj[start - 1 : end]
+                length = _to_int(indices[1])
+                return obj[start - 1 : start - 1 + length]
             result = obj
             for index in indices:
                 result = _get_index(result, index)
@@ -758,6 +761,10 @@ class EscriptInterpreter(EscriptParserVisitor):
                 return child.IDENTIFIER().getText()
             return self.visit(child)
 
+        logger.warning(
+            "visitPrimary: unhandled primary context type, returning UNINIT",
+            child_type=type(child).__name__,
+        )
         return UNINIT
 
     # ------------------------------------------------------------------
@@ -776,6 +783,10 @@ class EscriptInterpreter(EscriptParserVisitor):
             return self._parse_int_literal(child)
         if child_type is EscriptParser.FloatLiteralContext:
             return float(child.getText())
+        logger.warning(
+            "visitLiteral: unhandled literal child type, returning UNINIT",
+            child_type=type(child).__name__,
+        )
         return UNINIT
 
     def _parse_int_literal(self, ctx: EscriptParser.IntegerLiteralContext) -> int:
@@ -1026,11 +1037,20 @@ def _div(left: Any, right: Any) -> int | float:
     r_num = _to_number(right)
     if r_num == 0:
         return 0
-    result = l_num / r_num
-    # If both operands were int and result is whole, return int
-    if isinstance(l_num, int) and isinstance(r_num, int) and result == int(result):
-        return int(result)
-    return result
+    # eScript: int / int → integer division (truncating toward zero)
+    if isinstance(l_num, int) and isinstance(r_num, int):
+        return int(l_num / r_num)  # truncate toward zero (not floor)
+    return l_num / r_num
+
+
+def _mod(left: Any, right: Any) -> int:
+    """eScript modulo: C-style remainder (sign follows dividend, not divisor)."""
+    l = _to_int(left)
+    r = _to_int(right)
+    if r == 0:
+        return 0
+    # C-style: truncate toward zero, remainder = dividend - truncated_quotient * divisor
+    return l - int(l / r) * r
 
 
 def _compound_assign(op: str, old: Any, right: Any) -> Any:
@@ -1044,7 +1064,7 @@ def _compound_assign(op: str, old: Any, right: Any) -> Any:
     if op == "/=":
         return _div(old, right)
     if op == "%=":
-        return _to_int(old) % _to_int(right) if _to_int(right) != 0 else 0
+        return _mod(old, right)
     return right
 
 
@@ -1094,6 +1114,12 @@ def _in_check(item: Any, container: Any) -> bool:
 
 def _get_index(obj: Any, index: Any) -> Any:
     """Get element by index from an array, dict, or game object."""
+    if isinstance(obj, str):
+        # eScript string indexing: 1-based, returns single character
+        idx = _to_int(index) - 1
+        if 0 <= idx < len(obj):
+            return obj[idx]
+        return ""
     if isinstance(obj, EArray):
         return obj.get(_to_int(index))
     if isinstance(obj, EDict):
@@ -1104,6 +1130,11 @@ def _get_index(obj: Any, index: Any) -> Any:
         idx = _to_int(index) - 1  # 1-based
         if 0 <= idx < len(obj):
             return obj[idx]
+        logger.warning(
+            "_get_index list bounds check failed, returning UNINIT",
+            index=repr(index),
+            list_len=len(obj),
+        )
         return UNINIT
     # Fallback for objects supporting __getitem__ (e.g., RuntimeConfigFile)
     if hasattr(obj, '__getitem__'):
@@ -1188,6 +1219,11 @@ def _get_member(obj: Any, name: str) -> Any:
                 return getattr(obj, attr, UNINIT)
             except Exception:
                 pass
+    logger.warning(
+        "_get_member: member not found after all strategies, returning UNINIT",
+        member=name,
+        obj_type=type(obj).__name__,
+    )
     return UNINIT
 
 

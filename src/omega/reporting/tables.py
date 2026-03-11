@@ -134,7 +134,10 @@ def format_table_html(rows: list[dict[str, Any]]) -> str:
         parts.append("<tr>")
         for h in headers:
             val = row.get(h, "")
-            parts.append(f"<td>{_escape(_fmt(val))}</td>")
+            # Use the stat name from the "stat" column (comparison tables)
+            # to determine if this value is a rate that should be formatted as %
+            stat_name = row.get("stat", h) if h != "stat" else ""
+            parts.append(f"<td>{_escape(_fmt(val, stat_name=stat_name))}</td>")
         parts.append("</tr>")
 
     parts.append("</table>")
@@ -150,6 +153,8 @@ def _get_stat(cell: CellResult, name: str) -> Any:
     """Extract a named statistic from a CellResult."""
     ds = cell.damage_stats
     rs = cell.ratios
+
+    ds_hit = cell.damage_stats_on_hit
 
     stat_map: dict[str, Any] = {
         "mean": ds.mean,
@@ -172,6 +177,23 @@ def _get_stat(cell: CellResult, name: str) -> Any:
         "total": ds.count * ds.mean,
         "absorbed_mean": cell.absorbed_stats.mean,
         "errors": cell.error_count,
+        # Drain stats (mana/hp/stamina drained by effect enchantments)
+        "drain_mean": cell.drain_stats.mean,
+        "drain_total": cell.drain_stats.count * cell.drain_stats.mean,
+        # On-hit drain (only swings that drained)
+        "drain_mean_on_hit": cell.drain_stats_on_hit.mean,
+        # On-hit damage stats (only swings that connected)
+        "mean_on_hit": ds_hit.mean,
+        "median_on_hit": ds_hit.median,
+        "min_on_hit": ds_hit.min,
+        "max_on_hit": ds_hit.max,
+        "std_dev_on_hit": ds_hit.std_dev,
+        "p5_on_hit": ds_hit.p5,
+        "p95_on_hit": ds_hit.p95,
+        # On-hit conditional rates
+        "reactive_rate_on_hit": rs.reactive_rate_on_hit,
+        "spell_strike_rate_on_hit": rs.spell_strike_rate_on_hit,
+        "effect_rate_on_hit": rs.effect_rate_on_hit,
         # Elemental totals
         "elem_total_net": cell.elemental_breakdown.total_net,
         "elem_total_gross": cell.elemental_breakdown.total_gross,
@@ -201,10 +223,22 @@ def _get_stat(cell: CellResult, name: str) -> Any:
     return ""
 
 
-def _fmt(val: Any) -> str:
-    """Format a value for display."""
+# Stat names that represent rates (0.0–1.0) and should be formatted as percentages
+_RATE_STATS = frozenset({
+    "hit_rate", "poison_rate", "equipment_break_rate",
+    "reactive_rate", "spell_strike_rate", "effect_rate",
+    "reactive_rate_on_hit", "spell_strike_rate_on_hit", "effect_rate_on_hit",
+})
+
+
+def _fmt(val: Any, *, stat_name: str = "") -> str:
+    """Format a value for display.
+
+    Rate stats (hit_rate, effect_rate, etc.) are always formatted as
+    percentages.  Other floats are formatted as plain decimals.
+    """
     if isinstance(val, float):
-        if 0.0 < abs(val) < 1.0:
+        if stat_name in _RATE_STATS:
             return f"{val:.1%}"
         return f"{val:.2f}"
     return str(val)

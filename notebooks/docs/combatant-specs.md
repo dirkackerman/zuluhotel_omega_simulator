@@ -27,6 +27,7 @@ class CombatantSpec:
     weapon: WeaponSpec | None = None
     armor: ArmorSpec | None = None
     npc_template: str | None = None
+    properties: dict[str, Any] = {}
 ```
 
 ### Fields
@@ -46,6 +47,7 @@ class CombatantSpec:
 | `weapon` | `WeaponSpec \| None` | `None` | Weapon spec. `None` means unarmed (fist). |
 | `armor` | `ArmorSpec \| None` | `None` | Armor spec. `None` means unarmored (AR 0). |
 | `npc_template` | `str \| None` | `None` | Reserved for future NPC template lookup from config. |
+| `properties` | `dict[str, Any]` | `{}` | Mobile-level properties accessible via `GetObjProperty()`. Used for reactive armor (`ReactiveArmor`), creature type (`Type`), etc. |
 
 ### Skill values: display vs internal
 
@@ -128,6 +130,7 @@ class WeaponSpec:
     quality: float = 1.0
     hp: int = 50
     max_hp: int = 50
+    hitscript: str | None = None
     properties: dict[str, Any] = {}
 ```
 
@@ -143,6 +146,7 @@ class WeaponSpec:
 | `quality` | `float` | `1.0` | Weapon quality multiplier |
 | `hp` | `int` | `50` | Current durability |
 | `max_hp` | `int` | `50` | Maximum durability |
+| `hitscript` | `str \| None` | `None` | Enchantment hitscript package path (e.g., `":combat:spellstrikescript"`). Set automatically by `enchant_with()`. |
 | `properties` | `dict` | `{}` | Custom properties accessible via `GetObjProperty()` in eScript |
 
 ### Dice notation
@@ -190,6 +194,97 @@ WeaponSpec(
 ```
 
 The slayer check in the shard scripts compares `weapon.SlayType` against `defender.Type`. If they match, damage is doubled.
+
+### Enchanting weapons with `enchant_with()` (V1.5)
+
+The `enchant_with()` method applies a full enchantment bundle (hitscript + CProps) from the `Enchantment` enum:
+
+```python
+from omega.config.enchantments import Enchantment
+
+# Spell strike — casts Fireball on hit
+fire_sword = WeaponSpec(name="Fire Sword", damage="3d6+2").enchant_with(
+    Enchantment.OF_DAEMONS_BREATH
+)
+# Equivalent to:
+# WeaponSpec(name="Fire Sword", damage="3d6+2",
+#            hitscript=":combat:spellstrikescript",
+#            properties={"HitWithSpell": Spell.FIREBALL})
+
+# Slayer — bonus damage vs undead
+silver_sword = WeaponSpec(name="Silver Sword", damage="3d6+2").enchant_with(
+    Enchantment.SILVER
+)
+
+# Greater enchantment — dual-element damage
+planar_weapon = WeaponSpec(damage="3d6+2").enchant_with(
+    Enchantment.OF_PLANAR_FURY
+)
+```
+
+`enchant_with()` returns a new frozen `WeaponSpec` with `hitscript` and `properties` set. Existing properties take precedence — you can customize per-weapon fields like `EffectCircle` or `ChanceOfEffect`:
+
+```python
+# Default ChanceOfEffect is 7 for Planar Fury; override to 15
+WeaponSpec(
+    damage="3d6+2",
+    properties={"ChanceOfEffect": 15},
+).enchant_with(Enchantment.OF_PLANAR_FURY)
+```
+
+### Enchantment and Spell enums
+
+**`Enchantment`** (`omega.config.enchantments.Enchantment`) — 45 members from `hitscriptdesc.cfg`:
+- Spell strike (1–18): `OF_BUNGLING`, `OF_DAEMONS_BREATH`, `OF_THUNDER`, `OF_HELLFIRE`, etc.
+- Slayer (19–35): `SLIME_SLAYER`, `SILVER` (Undead), `HOLY` (Daemon), `DRAGON_SLAYER`, etc.
+- Effect (36–42): `OF_PIERCING`, `BANISHING`, `POISONED`, `BLOODY`, `VAMPIRIC`, `LEECH`, `BLINDING`
+- Greater (43–45): `OF_PLANAR_FURY`, `OF_THE_VOID`, `OF_ELEMENTAL_FURY`
+
+**`Spell`** (`omega.config.spells.Spell`) — 132 spell IDs from `spells.cfg`:
+- Used in `HitWithSpell` properties (e.g., `Spell.FIREBALL == 18`)
+- See [Constants Reference](constants-reference.md) for the full list
+
+### Elemental weapon properties
+
+Set `ElementalDamage` on a weapon to split damage by element type:
+
+```python
+# Fire weapon
+WeaponSpec(
+    name="Flaming Sword", damage="3d6+2",
+    properties={"ElementalDamage": 0x01},  # FIRE
+)
+
+# Multi-element weapon
+WeaponSpec(
+    name="Tri-Elemental Blade", damage="3d6+2",
+    properties={"ElementalDamage": 0x01 | 0x02 | 0x04},  # FIRE + AIR + EARTH
+)
+```
+
+The defender's elemental protection CProps reduce elemental damage:
+- `FireProtection`, `AirProtection`, `EarthProtection`, `WaterProtection`
+- `NecroProtection`, `HolyProtection`, `PoisonProtection`, `AcidProtection`
+
+### Combatant properties
+
+Use `CombatantSpec.properties` for mobile-level CProps that affect combat:
+
+```python
+# Defender with reactive armor
+CombatantSpec(
+    name="Mage", is_npc=False,
+    str_=50, int_=100, dex_=80,
+    properties={"ReactiveArmor": 1},
+)
+
+# NPC with a creature type (for slayer matching)
+CombatantSpec(
+    name="Skeleton", is_npc=True,
+    str_=80, dex_=60, int_=20,
+    properties={"Type": "Undead"},
+)
+```
 
 ## ArmorSpec
 

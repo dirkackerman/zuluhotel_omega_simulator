@@ -383,7 +383,7 @@ class TestVoid:
             rawdmg = result.metrics.get("void_rawdmg")
             amount = result.metrics.get("void_drain_amount")
             if rawdmg is not None and amount is not None:
-                assert amount == rawdmg / 2
+                assert amount == int(rawdmg / 2)  # eScript int division
                 return
 
         pytest.skip("No successful void hit found")

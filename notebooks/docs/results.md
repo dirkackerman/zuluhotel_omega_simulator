@@ -27,6 +27,7 @@ class HitResult:
 
     side_effects: list[SideEffect] = []
     hit_log: list[str] = []
+    metrics: dict[str, Any] = {}
 
     success: bool = True
     error: str | None = None
@@ -46,6 +47,7 @@ class HitResult:
 | `defender_hp_after` | Defender's HP after the hit. |
 | `side_effects` | List of `SideEffect` events recorded during execution. See [Side effects](#side-effects). |
 | `hit_log` | Reserved for future use (per-hit debug log). |
+| `metrics` | Dictionary of custom metrics from `__RecordSimulatorMetric` calls. See [Messages and Metrics](messages-and-metrics.md). Contains per-hit data like elemental breakdowns, enchantment effects, etc. |
 | `success` | `True` if the script executed without errors. |
 | `error` | Error message if `success` is `False`. |
 
@@ -69,6 +71,11 @@ class SideEffect:
 | `"paralyze"` | `SetParalyzed()` | `True`/`False` | Paralyze toggled |
 | `"item_destroyed"` | `DestroyItem()` | — | Item was destroyed |
 | `"equipment_damaged"` | Equipment stub | — | Equipment took durability damage |
+| `"hp_set"` | `SetHP()` | new HP value | HP directly set (e.g., reactive armor reflect) |
+| `"mana_changed"` | `SetMana()` / drain scripts | delta | Mana changed (e.g., mana drain enchantment) |
+| `"stamina_changed"` | `SetStamina()` / drain scripts | delta | Stamina changed (e.g., stamina drain enchantment) |
+| `"heal"` | Over-protection healing | heal amount | HP healed via elemental over-protection |
+| `"reactive"` | Reactive armor script | damage reflected | Damage reflected back to attacker |
 
 ### Inspecting individual hits
 
@@ -144,19 +151,42 @@ class RatioStats:
     hit_rate: float = 0.0
     poison_rate: float = 0.0
     equipment_break_rate: float = 0.0
+    reactive_rate: float = 0.0
+    spell_strike_rate: float = 0.0
+    effect_rate: float = 0.0
+    reactive_rate_on_hit: float = 0.0
+    spell_strike_rate_on_hit: float = 0.0
+    effect_rate_on_hit: float = 0.0
 ```
+
+### Overall rates (per swing)
 
 | Field | Description |
 |-------|-------------|
-| `hit_rate` | Fraction of iterations where `final_damage > 0`. Usually 1.0 unless armor fully absorbs. |
-| `poison_rate` | Fraction of iterations where poison was applied (from weapon charges etc.) |
-| `equipment_break_rate` | Fraction of iterations where equipment took durability damage (~8% in the shard) |
+| `hit_rate` | Fraction of swings where the attack connected (`final_damage > 0`). Determined by POL's core hit/miss check. |
+| `poison_rate` | Fraction of swings where poison was applied |
+| `equipment_break_rate` | Fraction of swings where equipment took durability damage (~8% in the shard) |
+| `reactive_rate` | Fraction of swings where reactive armor triggered |
+| `spell_strike_rate` | Fraction of swings where a spell strike enchantment fired |
+| `effect_rate` | Fraction of swings where an effect/greater enchantment fired |
+
+### On-hit rates (per connected swing)
+
+These show the conditional probability given that the swing hit. Misses are excluded from the denominator.
+
+| Field | Description |
+|-------|-------------|
+| `reactive_rate_on_hit` | Fraction of *hits* where reactive armor triggered |
+| `spell_strike_rate_on_hit` | Fraction of *hits* where a spell strike fired |
+| `effect_rate_on_hit` | Fraction of *hits* where an effect enchantment fired |
+
+When hit rate is 100%, the overall and on-hit rates are identical.
 
 ```python
 r = result.ratios
 print(f"Hit rate: {r.hit_rate:.1%}")
-print(f"Poison: {r.poison_rate:.1%}")
-print(f"Equip break: {r.equipment_break_rate:.1%}")
+print(f"Spell strike (overall): {r.spell_strike_rate:.1%}")
+print(f"Spell strike (on hit):  {r.spell_strike_rate_on_hit:.1%}")
 ```
 
 ## CellResult
@@ -167,10 +197,14 @@ Results for a single scenario — one cell in a sweep grid, or the direct output
 @dataclass
 class CellResult:
     variable_values: dict[str, Any] = {}
-    damage_stats: DamageStats = DamageStats()
+    damage_stats: DamageStats = DamageStats()          # overall (all swings)
     base_damage_stats: DamageStats = DamageStats()
     absorbed_stats: DamageStats = DamageStats()
     ratios: RatioStats = RatioStats()
+    elemental_breakdown: ElementalBreakdown = ElementalBreakdown()
+    drain_stats: DamageStats = DamageStats()            # overall drain per swing
+    damage_stats_on_hit: DamageStats = DamageStats()    # hits only
+    drain_stats_on_hit: DamageStats = DamageStats()     # hits with drain only
     raw_results: list[HitResult] = []
     iteration_count: int = 0
     success_count: int = 0
@@ -182,18 +216,31 @@ class CellResult:
 | Field | Description |
 |-------|-------------|
 | `variable_values` | The swept parameter values for this cell (empty for non-sweep runs). Example: `{"attacker.skills.27": 100}` |
-| `damage_stats` | Statistics over **final damage** values (post-pipeline). |
+| `damage_stats` | Statistics over **final damage** values, **all swings** (includes 0 for misses). |
+| `damage_stats_on_hit` | Statistics over final damage for **hits only** (misses excluded). |
 | `base_damage_stats` | Statistics over **base damage** values (weapon dice rolls). |
 | `absorbed_stats` | Statistics over **absorbed damage** values (armor reduction). |
-| `ratios` | Event frequency ratios. |
+| `ratios` | Event frequency ratios — both overall (per swing) and on-hit (per connected swing). |
+| `elemental_breakdown` | Per-element damage breakdown (V1.5). Only populated for weapons with `ElementalDamage`. See [Elemental breakdown](#elemental-breakdown). |
+| `drain_stats` | Mean drain amount **per swing** (0 for misses and non-drain hits). |
+| `drain_stats_on_hit` | Mean drain amount for **hits that drained** only. |
 | `raw_results` | All individual `HitResult` objects. Available for deep inspection. |
 | `iteration_count` | Total iterations attempted. |
 | `success_count` | Iterations that completed without error. |
 | `error_count` | Iterations that failed (script execution errors). |
 
-### Three damage distributions
+### Overall vs on-hit damage stats
 
-A `CellResult` provides three separate statistical summaries:
+`CellResult` provides two tiers of damage statistics:
+
+| Tier | Field | Includes misses? | Use case |
+|------|-------|:-:|---------|
+| Overall | `damage_stats` | Yes (0 damage) | Expected damage per swing attempt |
+| On-hit | `damage_stats_on_hit` | No | Damage when you connect |
+
+With a 50% hit rate and 20 damage per hit, `damage_stats.mean` ≈ 10, `damage_stats_on_hit.mean` ≈ 20.
+
+### Three damage distributions (overall)
 
 | Distribution | What it measures | Useful for |
 |-------------|-----------------|------------|
@@ -205,9 +252,10 @@ The relationship: `base_damage ≈ final_damage + absorbed` (approximately, befo
 
 ```python
 result = run_scenario(scenario, shard=shard)
-print(f"Base:     {result.base_damage_stats.mean:.1f}")
-print(f"Absorbed: {result.absorbed_stats.mean:.1f}")
-print(f"Final:    {result.damage_stats.mean:.1f}")
+print(f"Hit rate: {result.ratios.hit_rate:.1%}")
+print(f"Overall mean:  {result.damage_stats.mean:.1f}")
+print(f"On-hit mean:   {result.damage_stats_on_hit.mean:.1f}")
+print(f"Absorbed mean: {result.absorbed_stats.mean:.1f}")
 ```
 
 ## SimulationResult
@@ -263,6 +311,49 @@ for cell in result.cells:
 
 # Filter to cells with errors
 bad = [c for c in result.cells if c.error_count > 0]
+```
+
+## Elemental breakdown (V1.5)
+
+When a weapon has an `ElementalDamage` property, the `CellResult.elemental_breakdown` provides per-element damage statistics.
+
+**Import path:**
+```python
+from omega.simulation import ElementalBreakdown, ElementDamage
+```
+
+### ElementDamage
+
+Per-element statistics (all values are means across iterations):
+
+| Field | Description |
+|-------|-------------|
+| `gross` | Mean damage before protection reduction |
+| `net` | Mean damage after protection reduction |
+| `prot` | Mean protection percentage applied |
+| `healed` | Mean amount healed via over-protection (>100%) |
+| `absorbed` | Computed: `gross - net` |
+
+### ElementalBreakdown
+
+| Method / Property | Description |
+|-------------------|-------------|
+| `elements` | `dict[str, ElementDamage]` — one entry per active element |
+| `total_net` | Sum of net damage across all elements |
+| `total_gross` | Sum of gross damage across all elements |
+| `net_dict()` | `{element_name: net_damage}` mapping |
+| `gross_dict()` | `{element_name: gross_damage}` mapping |
+| `prot_dict()` | `{element_name: protection_%}` mapping |
+
+```python
+result = run_scenario(scenario, shard=shard)
+eb = result.elemental_breakdown
+
+if eb.elements:
+    print(f"Total elemental (gross): {eb.total_gross:.1f}")
+    print(f"Total elemental (net):   {eb.total_net:.1f}")
+    for name, ed in eb.elements.items():
+        print(f"  {name}: {ed.gross:.1f} gross → {ed.net:.1f} net ({ed.prot:.0f}% prot)")
 ```
 
 ## Error handling

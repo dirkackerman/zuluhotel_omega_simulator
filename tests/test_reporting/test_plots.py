@@ -223,3 +223,15 @@ class TestEnchantmentComparison:
         }
         fig = enchantment_comparison(cells)
         assert type(fig).__name__ == "Figure"
+
+    def test_with_drain_stats(self):
+        """When drain_stats.mean > 0, a third 'Drain' bar group should appear."""
+        plain = _make_cell(mean=20.0)
+        vampiric = _make_cell(mean=20.0)
+        vampiric.drain_stats = DamageStats(count=50, mean=5.0)
+        cells = {"Plain": plain, "Vampiric": vampiric}
+        fig = enchantment_comparison(cells)
+        assert type(fig).__name__ == "Figure"
+        # Should have 3 bar groups (Physical, Elemental, Drain) in the legend
+        legend_texts = [t.get_text() for t in fig.axes[0].get_legend().get_texts()]
+        assert any("Drain" in t for t in legend_texts)

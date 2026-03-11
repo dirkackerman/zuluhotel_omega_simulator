@@ -22,13 +22,55 @@ from omega.combat.result import HitResult
 from omega.interpreter.executor import Executor
 from omega.interpreter.types import EStruct
 from omega.logging import get_logger
+from omega.model.constants import LAYER_HAND1, SKILLID_WRESTLING
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
 from omega.parser.parser import ParseResult
 from omega.runtime.context import SimulationContext, set_context
-from omega.runtime.rng import set_rng_seed
+from omega.runtime.rng import SimulationRNG, set_rng_seed
 
 logger = get_logger("omega.combat")
+
+
+def _weapon_skill(mobile: Mobile, weapon: Weapon | None = None) -> int:
+    """Get a mobile's effective skill for their weapon, in display units (0-200).
+
+    POL's ``weapon_attribute()`` returns the effective skill in the weapon's
+    primary attribute.  If the mobile has no weapon, Wrestling is used.
+    """
+    if weapon is None:
+        equipped = mobile.get_equipped(LAYER_HAND1)
+        if isinstance(equipped, Weapon) and equipped.attribute:
+            return mobile.get_effective_skill(equipped.attribute)
+        return mobile.get_effective_skill(SKILLID_WRESTLING)
+    if weapon.attribute:
+        return mobile.get_effective_skill(weapon.attribute)
+    return mobile.get_effective_skill(SKILLID_WRESTLING)
+
+
+def check_hit(
+    attacker: Mobile,
+    defender: Mobile,
+    weapon: Weapon,
+    rng: SimulationRNG,
+) -> bool:
+    """POL-style hit check: does this swing connect?
+
+    Formula (from ``Character::attack()`` in polserver)::
+
+        hit_chance = (attacker_skill + 50) / (2 * (defender_skill + 50))
+
+    Returns True if the attack hits, False if it misses.
+    """
+    atk_skill = _weapon_skill(attacker, weapon)
+    def_skill = _weapon_skill(defender)
+
+    hit_chance = (atk_skill + 50.0) / (2.0 * (def_skill + 50.0))
+
+    # Clamp to [0, 1] — POL doesn't clamp but values outside are fine with
+    # the random check (always hit if >= 1, always miss if <= 0).
+    roll = rng.random_float()
+    return roll < hit_chance
 
 
 def execute_hit(
@@ -46,6 +88,7 @@ def execute_hit(
     executor: Executor | None = None,
     shard_root: Path | None = None,
     package_map: Any = None,
+    core_hit_check: bool = True,
 ) -> HitResult:
     """Execute a single combat hit through the eScript interpreter.
 
@@ -82,6 +125,11 @@ def execute_hit(
     package_map:
         Package name → directory mapping for resolving ``:pkg:name`` script
         paths in ``start_script`` calls.
+    core_hit_check:
+        If True (default), perform POL's core hit/miss check before calling
+        the hitscript.  The formula is:
+        ``hit_chance = (atk_skill + 50) / (2 * (def_skill + 50))``.
+        Misses return immediately with ``final_damage=0``.
 
     Returns
     -------
@@ -98,6 +146,13 @@ def execute_hit(
 
     # Set up RNG
     rng = set_rng_seed(rng_seed)
+
+    # POL hit check — core performs this BEFORE calling the hitscript.
+    # Formula: hit_chance = (atk_skill + 50) / (2 * (def_skill + 50))
+    if core_hit_check and not check_hit(attacker, defender, weapon, rng):
+        result.final_damage = 0.0
+        result.defender_hp_after = defender.hp
+        return result
 
     # Roll or use provided base damage
     if base_damage is not None:

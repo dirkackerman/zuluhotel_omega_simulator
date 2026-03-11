@@ -14,6 +14,14 @@ from typing import Any
 from omega.combat.result import HitResult
 
 
+def _safe_float(val: Any) -> float:
+    """Convert a value to float, returning 0.0 for non-numeric types (e.g. UNINIT)."""
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 # ---------------------------------------------------------------------------
 # Statistical summary dataclasses
 # ---------------------------------------------------------------------------
@@ -37,7 +45,13 @@ class DamageStats:
 
 @dataclass(slots=True)
 class RatioStats:
-    """Event frequency ratios (0.0–1.0)."""
+    """Event frequency ratios (0.0–1.0).
+
+    "Overall" rates (``hit_rate``, ``spell_strike_rate``, etc.) are computed
+    over **all swings**, including misses.  "On-hit" rates
+    (``spell_strike_rate_on_hit``, etc.) are computed over **hits only**,
+    showing the conditional probability given that the swing connected.
+    """
 
     hit_rate: float = 0.0
     poison_rate: float = 0.0
@@ -45,6 +59,11 @@ class RatioStats:
     reactive_rate: float = 0.0
     spell_strike_rate: float = 0.0
     effect_rate: float = 0.0
+
+    # Conditional rates — given the swing hit, how often did X happen?
+    reactive_rate_on_hit: float = 0.0
+    spell_strike_rate_on_hit: float = 0.0
+    effect_rate_on_hit: float = 0.0
 
 
 # Bitflag → field name mapping for element types
@@ -148,6 +167,15 @@ class CellResult:
     absorbed_stats: DamageStats = field(default_factory=DamageStats)
     ratios: RatioStats = field(default_factory=RatioStats)
     elemental_breakdown: ElementalBreakdown = field(default_factory=ElementalBreakdown)
+    drain_stats: DamageStats = field(default_factory=DamageStats)
+    """Stats for effect drain amount (mana/hp/stamina drained per hit)."""
+
+    # On-hit variants — stats computed only over swings that connected
+    damage_stats_on_hit: DamageStats = field(default_factory=DamageStats)
+    """Damage stats for hits only (excludes misses with 0 damage)."""
+    drain_stats_on_hit: DamageStats = field(default_factory=DamageStats)
+    """Drain stats for hits only (excludes misses)."""
+
     raw_results: list[HitResult] = field(default_factory=list)
     iteration_count: int = 0
     success_count: int = 0
@@ -241,7 +269,7 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
     if not successes:
         return cell
 
-    # Damage stats (from successful hits only)
+    # Damage stats — overall (all swings including misses)
     final_damages = [r.final_damage for r in successes]
     base_damages = [float(r.base_damage) for r in successes]
     absorbed_vals = [r.absorbed for r in successes]
@@ -250,9 +278,17 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
     cell.base_damage_stats = _compute_damage_stats(base_damages)
     cell.absorbed_stats = _compute_damage_stats(absorbed_vals)
 
-    # Ratio stats
+    # Separate hits (damage > 0) from misses
+    hits_only = [r for r in successes if r.final_damage > 0]
     n = len(successes)
-    hits = sum(1 for r in successes if r.final_damage > 0)
+    n_hits = len(hits_only)
+
+    # On-hit damage stats (only swings that connected)
+    if hits_only:
+        hit_damages = [r.final_damage for r in hits_only]
+        cell.damage_stats_on_hit = _compute_damage_stats(hit_damages)
+
+    # Event counts
     poisons = sum(
         1 for r in successes
         if any(se.kind == "poison_applied" for se in r.side_effects)
@@ -276,12 +312,16 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
     )
 
     cell.ratios = RatioStats(
-        hit_rate=hits / n,
+        hit_rate=n_hits / n,
         poison_rate=poisons / n,
         equipment_break_rate=equip_breaks / n,
         reactive_rate=reactives / n,
         spell_strike_rate=spell_strikes / n,
         effect_rate=effects / n,
+        # On-hit conditional rates
+        reactive_rate_on_hit=reactives / n_hits if n_hits else 0.0,
+        spell_strike_rate_on_hit=spell_strikes / n_hits if n_hits else 0.0,
+        effect_rate_on_hit=effects / n_hits if n_hits else 0.0,
     )
 
     # Elemental breakdown — aggregate from per-hit metrics
@@ -301,13 +341,16 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
             has_elem = True
             for entry in applied:
                 attack_type = entry.get("attack_type", 0)
-                elem_name = _DMGID_TO_ELEMENT.get(int(attack_type))
+                try:
+                    elem_name = _DMGID_TO_ELEMENT.get(int(attack_type))
+                except (TypeError, ValueError):
+                    continue
                 if elem_name is None:
                     continue
-                elem_gross[elem_name] = elem_gross.get(elem_name, 0.0) + float(entry.get("dmg_gross", 0))
-                elem_net[elem_name] = elem_net.get(elem_name, 0.0) + float(entry.get("dmg_net", 0))
-                elem_prot[elem_name] = elem_prot.get(elem_name, 0.0) + float(entry.get("prot", 0))
-                elem_healed[elem_name] = elem_healed.get(elem_name, 0.0) + float(entry.get("healed", 0))
+                elem_gross[elem_name] = elem_gross.get(elem_name, 0.0) + _safe_float(entry.get("dmg_gross", 0))
+                elem_net[elem_name] = elem_net.get(elem_name, 0.0) + _safe_float(entry.get("dmg_net", 0))
+                elem_prot[elem_name] = elem_prot.get(elem_name, 0.0) + _safe_float(entry.get("prot", 0))
+                elem_healed[elem_name] = elem_healed.get(elem_name, 0.0) + _safe_float(entry.get("healed", 0))
         if has_elem:
             elem_count += 1
 
@@ -321,5 +364,23 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
                 healed=elem_healed.get(name, 0.0) / elem_count,
             )
         cell.elemental_breakdown = ElementalBreakdown(elements=elements)
+
+    # Drain stats — aggregate effect_drain_amount from per-hit metrics
+    # On-hit: only iterations where drain actually occurred
+    drain_amounts_on_hit = [
+        _safe_float(r.metrics.get("effect_drain_amount", 0))
+        for r in successes
+        if r.metrics.get("effect_drain_amount") is not None
+    ]
+    if drain_amounts_on_hit:
+        cell.drain_stats_on_hit = _compute_damage_stats(drain_amounts_on_hit)
+
+    # Overall: drain per swing (0 for misses and non-drain hits)
+    drain_amounts_all = [
+        _safe_float(r.metrics.get("effect_drain_amount", 0))
+        for r in successes
+    ]
+    if any(d > 0 for d in drain_amounts_all):
+        cell.drain_stats = _compute_damage_stats(drain_amounts_all)
 
     return cell

@@ -136,7 +136,7 @@ for class_id in ALL_CLASS_IDS:
 
 ## Damage type bitflags
 
-Used in the shard scripts for elemental damage and resistance calculations. These are informational for V1 (physical damage only) but included for reference.
+Used in `WeaponSpec.properties["ElementalDamage"]` and in the shard scripts for elemental damage and resistance calculations. Set on weapons to enable elemental damage splitting.
 
 | Constant | Hex | Description |
 |----------|-----|-------------|
@@ -209,3 +209,137 @@ Used for type checking with `.isa()`:
 | `POLCLASS_WEAPON` | `"Weapon"` |
 | `POLCLASS_ARMOR` | `"Armor"` |
 | `POLCLASS_ITEM` | `"Item"` |
+
+## Enchantment enum (V1.5)
+
+The `Enchantment` IntEnum (`omega.config.enchantments`) provides named constants for all 45 enchantments from `hitscriptdesc.cfg`. Use with `WeaponSpec.enchant_with()`.
+
+```python
+from omega.config.enchantments import Enchantment
+```
+
+### Spell strike enchantments (1–18)
+
+| Member | ID | Spell cast |
+|--------|-----|-----------|
+| `OF_BUNGLING` | 1 | Clumsy |
+| `OF_SENILITY` | 2 | Feeblemind |
+| `OF_BURNING` | 3 | Magic Arrow |
+| `OF_WEAKENING` | 4 | Weaken |
+| `OF_WOUNDING` | 5 | Harm |
+| `OF_DAEMONS_BREATH` | 6 | Fireball |
+| `OF_EVIL` | 7 | Curse |
+| `OF_THUNDER` | 8 | Lightning |
+| `OF_MAGES_BANE` | 9 | Mana Drain |
+| `OF_MENTAL_STRIKE` | 10 | Mind Blast |
+| `OF_ENTRAPMENT` | 11 | Paralyze |
+| `OF_DISRUPTION` | 12 | Energy Bolt |
+| `OF_CONFLAGRATION` | 13 | Explosion |
+| `OF_CORRUPTION` | 14 | Mass Curse |
+| `OF_HEAVENS_WRATH` | 15 | Chain Lightning |
+| `OF_HELLFIRE` | 16 | Flame Strike |
+| `OF_CELESTIAL_FURY` | 17 | Meteor Swarm |
+| `OF_GAIAS_WRATH` | 18 | Earthquake |
+
+### Slayer enchantments (19–35)
+
+| Member | ID | Slays type |
+|--------|-----|-----------|
+| `SLIME_SLAYER` | 19 | Slime |
+| `RATKIN_SLAYER` | 20 | Ratkin |
+| `PLANT_SLAYER` | 21 | Plant |
+| `ANIMAL_SLAYER` | 22 | Animal |
+| `BEHOLDER_SLAYER` | 23 | Beholder |
+| `ORC_SLAYER` | 24 | Orc |
+| `TERATHAN_SLAYER` | 25 | Terathan |
+| `OPHIDIAN_SLAYER` | 26 | Ophidian |
+| `BEWITCHED_SLAYER` | 27 | Animated |
+| `GARGOYLE_SLAYER` | 28 | Gargoyle |
+| `TROLL_SLAYER` | 29 | Troll |
+| `GIANT_SLAYER` | 30 | Giantkin |
+| `ELEMENTAL_SLAYER` | 31 | Elemental |
+| `SILVER` | 32 | Undead |
+| `HOLY` | 33 | Daemon |
+| `DRAGON_SLAYER` | 34 | Dragonkin |
+| `ASSASSINS` | 35 | Human |
+
+### Effect enchantments (36–42)
+
+| Member | ID | Script |
+|--------|-----|--------|
+| `OF_PIERCING` | 36 | piercingscript |
+| `BANISHING` | 37 | banishscript |
+| `POISONED` | 38 | poisonhit |
+| `BLOODY` | 39 | lifedrainscript |
+| `VAMPIRIC` | 40 | manadrainscript |
+| `LEECH` | 41 | staminadrainscript |
+| `BLINDING` | 42 | blindingscript |
+
+### Greater enchantments (43–45)
+
+| Member | ID | Script |
+|--------|-----|--------|
+| `OF_PLANAR_FURY` | 43 | dualplanarscript |
+| `OF_THE_VOID` | 44 | voidscript |
+| `OF_ELEMENTAL_FURY` | 45 | trielementalscript |
+
+## Spell enum (V1.5)
+
+The `Spell` IntEnum (`omega.config.spells`) provides named constants for all 132 spells from the shard's `spells.cfg` files. Used in `HitWithSpell` weapon properties.
+
+```python
+from omega.config.spells import Spell
+```
+
+### Standard spells (1–64)
+
+Common combat-relevant spells:
+
+| Member | ID | Circle |
+|--------|-----|--------|
+| `CLUMSY` | 1 | 1st |
+| `FEEBLEMIND` | 3 | 1st |
+| `MAGIC_ARROW` | 5 | 1st |
+| `WEAKEN` | 8 | 1st |
+| `HARM` | 12 | 2nd |
+| `FIREBALL` | 18 | 3rd |
+| `CURSE` | 27 | 4th |
+| `LIGHTNING` | 30 | 4th |
+| `MANA_DRAIN` | 31 | 4th |
+| `MIND_BLAST` | 37 | 5th |
+| `PARALYZE` | 38 | 5th |
+| `ENERGY_BOLT` | 42 | 6th |
+| `EXPLOSION` | 43 | 6th |
+| `MASS_CURSE` | 46 | 6th |
+| `CHAIN_LIGHTNING` | 49 | 7th |
+| `FLAME_STRIKE` | 51 | 7th |
+| `METEOR_SWARM` | 55 | 7th |
+| `EARTHQUAKE` | 57 | 8th |
+
+### Extended spell books
+
+| Book | ID range | Example |
+|------|----------|---------|
+| Necromancy | 65–80 | `Spell.ABYSSAL_FLAME` (69) |
+| Earth Magic | 81–96 | `Spell.ICE_STRIKE` (92) |
+| Holy Book | 166–181 | `Spell.ANGELIC_AURA` (169) |
+| Song Book | 182–197 | `Spell.SONG_OF_FIRE` (193) |
+
+Use `Spell(id)` to convert a numeric ID to the enum: `Spell(169)` → `Spell.ANGELIC_AURA`.
+
+## Elemental protection properties
+
+CProps on mobiles that reduce elemental damage. Set via `CombatantSpec.properties` or `ArmorSpec.properties`.
+
+| Property name | Reduces |
+|--------------|---------|
+| `FireProtection` | Fire damage (0x01) |
+| `AirProtection` | Air/lightning damage (0x02) |
+| `EarthProtection` | Earth damage (0x04) |
+| `WaterProtection` | Water/ice damage (0x08) |
+| `NecroProtection` | Necromantic damage (0x10) |
+| `HolyProtection` | Holy damage (0x20) |
+| `PoisonProtection` | Poison damage (0x40) |
+| `AcidProtection` | Acid damage (0x80) |
+
+Values represent protection level (0 = none, higher = more resistance).

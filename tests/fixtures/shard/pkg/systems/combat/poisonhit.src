@@ -27,9 +27,8 @@ program poisonhit(attacker, defender, weapon, armor, basedamage, rawdamage)
             targ := defender;
         endif
 
-
 		if(DEBUG_MODE)
-			__RecordSimulatorMetric(struct{ "effect_type" := "poison", "effect_poison_level" := poison, "cursed" := cursed });
+			__RecordSimulatorMetric(struct{ "effect_type" := "poison", "effect_triggered" := 1, "effect_poison_level" := poison, "cursed" := cursed });
 		endif
 
 		var noPKatk := GetObjProperty(attacker, "NOPKAREA");

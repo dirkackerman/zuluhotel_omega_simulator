@@ -100,10 +100,12 @@ def read_config_file(path: Any = None) -> Any:
 def find_config_elem(cfg: Any = None, name: Any = None) -> Any:
     """Get a config element by name."""
     if cfg is None or name is None:
+        logger.warning("FindConfigElem: cfg or name is None", cfg=repr(cfg), name=repr(name))
         return None
     try:
         return cfg[name]
     except (KeyError, TypeError):
+        logger.warning("FindConfigElem: element not found", name=repr(name))
         return None
 
 
@@ -200,11 +202,13 @@ def system_find_object_by_serial(serial: Any = None, flags: Any = None) -> Any:
 def find_mobile(serial: Any = None) -> Any:
     """Find a mobile by serial number."""
     if serial is None:
+        logger.warning("FindMobile: serial is None")
         return None
     ctx = get_context()
     obj = ctx.find_object(int(serial))
     if obj is not None and hasattr(obj, "is_npc"):
         return obj
+    logger.warning("FindMobile: object not found or not a mobile", serial=repr(serial))
     return None
 
 
@@ -372,6 +376,7 @@ def create_item_at_location(
 def get_global_property(name: Any = None) -> Any:
     """Get global server property from context store."""
     if name is None:
+        logger.warning("GetGlobalProperty: name is None")
         return None
     ctx = get_context()
     key = str(name)

@@ -358,3 +358,132 @@ class TestPlanarAppliedAggregation:
         ]
         cell = aggregate_cell(hits)
         assert cell.elemental_breakdown.elements["holy"].healed == 5.0
+
+
+class TestDrainStatsAggregation:
+    """Test drain_stats aggregation from effect_drain_amount metrics."""
+
+    def test_drain_from_single_hit(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_drain_amount": 5.0, "effect_drain_type": "mana"}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.drain_stats.count == 1
+        assert cell.drain_stats.mean == 5.0
+
+    def test_drain_from_multiple_hits(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_drain_amount": 4.0}),
+            HitResult(final_damage=12.0, success=True,
+                      metrics={"effect_drain_amount": 6.0}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.drain_stats.count == 2
+        assert cell.drain_stats.mean == 5.0
+
+    def test_drain_only_from_hits_with_metric(self):
+        """drain_stats_on_hit only counts hits with the metric; drain_stats is overall."""
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_drain_amount": 8.0}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+        ]
+        cell = aggregate_cell(hits)
+        # On-hit drain: only the hit with the metric
+        assert cell.drain_stats_on_hit.count == 1
+        assert cell.drain_stats_on_hit.mean == 8.0
+        # Overall drain: all 3 swings, 0 for those without metric
+        assert cell.drain_stats.count == 3
+        assert abs(cell.drain_stats.mean - 8.0 / 3) < 0.01
+
+    def test_no_drain_metrics_gives_empty_stats(self):
+        hits = [_make_hit(final_damage=10.0), _make_hit(final_damage=20.0)]
+        cell = aggregate_cell(hits)
+        assert cell.drain_stats.count == 0
+        assert cell.drain_stats.mean == 0.0
+
+    def test_drain_zero_amount_still_counted_on_hit(self):
+        """A drain of 0 is still a drain event in on-hit stats."""
+        hits = [
+            HitResult(final_damage=0.0, success=True,
+                      metrics={"effect_drain_amount": 0}),
+        ]
+        cell = aggregate_cell(hits)
+        # On-hit: drain amount 0 is still counted
+        assert cell.drain_stats_on_hit.count == 1
+        assert cell.drain_stats_on_hit.mean == 0.0
+        # Overall: no non-zero drains, so drain_stats stays empty
+        assert cell.drain_stats.count == 0
+
+    def test_drain_from_failed_hits_excluded(self):
+        """Failed hits should not contribute to drain_stats."""
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_drain_amount": 5.0}),
+            HitResult(final_damage=0.0, success=False,
+                      metrics={"effect_drain_amount": 3.0}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.drain_stats.count == 1
+        assert cell.drain_stats.mean == 5.0
+
+    def test_drain_with_uninit_value(self):
+        """UNINIT drain amounts should be treated as 0 via _safe_float."""
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_drain_amount": "UNINIT"}),
+        ]
+        cell = aggregate_cell(hits)
+        # On-hit: UNINIT is treated as 0 (still counted)
+        assert cell.drain_stats_on_hit.count == 1
+        assert cell.drain_stats_on_hit.mean == 0.0
+        # Overall: no non-zero drains
+        assert cell.drain_stats.count == 0
+
+
+class TestSpellStrikeRateAggregation:
+    """Test spell_strike_rate aggregation from HitResult.metrics."""
+
+    def test_spell_strike_partial(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"spell_strike_triggered": 1}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"spell_strike_triggered": 1}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.ratios.spell_strike_rate == 0.5
+
+    def test_spell_strike_none(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True, metrics={}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.ratios.spell_strike_rate == 0.0
+
+
+class TestReactiveRateAggregation:
+    """Test reactive_rate aggregation from HitResult.metrics."""
+
+    def test_reactive_all_triggered(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"reactive_triggered": 1}),
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"reactive_triggered": 1}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.ratios.reactive_rate == 1.0
+
+    def test_reactive_none_triggered(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True, metrics={}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.ratios.reactive_rate == 0.0

@@ -2,6 +2,8 @@
 
 from omega.combat.result import HitResult
 from omega.reporting.tables import (
+    _RATE_STATS,
+    _fmt,
     comparison_table,
     format_table_html,
     summary_table,
@@ -137,11 +139,18 @@ class TestFormatTableHtml:
         assert "&lt;script&gt;" in html
 
     def test_formats_floats(self):
-        rows = [{"rate": 0.5, "damage": 42.567}]
+        """Rate stats are formatted as percentages; other floats as decimals."""
+        # comparison_table format: {"stat": "...", "label": value}
+        rows = [
+            {"stat": "hit_rate", "A": 0.5},
+            {"stat": "mean", "A": 42.567},
+            {"stat": "effect_rate", "A": 0.06},
+        ]
         html = format_table_html(rows)
 
-        assert "50.0%" in html
-        assert "42.57" in html
+        assert "50.0%" in html     # hit_rate → percentage
+        assert "42.57" in html     # mean → float
+        assert "6.0%" in html      # effect_rate → percentage
 
     def test_from_real_aggregation(self):
         """End-to-end: aggregate → summary_table → HTML."""
@@ -257,3 +266,132 @@ class TestEnchantmentStatColumns:
         assert row["spell_strike_rate"] == 0.5
         assert row["reactive_rate"] == 0.2
         assert row["effect_rate"] == 0.3
+
+
+class TestDrainStatColumns:
+    """Test drain_mean and drain_total stat columns."""
+
+    def test_drain_mean(self):
+        cell = _make_cell()
+        cell.drain_stats = DamageStats(count=10, mean=5.0)
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(result, stats=["drain_mean"])
+        assert rows[0]["drain_mean"] == 5.0
+
+    def test_drain_total(self):
+        cell = _make_cell()
+        cell.drain_stats = DamageStats(count=10, mean=5.0)
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(result, stats=["drain_total"])
+        assert rows[0]["drain_total"] == 50.0
+
+    def test_drain_mean_no_drains(self):
+        """Default drain_stats has mean=0."""
+        cell = _make_cell()
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(result, stats=["drain_mean"])
+        assert rows[0]["drain_mean"] == 0.0
+
+    def test_drain_in_comparison_table(self):
+        cells = {
+            "Vampiric": _make_cell(),
+            "Plain": _make_cell(),
+        }
+        cells["Vampiric"].drain_stats = DamageStats(count=100, mean=7.5)
+        rows = comparison_table(cells, stats=["drain_mean"])
+        assert rows[0]["Vampiric"] == 7.5
+        assert rows[0]["Plain"] == 0.0
+        assert "delta" in rows[0]  # 2 scenarios → delta
+
+    def test_drain_in_comparison_delta(self):
+        cells = {
+            "A": _make_cell(),
+            "B": _make_cell(),
+        }
+        cells["A"].drain_stats = DamageStats(count=100, mean=10.0)
+        cells["B"].drain_stats = DamageStats(count=100, mean=4.0)
+        rows = comparison_table(cells, stats=["drain_mean"])
+        assert rows[0]["delta"] == "-6.00"
+
+
+class TestFmtFormatting:
+    """Test _fmt formatting logic — rates as percentages, other floats as decimals."""
+
+    def test_rate_stat_formatted_as_percentage(self):
+        assert _fmt(0.5, stat_name="hit_rate") == "50.0%"
+
+    def test_non_rate_stat_formatted_as_decimal(self):
+        assert _fmt(0.5, stat_name="mean") == "0.50"
+
+    def test_non_rate_small_float_not_percentage(self):
+        """Regression: small floats like drain_mean=0.5 must NOT become '50.0%'."""
+        assert _fmt(0.5, stat_name="drain_mean") == "0.50"
+        assert _fmt(0.05, stat_name="drain_mean") == "0.05"
+
+    def test_rate_at_zero(self):
+        assert _fmt(0.0, stat_name="hit_rate") == "0.0%"
+
+    def test_rate_at_one(self):
+        assert _fmt(1.0, stat_name="hit_rate") == "100.0%"
+
+    def test_no_stat_name_uses_decimal(self):
+        """Without stat_name context, floats should be plain decimals."""
+        assert _fmt(0.75) == "0.75"
+        assert _fmt(0.05) == "0.05"
+
+    def test_integer_formatted_as_string(self):
+        assert _fmt(42) == "42"
+
+    def test_string_passthrough(self):
+        assert _fmt("hello") == "hello"
+
+    def test_all_rate_stats_are_known(self):
+        """All rate stats in _RATE_STATS should be recognized."""
+        expected = {
+            "hit_rate", "poison_rate", "equipment_break_rate",
+            "reactive_rate", "spell_strike_rate", "effect_rate",
+            "reactive_rate_on_hit", "spell_strike_rate_on_hit", "effect_rate_on_hit",
+        }
+        assert _RATE_STATS == expected
+
+    def test_elem_total_not_rate(self):
+        """elem_total_net is a damage value, not a rate."""
+        assert _fmt(0.5, stat_name="elem_total_net") == "0.50"
+
+    def test_drain_mean_not_rate(self):
+        """drain_mean is a damage value, not a rate."""
+        assert _fmt(3.5, stat_name="drain_mean") == "3.50"
+
+
+class TestFormatTableHtmlRateFormatting:
+    """Test that format_table_html correctly formats rates vs non-rates."""
+
+    def test_comparison_table_rate_as_percentage(self):
+        """Rate stats in comparison tables should be formatted as percentages."""
+        rows = [{"stat": "hit_rate", "A": 0.75}]
+        html = format_table_html(rows)
+        assert "75.0%" in html
+
+    def test_comparison_table_damage_as_decimal(self):
+        """Damage stats in comparison tables should NOT be formatted as percentages."""
+        rows = [{"stat": "drain_mean", "A": 0.5}]
+        html = format_table_html(rows)
+        assert "0.50" in html
+        assert "50.0%" not in html
+
+    def test_comparison_table_elem_total_as_decimal(self):
+        """elem_total_net in comparison tables should be a decimal, not percentage."""
+        rows = [{"stat": "elem_total_net", "A": 0.8}]
+        html = format_table_html(rows)
+        assert "0.80" in html
+        assert "80.0%" not in html
+
+    def test_summary_table_html_rates_formatted(self):
+        """In summary tables (no 'stat' column), rate columns use header name."""
+        cell = _make_cell()
+        cell.ratios.effect_rate = 0.33
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(result, stats=["effect_rate", "mean"])
+        html = format_table_html(rows)
+        assert "33.0%" in html  # effect_rate as percentage
+        assert "10.00" in html  # mean as decimal
