@@ -222,7 +222,17 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 - Expanded stats for magical damage types
 - **POL stub conformance audit**: Review every POL built-in stub in `src/omega/runtime/` against its C++ implementation in `submodules/polserver/pol-core/`. For each stub: (1) read the POL source to understand exact semantics (return values, edge cases, side effects); (2) verify our Python implementation matches; (3) fix any divergences; (4) write a unit test per stub that encodes the POL behaviour so regressions are caught. Priority stubs: `execute_hit` flow (`run_hit_script` vs `apply_damage` dispatch in `charactr.cpp`), `ApplyRawDamage`, `start_script`, `ReadConfigFile`, property bags (`GetObjProperty`/`SetObjProperty`), stat accessors, `Distance`, `Random`/`RandomInt`. This audit prevents bugs like the M18 double-damage issue where our stub behaviour diverged from POL's either/or hitscript dispatch.
 
-### V3 — Extended Combat
+### V3 — Damage Spell Casting
+- New simulation type: `execute_spell()` / `run_spell_scenario()` parallel to weapon-hit simulation
+- 31 damage-dealing spells across 4 schools (Standard, Necromancy, Earth, Holy)
+- Single-target and AoE spells, executing real shard spell scripts through the interpreter
+- Full spell damage pipeline: CheckSkill (fizzle) → CalcSpellDamage → Resisted → ApplyElementalDamage → ApplyTheDamage
+- Spell-specific stats: fizzle rate, resist rate, elemental breakdown
+- New stubs: CheckSkill, ConsumeMana, CanTargetSpell, ListMobilesNearLocationEx, RandomDiceRoll
+- 3 new notebooks (spell damage, spell comparison, spell resistance)
+- POL stub audit for spell-path stubs
+
+### V4 — Extended Combat
 - HP tracking and kill-time distributions
 - Buff/debuff state over time (accumulating state across hits)
 - Group combat (1vN, NvN)
@@ -278,6 +288,10 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **V1.5 status**: Complete (M12–M22). Elemental damage, sub-script executor, reactive armor, spell strike, effect/greater enchantments, Spell/Enchantment enums, enchant_with() API, UNINIT audit, full documentation update. 964 tests.
 - **[Path to V1.5](./planning/path_to_v1.5.md)** — Elemental & Enchanted Weapons roadmap (M12–M22), three phases: elemental damage, sub-script execution, polish
 - **[Changelog to V1.5](./changelog/changelog_to_v1.5.md)** — Per-milestone change summaries for V1.5
+- **V2 status**: Not started.
+- **[Path to V2](./planning/path_to_v2.md)** — Spell & Resistance Flows roadmap (M-V2.1–M-V2.7): POL stub conformance audit, astral damage validation, reactive armor + resistance integration, notebook enrichment
+- **[Changelog to V2](./changelog/changelog_to_v2.md)** — Per-milestone change summaries for V2
+- **[Path to V3](./planning/path_to_v3.md)** — Damage Spell Casting roadmap (M23–M29): spell config, execution engine, single-target + AoE spells, runner/stats, reporting/notebooks, stub audit
 
 ## Commands
 - `uv run pytest -n auto` - run tests in parallel (preferred, ~36s)
