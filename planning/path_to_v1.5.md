@@ -153,7 +153,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Implement the 7 effect-type enchantments (piercing, poison, lifedrain, manadrain, staminadrain, blinding, banishing).
 
 **Deliverables**:
-- [ ] Parse and execute each effect script:
+- [x] Parse and execute each effect script:
   - `:combat:piercingscript` — armor penetration
   - `:combat:poisonhit` — applies poison
   - `:combat:lifedrainscript` — lifesteal (attacker heals)
@@ -161,11 +161,15 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
   - `:combat:staminadrainscript` — stamina drain
   - `:combat:blindingscript` — blinding effect
   - `:combat:banishscript` — banish effect
-- [ ] Record each effect type as a side effect
-- [ ] Add `__RecordSimulatorMetric` calls per effect: `LifeDrainAmount`, `ManaDrainAmount`, `StaminaDrainAmount`, `PiercingArmorReduction`, `PoisonLevel`, `BlindDuration`, `BanishDuration`
-- [ ] Integration test per effect type
-- [ ] Integration test: effect metrics recorded in `ctx.metrics`
-- [ ] Stub any additional POL functions needed by the effect scripts
+- [x] Record each effect type via `__RecordSimulatorMetric` (categorical info only: effect_type, cursed, target_type, triggered)
+- [x] Track balancing values through POL stubs (hp_set, mana_changed, stamina_changed, damage_applied) — not duplicated in metrics
+- [x] New POL stubs: GetVital, GetVitalMaximumValue, SetVital (hundredths conversion), SetHP, GetMaxMana, GetMaxStamina, MoveObjectToLocation
+- [x] Extended SetMana/SetStamina stubs with side effect recording (delta tracking)
+- [x] Mobile model: setlightlevel(), x/y/z/realm attributes
+- [x] Graceful start_script error handling (fire-and-forget — POL async semantics)
+- [x] Fixture sync: added processpoisonmod.src to extra runtime scripts
+- [x] Integration tests: 21 tests covering all 7 effects + dispatch verification
+- [x] 818 tests passing, 0 skipped
 
 **Depends on**: M15, M16
 
@@ -183,6 +187,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 - [ ] Integration tests for each
 - [ ] Integration test: greater enchantment metrics recorded in `ctx.metrics`
 - [ ] These scripts likely depend on elemental damage stubs (M12–M13) and potentially astral damage path
+- [ ] POL stub unit tests: add dedicated unit tests for all POL stubs (GetVital, SetVital, GetVitalMaximumValue, SetHP, GetMaxMana, GetMaxStamina, SetMana, SetStamina, MoveObjectToLocation, HealDamage, ApplyRawDamage, etc.) validating current behaviour — return values, clamping, side effect recording, hundredths conversion. These lock in stub semantics so the future POL audit (M22) can detect regressions.
 
 **Depends on**: M15, M16, M12, M13
 
@@ -239,7 +244,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 | M16 | Fixture Sync for Enchantment Scripts | 2 | M15 | **Done** |
 | M17 | Reactive Armor | 2 | M15, M16 | **Done** |
 | M18 | Spell Strike Enchantments | 2 | M15, M16, M12 | **Done** |
-| M19 | Effect Enchantments | 2 | M15, M16 | Not started |
+| M19 | Effect Enchantments | 2 | M15, M16 | **Done** |
 | M20 | Greater Enchantments | 2 | M15, M16, M12, M13 | Not started |
 | M21 | Enchantment Reporting & WeaponSpec Integration | 3 | M14, M17–M20 | Not started |
 | M22 | Test Fixture Independence & Documentation | 3 | All | Not started |

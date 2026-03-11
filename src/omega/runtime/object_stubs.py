@@ -161,18 +161,169 @@ def get_stamina(mobile: Any = None) -> int:
     return getattr(mobile, "stamina", 0)
 
 
+@pol_function("uo", "SetHP")
+@pol_function("vitals", "SetHP")
+@pol_function("", "SetHP")
+def set_hp(mobile: Any = None, value: Any = 0) -> None:
+    """Set HP on a mobile, clamped to [0, max_hp]. Records side effect."""
+    if mobile is None:
+        return
+    new_val = int(value)
+    max_hp = getattr(mobile, "max_hp", new_val)
+    new_val = max(0, min(new_val, max_hp))
+    old_hp = mobile.hp
+    mobile.hp = new_val
+    delta = new_val - old_hp
+
+    from omega.runtime.context import get_context
+
+    ctx = get_context()
+    ctx.record_side_effect(
+        kind="hp_set",
+        target_serial=getattr(mobile, "serial", 0),
+        value=delta,
+    )
+    logger.debug("SetHP", target=getattr(mobile, "name", "?"), old=old_hp, new=new_val, delta=delta)
+
+
 @pol_function("uo", "SetMana")
 @pol_function("", "SetMana")
 def set_mana(mobile: Any = None, value: Any = 0) -> None:
-    if mobile is not None:
-        mobile.mana = int(value)
+    """Set mana on a mobile. Records side effect with delta."""
+    if mobile is None:
+        return
+    new_val = int(value)
+    old_mana = mobile.mana
+    mobile.mana = new_val
+    delta = new_val - old_mana
+
+    from omega.runtime.context import get_context
+
+    ctx = get_context()
+    ctx.record_side_effect(
+        kind="mana_changed",
+        target_serial=getattr(mobile, "serial", 0),
+        value=delta,
+    )
+    logger.debug("SetMana", target=getattr(mobile, "name", "?"), old=old_mana, new=new_val, delta=delta)
 
 
 @pol_function("uo", "SetStamina")
 @pol_function("", "SetStamina")
 def set_stamina(mobile: Any = None, value: Any = 0) -> None:
-    if mobile is not None:
-        mobile.stamina = int(value)
+    """Set stamina on a mobile. Records side effect with delta."""
+    if mobile is None:
+        return
+    new_val = int(value)
+    old_stamina = mobile.stamina
+    mobile.stamina = new_val
+    delta = new_val - old_stamina
+
+    from omega.runtime.context import get_context
+
+    ctx = get_context()
+    ctx.record_side_effect(
+        kind="stamina_changed",
+        target_serial=getattr(mobile, "serial", 0),
+        value=delta,
+    )
+    logger.debug("SetStamina", target=getattr(mobile, "name", "?"), old=old_stamina, new=new_val, delta=delta)
+
+
+@pol_function("uo", "GetMaxMana")
+@pol_function("", "GetMaxMana")
+def get_max_mana(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "max_mana", 0)
+
+
+@pol_function("uo", "GetMaxStamina")
+@pol_function("", "GetMaxStamina")
+def get_max_stamina(mobile: Any = None) -> int:
+    if mobile is None:
+        return 0
+    return getattr(mobile, "max_stamina", 0)
+
+
+# ---------------------------------------------------------------------------
+# Vitals (vitals module — GetVital / GetVitalMaximumValue)
+#
+# POL stores vitals in hundredths internally:
+#   GetVital(mob, "life") returns mob.hp * 100
+#   GetVitalMaximumValue(mob, "life") returns mob.max_hp * 100
+# The shard's eScript wrappers (GetHP, GetMana, etc.) divide by 100.
+# ---------------------------------------------------------------------------
+
+_VITAL_MAP = {
+    "life": ("hp", "max_hp"),
+    "mana": ("mana", "max_mana"),
+    "stamina": ("stamina", "max_stamina"),
+}
+
+
+@pol_function("vitals", "GetVital")
+@pol_function("", "GetVital")
+def get_vital(mobile: Any = None, vital_id: Any = None) -> int:
+    """Get current vital value in hundredths (POL internal format)."""
+    if mobile is None or vital_id is None:
+        return 0
+    attrs = _VITAL_MAP.get(str(vital_id))
+    if attrs is None:
+        return 0
+    return getattr(mobile, attrs[0], 0) * 100
+
+
+@pol_function("vitals", "GetVitalMaximumValue")
+@pol_function("", "GetVitalMaximumValue")
+def get_vital_maximum_value(mobile: Any = None, vital_id: Any = None) -> int:
+    """Get maximum vital value in hundredths (POL internal format)."""
+    if mobile is None or vital_id is None:
+        return 0
+    attrs = _VITAL_MAP.get(str(vital_id))
+    if attrs is None:
+        return 0
+    return getattr(mobile, attrs[1], 0) * 100
+
+
+@pol_function("vitals", "SetVital")
+@pol_function("", "SetVital")
+def set_vital(mobile: Any = None, vital_id: Any = None, value: Any = 0) -> int:
+    """Set vital value in hundredths (POL internal format).
+
+    Records side effect with the delta for tracking drain/heal amounts.
+    Returns 1 on success.
+    """
+    if mobile is None or vital_id is None:
+        return 0
+    attrs = _VITAL_MAP.get(str(vital_id))
+    if attrs is None:
+        return 0
+    current_attr = attrs[0]  # e.g. "hp", "mana", "stamina"
+    max_attr = attrs[1]      # e.g. "max_hp", "max_mana", "max_stamina"
+    old_val = getattr(mobile, current_attr, 0)
+    # POL stores in hundredths; convert back to display units
+    new_val = max(0, int(value) // 100)
+    max_val = getattr(mobile, max_attr, new_val)
+    new_val = min(new_val, max_val)
+    setattr(mobile, current_attr, new_val)
+    delta = new_val - old_val
+
+    from omega.runtime.context import get_context
+
+    kind_map = {"hp": "hp_set", "mana": "mana_changed", "stamina": "stamina_changed"}
+    ctx = get_context()
+    ctx.record_side_effect(
+        kind=kind_map.get(current_attr, f"{current_attr}_changed"),
+        target_serial=getattr(mobile, "serial", 0),
+        value=delta,
+    )
+    logger.debug(
+        "SetVital", vital=str(vital_id),
+        target=getattr(mobile, "name", "?"),
+        old=old_val, new=new_val, delta=delta,
+    )
+    return 1
 
 
 @pol_function("vitals", "HealDamage")

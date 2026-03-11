@@ -23,8 +23,10 @@ program piercingscript(attacker, defender, weapon, armor, basedamage, rawdamage)
 			rawdamage	:= attacker[6];
 			attacker 	:= attacker[1];
 		endif
-		//Print("Piercing script launched!");
-		
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("effect_type", "piercing");
+		endif
+
         rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage , 1 );
         
         if( GetObjProperty( weapon , "Cursed" ) )

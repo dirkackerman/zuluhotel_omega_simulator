@@ -35,6 +35,10 @@ program lifedrainscript(attacker, defender, weapon, armor, basedamage, rawdamage
 			return 0;
 		endif
 
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("effect_type", "lifedrain");
+		endif
+
         var amount := rawdamage / 2;
         amount := amount * 0.75;
         

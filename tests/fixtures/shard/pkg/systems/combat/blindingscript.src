@@ -27,25 +27,30 @@ program blindingscript( attacker, defender, weapon, armor, basedamage, rawdamage
 			rawdamage	:= attacker[6];
 			attacker 	:= attacker[1];
 		endif
-		
+
         var chance := GetObjProperty(weapon, "ChanceOfEffect");
         if(RandomDiceStr("1d100") <= chance)
 
             var targ;
-            if( GetObjProperty( weapon , "Cursed" ) )
+            var cursed := GetObjProperty( weapon , "Cursed" );
+            if( cursed )
                 targ := attacker;
             else
                 targ := defender;
             endif
 
+			if(DEBUG_MODE)
+				__RecordSimulatorMetric(struct{ "effect_type" := "blinding", "effect_triggered" := 1, "cursed" := cursed });
+			endif
+
             if( !GetObjProperty( targ , "PermNightSight" ) )
                 PlaySoundEffect( targ , SFX_SPELL_NIGHT_SIGHT );
                     PlayObjectCenteredEffect( targ , FX_SPELL_OWL_SIGHT , SPEED_SPELL_OWL_SIGHT , LOOP_SPELL_OWL_SIGHT );
                     targ.setlightlevel( 30 , 60 );
-                endif
+            endif
         endif
 
         rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage );
         DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
-	
+
 endprogram

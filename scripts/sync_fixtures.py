@@ -246,7 +246,18 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
         dest = FIXTURE_DIR / rel
         copy_file(src_path, dest)
 
-    # 2b. Discover and copy enchantment sub-scripts
+    # 2b. Copy additional scripts needed by the combat path (not discovered
+    # via includes but referenced at runtime via start_script).
+    extra_scripts = [
+        "pkg/opt/summoning/processpoisonmod.src",   # SetPoison → start_script
+    ]
+    print("\nCopying extra runtime scripts...")
+    for rel_path in extra_scripts:
+        src = shard_root / rel_path
+        if src.exists():
+            copy_file(src, FIXTURE_DIR / rel_path)
+
+    # 2c. Discover and copy enchantment sub-scripts
     print("\nDiscovering enchantment sub-scripts from hitscriptdesc.cfg...")
     enchantment_scripts = discover_enchantment_scripts(shard_root)
     print(f"  Found {len(enchantment_scripts)} enchantment scripts")

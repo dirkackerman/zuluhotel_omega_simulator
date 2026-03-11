@@ -504,6 +504,13 @@ def set_war_mode(mobile: Any = None, mode: Any = None) -> None:
     logger.debug("SetWarMode (no-op)", mode=mode)
 
 
+@pol_function("uo", "MoveObjectToLocation")
+@pol_function("", "MoveObjectToLocation")
+def move_object_to_location(*args: Any, **kwargs: Any) -> None:
+    """Move object to world location (no-op in simulation)."""
+    logger.debug("MoveObjectToLocation (no-op)")
+
+
 @pol_function("", "RevokePrivilege")
 @pol_function("uo", "RevokePrivilege")
 def revoke_privilege(mobile: Any = None, priv: Any = None) -> None:

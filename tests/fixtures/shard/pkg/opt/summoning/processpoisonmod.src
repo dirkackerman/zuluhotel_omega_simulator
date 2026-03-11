@@ -1,0 +1,201 @@
+use uo;
+use os;
+use polsys;
+
+include "include/spelldata";
+include "include/client";
+include "include/dotempmods";
+include "include/areas";
+
+program processtempmods( parms )
+
+	set_script_option( SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES , 1 );
+	
+	var who	:= parms[1];
+	var plvl	:= parms[2];
+	var msg	:= parms[3];
+	var caster := parms[4];
+	var serial	:= who.serial;
+	var shuriken := parms[5];
+
+	if (IsInSafeArea(who) && !IsInBox(who, 5508, 5527, 1655, 1674))
+		return 0;
+	endif
+	
+	plvl := cint(plvl);
+	
+	if ( plvl > 6 )
+		plvl := 6;
+	endif
+
+	var protected;
+	if(caster)
+		if(GetObjProperty( caster , CLASSEID_THIEF ))
+			protected := PoisonProtected( who , plvl, 1);
+		else
+			protected := PoisonProtected( who , plvl );
+		endif
+	else
+		protected := PoisonProtected( who , plvl );
+	endif
+
+	if( protected == IMMUNED )
+		return;
+	endif
+	
+	if( protected == CURSED )
+		plvl := plvl + 2;
+	endif
+	
+	if (plvl < 1) 
+		return;
+	endif
+	
+	var current := 0;
+	set_critical(1);
+
+	var currentmod := GetObjProperty( who , "poison" );
+	
+	if( currentmod )
+		current := Cint( currentmod[1] );
+	else
+		currentmod := {};
+	endif
+	
+	var level := GetClasseLevel(caster);
+	var newPsnDmg;
+	
+	if(!GetObjProperty( caster , CLASSEID_THIEF ))
+		// Non-spec = 12 DMG.
+		newPsnDmg := plvl*2;
+		// If NPC multiply damage by x.
+		if(who.IsA(POLCLASS_NPC))
+			newPsnDmg := newPsnDmg * 3;
+		endif
+	else
+		// Based on Potion level (plvl) 6. Spec 1 = 18, 2 = 23, 3 = 24, 4 = 28, 5 = 33, 6 = 39 DMG.
+		case(level)
+			1: newPsnDmg := (plvl*(2+(level * 4/6))-1);
+			2: newPsnDmg := (plvl*(2+(level * 4/6))-2);
+			3: newPsnDmg := (plvl*(3+(level * 4/6))-5);
+			4: newPsnDmg := (plvl*(3+(level * 4/6))-4);
+			5: newPsnDmg := (plvl*(3+(level * 4/6))-5);
+			6: newPsnDmg := (plvl*(3+(level * 4/6))-3);
+		endcase
+
+		if(shuriken)
+			// Based on Potion level (plvl) 6. Spec 1 = 18, 2 = 23, 3 = 28, 4 = 33, 5 = 38, 6 = 45 DMG.
+			case(level)
+				1: newPsnDmg := (plvl*(3+(level * 4/6))-3);
+				2: newPsnDmg := (plvl*(3+(level * 4/6))-3);
+				3: newPsnDmg := (plvl*(3+(level * 4/6))-1);
+				4: newPsnDmg := (plvl*(3+(level * 4/6))+1);
+				5: newPsnDmg := (plvl*(4+(level * 4/6))-4);
+				6: newPsnDmg := (plvl*(4+(level * 4/6))-4);
+			endcase
+		endif
+		// If NPC multiply damage by x.
+		if(who.IsA(POLCLASS_NPC))
+			newPsnDmg := newPsnDmg * 5;
+		endif
+	endif
+
+	//PvP slowdown
+	// if(!who.IsA(POLCLASS_NPC) && GetGlobalProperty("ReducePoison") && DEBUG_MODE)
+	// 	newPsnDmg *= GetGlobalProperty("ReducePoison");
+	// endif
+
+	if(DEBUG_MODE)
+		PrintTextAbovePrivate( caster , "My Poison damage is: " + newPsnDmg, caster );
+	endif
+
+	if( who.poisoned )
+		var currPsnDmg := GetObjProperty(who, "psnDmg");
+		if(!currPsnDmg || (currPsnDmg < newPsnDmg) )
+			SetObjProperty(who, "psnDmg", newPsnDmg);
+		endif
+		set_critical(0);
+		return;
+	else
+		SetObjProperty(who, "psnDmg", newPsnDmg);
+	endif
+
+	var duration := Cint(30);
+	if(GetObjProperty(caster, CLASSEID_THIEF))
+		duration := 30+(level*5);
+	endif
+		
+	//var newpoisonregenmod := GetPoisonRegenMod( plvl );
+	var current_clock := Cint(ReadGameClock());
+	
+	if( plvl > current )
+		SetHpRegenRate(who, -1);
+		//SetHpRegenRate( who,  (newpoisonregenmod * 10));
+		//who.hp_regen_rate := Cint(BaseRegenRate( who ) + ( newpoisonregenmod));
+	endif
+
+	var mmod := { plvl , Cint(current_clock + duration) };
+
+	if( !current )
+		who.SetPoisoned();
+		IncRevision(who);
+		if( msg )
+			PrintTextAbovePrivate( who , msg , who );
+		endif	
+		currentmod := mmod;
+	else
+		AddToPoisonMod( currentmod , mmod );
+	endif
+
+	SetObjProperty( who , "poison" , currentmod );
+
+	set_critical(0);
+			
+	var timer := 0;
+	repeat
+	
+	sleep(1);
+	
+	if(CInt(ReadGameClock() % 5) == 0)
+		if (Getobjproperty(who, "LottoDrops"))
+			StoreDamage(caster, who, Cint(GetObjProperty(who, "psnDmg")));
+		endif
+		ApplyRawDamage(who, Cint(GetObjProperty(who, "psnDmg")));
+	endif
+
+	timer := timer + 1;
+
+	if (GetHP(who) < 1)
+		SetObjProperty(who, "KilledBy", GetObjProperty(who, "PoisonedBy"));
+		ApplyRawDamage(who, 5);
+		break;
+	endif
+
+	currentmod := GetObjProperty( who , "poison" );
+
+	until ( (timer >= duration) || !who.connected || who.dead || !currentmod);
+	
+	//Sleep(duration+1);
+	CurePoison(who);
+	IncRevision(who);
+	if( !who )
+		who := SystemFindObjectBySerial( cint(serial) , SYSFIND_SEARCH_OFFLINE_MOBILES );
+	endif
+	
+	if( who )
+		Set_Critical(1);
+		currentmod := GetObjProperty( who , "poison" );
+	
+		if( !currentmod )
+			Set_Critical( 0 );
+			return;
+		endif
+	
+		if( ReadGameClock() >= Cint(currentmod[2]) )
+			CurePoison( who );
+			IncRevision(who);
+		endif
+		Set_Critical(0);
+	endif
+	
+endprogram

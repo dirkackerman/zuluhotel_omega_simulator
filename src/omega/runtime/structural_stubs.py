@@ -275,7 +275,18 @@ def start_script(path: Any = None, *args: Any) -> Any:
         arg_count=len(args_list),
     )
 
-    return ctx.executor.run_sub_program(str(path), args_list)
+    # POL's start_script is async (fire-and-forget).  We run sub-scripts
+    # synchronously where possible, but failures in the spawned script
+    # must not crash the calling hitscript.
+    try:
+        return ctx.executor.run_sub_program(str(path), args_list)
+    except Exception as exc:
+        logger.warning(
+            "start_script sub-program failed (non-fatal)",
+            script=str(path),
+            error=str(exc),
+        )
+        return None
 
 
 # ---------------------------------------------------------------------------

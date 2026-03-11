@@ -60,6 +60,12 @@ class Mobile(GameObject):
         self.hidden: bool = False
         self.master: Any = None
 
+        # World position (used by banishscript etc.)
+        self.x: int = 0
+        self.y: int = 0
+        self.z: int = 0
+        self.realm: str = "britannia"
+
         # Base stats
         self.str_base: int = 10
         self.int_base: int = 10
@@ -172,6 +178,14 @@ class Mobile(GameObject):
             if isinstance(item, Armor):
                 total += item.ar
         return total
+
+    # ------------------------------------------------------------------
+    # Visual effects (no-op in simulation)
+    # ------------------------------------------------------------------
+
+    def setlightlevel(self, level: int = 0, duration: int = 0) -> None:
+        """Set light level on mobile (no-op — visual only)."""
+        pass
 
     # ------------------------------------------------------------------
     # Repr

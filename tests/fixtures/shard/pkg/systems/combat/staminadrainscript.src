@@ -17,25 +17,30 @@ program staminadrainscript(attacker, defender, weapon, armor, basedamage, rawdam
 			rawdamage	:= attacker[6];
 			attacker 	:= attacker[1];
 		endif
-		
+
         var drained;
         var drainer;
-            
+
         rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage );
 
-        if( GetObjProperty( weapon , "Cursed" ) )
+        var cursed := GetObjProperty( weapon , "Cursed" );
+        if( cursed )
             drained := attacker;
             drainer := defender;
         else
             drained := defender;
             drainer := attacker;
         endif
-		
+
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric(struct{"effect_type" := "staminadrain", "cursed" := cursed});
+		endif
+
 		if(GetObjProperty(defender, "InSafeArea"))
 			return 0;
 		endif
         var amount := rawdamage / 2;
-        
+
         var rdm := Random(10000);
 		if(rdm < 5000)
             if( amount > GetStamina(drained))
@@ -43,14 +48,13 @@ program staminadrainscript(attacker, defender, weapon, armor, basedamage, rawdam
             else
                 SetStamina(drained, GetStamina(drained)-amount);//drained.stamina := drained.stamina - amount;
             endif
-            
+
             SetStamina(drainer, GetStamina(drainer) + amount);//drainer.stamina := drainer.stamina + amount;
             if( GetStamina(drainer) > GetMaxStamina(drainer))//drainer.stamina > drainer.maxstamina)
                 SetStamina(drainer, GetMaxStamina(drainer));//drainer.stamina := drainer.maxstamina;
             endif
         endif
-        
+
         DealDamage( attacker , defender , weapon , armor , basedamage , rawdamage );
 
 endprogram
-

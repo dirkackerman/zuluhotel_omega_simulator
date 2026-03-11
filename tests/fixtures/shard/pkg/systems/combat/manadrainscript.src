@@ -36,6 +36,10 @@ program manadrainscript(attacker, defender, weapon, armor, basedamage, rawdamage
             drainer := attacker;
         endif
 		
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("effect_type", "manadrain");
+		endif
+
 		if(GetObjProperty(defender, "InSafeArea"))
 			return 0;
 		endif

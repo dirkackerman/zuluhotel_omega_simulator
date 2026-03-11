@@ -190,4 +190,36 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Verify `spell_strike_rate` aggregation (50% = 2 of 4 hits)
 - Verify `spell_strike_rate` is 0 when no triggers
 
+---
+
+## M19 — Effect Enchantments
+
+**Summary**: Implemented all 7 effect-type weapon enchantments end-to-end. Each effect script replaces mainhit (per M18's hitscript dispatch). Balancing values flow through POL stubs (SetVital, SetMana, SetStamina, ApplyRawDamage) as side effects — `__RecordSimulatorMetric` records only categorical decisions (which effect fired, cursed status, target type). Added the POL vitals subsystem (GetVital/SetVital/GetVitalMaximumValue with hundredths↔display conversion) to support the shard's wrapper functions in attributes.inc.
+
+**Changes**:
+- **POL vitals stubs** (`object_stubs.py`): `GetVital`, `GetVitalMaximumValue`, `SetVital` — POL stores vitals in hundredths internally (e.g., `GetVital(mob, "life")` returns `mob.hp * 100`). The shard's eScript wrappers (`GetMana`, `SetMana`, etc. in `attributes.inc`) call these with divide/multiply by 100. `SetVital` records `hp_set`/`mana_changed`/`stamina_changed` side effects with delta values.
+- **Additional stubs** (`object_stubs.py`): `SetHP` (sets hp with clamping + side effect), `GetMaxMana`, `GetMaxStamina`.
+- **`MoveObjectToLocation`** (`basic_stubs.py`): No-op stub for banishscript's teleport.
+- **Mobile model** (`mobile.py`): Added `x`, `y`, `z` (int), `realm` (str) for banishscript world access; `setlightlevel(level, duration)` no-op for blindingscript.
+- **`start_script` error handling** (`structural_stubs.py`): Wrapped `run_sub_program` call in try/except — POL's `start_script` is async (fire-and-forget), so failures in spawned scripts log a warning but don't crash the calling hitscript. Fixes poison test where `processpoisonmod` (a long-running daemon) can't fully execute in the synchronous simulator.
+- **Fixture sync** (`sync_fixtures.py`): Added `processpoisonmod.src` to extra runtime scripts list. Fixture count: 246 files, 962 KB.
+- **Shard instrumentation** (7 scripts, all inside `if(DEBUG_MODE)` guards):
+  - `piercingscript.src` — `effect_type=piercing`, `cursed`
+  - `poisonhit.src` — `effect_type=poison`, `effect_poison_level`, `cursed`
+  - `lifedrainscript.src` — `effect_type=lifedrain`, `cursed`
+  - `manadrainscript.src` — `effect_type=manadrain`, `cursed`
+  - `staminadrainscript.src` — `effect_type=staminadrain`, `cursed`
+  - `blindingscript.src` — `effect_type=blinding`, `effect_triggered=1`, `cursed`
+  - `banishscript.src` — `effect_type=banish`, `effect_target_type=(summoned|animated|normal)`, `cursed`
+
+**Testing** (21 tests):
+- Verify piercing executes, bypasses armor (piercing damage >= plain), cursed reversal
+- Verify poison executes with poison level metric, cursed reversal
+- Verify life drain heals attacker (hp_set side effect, 50% proc across seeds)
+- Verify mana drain transfers mana (mana_changed side effects for both drain and gain)
+- Verify stamina drain transfers stamina (stamina_changed side effects, 50% proc)
+- Verify blinding triggers at 100% chance, doesn't trigger at 0%
+- Verify banish: normal target gets regular damage, summoned target insta-killed (max_hp+3), cursed reversal
+- Verify no double damage: each effect weapon produces exactly 1 damage_applied entry (hitscript replaces mainhit)
+
 **Key insight**: Three independent interpreter bugs cascaded to produce a single error: (1) `_get_index` didn't handle `RuntimeConfigFile` objects, so `spellcfg[spellid]` returned UNINIT; (2) `_get_member` tried lowered case first, so `.Script` on `RuntimeConfigElement` returned None (wrong case); (3) `RandomDiceStr()` failed because `Find()` wasn't stubbed and eScript string slicing `str[start, end]` wasn't supported. Fixing all three made the full spell strike chain work.
