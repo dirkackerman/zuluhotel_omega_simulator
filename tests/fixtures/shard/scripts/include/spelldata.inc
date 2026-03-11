@@ -111,6 +111,7 @@ function ApplyElementalDamage( caster, cast_on, circle, dmg, element )
 	endif
 
 	var resultprot := GetResultingElementalProt( cast_on, element );
+	var dmg_gross := dmg;
 	//var magebonusdamage := 0;
 	//var mageequippedint := 0;
 	//var newdamage := 0;
@@ -134,18 +135,23 @@ function ApplyElementalDamage( caster, cast_on, circle, dmg, element )
 			// dmg := dmg + newdamage;
 			//Print("Damage after mage bonus: " + dmg);
 		else
-			dmg := dmg - Cint(dmg * resultprot / 100);	
+			dmg := dmg - Cint(dmg * resultprot / 100);
 		endif
 		if(DEBUG_MODE)
 			PrintTextAbovePrivate( caster , "I've dealt this much Elemental damage: " +dmg, caster );
 			PrintTextAbovePrivate( cast_on , "I received this much Elemental damage: " +dmg, cast_on );
+			__RecordSimulatorMetric("list:elemental_applied", struct{ "attack_type" := element, "prot" := resultprot, "dmg_gross" := dmg_gross, "dmg_net" := dmg });
 		endif
 
 		ApplyTheDamage( cast_on , caster , Resisted( caster, cast_on, circle, dmg ) , DMGID_MAGIC + element );
 	else
 		// Toadstool - heals x% of the damage that;s over 100. so 120% protection heals 20% of the damage
 		var amt := CDbl(resultprot)/100.0;
-		HealDamage( cast_on , Cint(dmg * CDbl(amt-1)) );
+		var heal_amount := Cint(dmg * CDbl(amt-1));
+		HealDamage( cast_on , heal_amount );
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("list:elemental_applied", struct{ "attack_type" := element, "prot" := resultprot, "dmg_gross" := dmg_gross, "healed" := heal_amount });
+		endif
 	endif
 
 endfunction
@@ -176,12 +182,13 @@ function ApplyElementalDamageNoResist( on_who, by_who, dmg, element )
 	else
 		// Toadstool - heals x% of the damage that;s over 100. so 120% protection heals 20% of the damage
 		var amt := CDbl(resultprot)/100.0;
-		HealDamage( on_who , Cint(dmg * CDbl(amt-1)) );
+		var heal_amount := Cint(dmg * CDbl(amt-1));
+		HealDamage( on_who , heal_amount );
 		if(DEBUG_MODE)
-			__RecordSimulatorMetric("list:elemental_applied", struct{ "attack_type" := element, "prot" := resultprot, "dmg_gross" := dmg_gross, "healed" := Cint(dmg * CDbl(amt-1)) });
+			__RecordSimulatorMetric("list:elemental_applied", struct{ "attack_type" := element, "prot" := resultprot, "dmg_gross" := dmg_gross, "healed" := heal_amount });
 		endif
 	endif
-	
+
 endfunction
 
 

@@ -1,0 +1,81 @@
+use os;
+use uo;
+
+include "include/spelldata";
+include "include/dotempmods";
+include "include/client";
+include "include/attributes";
+
+program cast_curse( parms, spell_id )
+
+	var circle := 6;
+	var caster;
+	var thetarget;
+	var fromhit;
+
+	if (parms[1] == "#MOB")
+		caster := parms[2];
+		thetarget := parms[3];
+		if (parms[4])
+			circle := parms[4];
+		endif
+		if (parms[5])
+			fromhit := parms[5];
+		endif
+	else
+        caster := parms;
+		if (IsPaladin(caster))
+			SendSysMessage(caster, "Paladins may not cast this spell!");
+			return 0;
+		endif
+		// For scrolls, StartSpellScript isn't working >:(
+		if (TypeOf(parms) == "Array")
+			caster := parms[1];
+			spell_id := parms[2];
+		endif
+		if (TryToCast( caster, spell_id ) != SUCCESS);
+			EraseObjProperty(caster, "#Casting");
+			return 0;
+		endif
+        thetarget := CanTargetArea(caster, circle);
+        if (!thetarget)
+            return;
+		endif
+	endif
+
+	PlaySoundEffect(caster, SFX_SPELL_MASS_CURSE);
+
+	detach();
+
+	var duration := GetModDuration( caster );
+	var victims := ListMobilesNearLocation( cint(thetarget.x), cint(thetarget.y), cint(thetarget.z), ModifyWithMagicEfficiency( caster , 4 ) );
+
+	victims := SmartAoE( caster, victims);
+
+	foreach cast_on in victims
+		if ( CheckLineOfSight( caster, cast_on ) )
+			var immunity := IsProtected( caster , cast_on , circle );
+			if( immunity != IMMUNED )
+				PlaySoundEffect(cast_on, SFX_SPELL_MASS_CURSE);
+				PlayObjectCenteredEffect( cast_on, FX_SPELL_MASS_CURSE , SPEED_SPELL_MASS_CURSE , LOOP_SPELL_MASS_CURSE);
+				send_attack(cast_on,caster);
+				var mod_amount := 0;
+				if(GetObjProperty(cast_on, CLASSEID_WARRIOR))
+					mod_amount := Resisted( caster , cast_on , circle , GetModAmount( caster ) * 0.45);
+				else
+					mod_amount := Resisted( caster , cast_on , circle , GetModAmount( caster ) * 0.75);
+				endif
+				
+				if( immunity == CURSED )
+					SendSysmessage( cast_on , "Your equipment increase the effect of the spell!" );
+					mod_amount := mod_amount * 2;
+				endif
+			
+				if(CanMod(cast_on, "all"))
+					DoTempMod(cast_on, "all", (0-mod_amount), duration);
+				endif
+			endif
+		endif
+	endforeach
+
+endprogram

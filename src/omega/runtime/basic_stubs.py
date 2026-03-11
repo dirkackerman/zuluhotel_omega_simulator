@@ -250,6 +250,17 @@ def substr_func(text: Any = "", start: Any = 1, length: Any = None) -> str:
     return s[idx:]
 
 
+@pol_function("", "Find")
+@pol_function("basic", "Find")
+def find_func(text: Any = "", search: Any = "", start: Any = 1) -> int:
+    """Find substring position (1-based). Returns 0 if not found."""
+    s = str(text) if text is not None else ""
+    needle = str(search) if search is not None else ""
+    offset = max(0, int(start) - 1)
+    pos = s.find(needle, offset)
+    return pos + 1 if pos >= 0 else 0
+
+
 # ---------------------------------------------------------------------------
 # Time (os module)
 # ---------------------------------------------------------------------------
@@ -364,6 +375,127 @@ def set_script_controller(mobile: Any = None) -> None:
 def distance(a: Any = None, b: Any = None) -> int:
     """Return distance between two objects. Default 1 (melee range)."""
     return 1
+
+
+@pol_function("uo", "SendEvent")
+@pol_function("", "SendEvent")
+def send_event(npc: Any = None, event: Any = None) -> None:
+    """Send event to NPC (no-op in simulation)."""
+    logger.debug("SendEvent (no-op)")
+
+
+@pol_function("uo", "PlayMovingEffect")
+@pol_function("", "PlayMovingEffect")
+def play_moving_effect(
+    source: Any = None, target: Any = None, effect: Any = None,
+    speed: Any = None, loop: Any = 0, explode: Any = 0,
+) -> None:
+    """Play moving visual effect (no-op in simulation)."""
+    logger.debug("PlayMovingEffect (no-op)")
+
+
+@pol_function("uo", "PlayMovingEffectEx")
+@pol_function("", "PlayMovingEffectEx")
+def play_moving_effect_ex(*args: Any, **kwargs: Any) -> None:
+    """Play moving visual effect extended (no-op in simulation)."""
+    logger.debug("PlayMovingEffectEx (no-op)")
+
+
+@pol_function("uo", "PlayObjectCenteredEffect")
+@pol_function("", "PlayObjectCenteredEffect")
+def play_object_centered_effect(
+    center: Any = None, effect: Any = None, speed: Any = None, loop: Any = 0,
+) -> None:
+    """Play centered visual effect (no-op in simulation)."""
+    logger.debug("PlayObjectCenteredEffect (no-op)")
+
+
+@pol_function("uo", "PlayObjectCenteredEffectEx")
+@pol_function("", "PlayObjectCenteredEffectEx")
+def play_object_centered_effect_ex(*args: Any, **kwargs: Any) -> None:
+    """Play centered visual effect extended (no-op in simulation)."""
+    logger.debug("PlayObjectCenteredEffectEx (no-op)")
+
+
+@pol_function("uo", "PlayStationaryEffect")
+@pol_function("", "PlayStationaryEffect")
+def play_stationary_effect(*args: Any, **kwargs: Any) -> None:
+    """Play stationary visual effect (no-op in simulation)."""
+    logger.debug("PlayStationaryEffect (no-op)")
+
+
+@pol_function("uo", "PlayLightningBoltEffect")
+@pol_function("", "PlayLightningBoltEffect")
+def play_lightning_bolt_effect(mobile: Any = None) -> None:
+    """Play lightning bolt visual effect (no-op in simulation)."""
+    logger.debug("PlayLightningBoltEffect (no-op)")
+
+
+@pol_function("uo", "send_attack")
+@pol_function("", "send_attack")
+def send_attack(target: Any = None, attacker: Any = None, spell_id: Any = None) -> None:
+    """Notify combat system of an attack (no-op in simulation)."""
+    logger.debug("send_attack (no-op)", spell_id=spell_id)
+
+
+@pol_function("os", "set_priority")
+@pol_function("", "set_priority")
+def set_priority(value: Any = None) -> int:
+    """Set script priority (no-op in simulation). Returns previous priority."""
+    return 0
+
+
+@pol_function("util", "RandomFloat")
+@pol_function("", "RandomFloat")
+def random_float(below: Any = 1.0) -> float:
+    """Return random float in [0, below)."""
+    rng = get_rng()
+    limit = float(below) if below is not None else 1.0
+    return rng._rng.random() * limit
+
+
+@pol_function("math", "LogE")
+@pol_function("", "LogE")
+def log_e(value: Any = None) -> float:
+    """Natural logarithm."""
+    if value is None or float(value) <= 0:
+        return 0.0
+    return pymath.log(float(value))
+
+
+@pol_function("util", "RandomDiceRoll")
+@pol_function("", "RandomDiceRoll")
+def random_dice_roll(dice_string: Any = None, allow_negatives: Any = 0) -> int:
+    """Roll dice from a string like '3d6+4'. Uses our deterministic RNG."""
+    if dice_string is None:
+        return 0
+    ds = str(dice_string).strip().lower()
+    # Parse XdY+Z or XdY-Z
+    import re
+    m = re.match(r'(\d+)d(\d+)([+-]\d+)?', ds)
+    if not m:
+        try:
+            return int(float(ds))
+        except (ValueError, TypeError):
+            return 0
+    num_dice = int(m.group(1))
+    faces = int(m.group(2))
+    bonus = int(m.group(3)) if m.group(3) else 0
+    rng = get_rng()
+    total = bonus + num_dice  # base = bonus + num_dice (1 per die minimum)
+    for _ in range(num_dice):
+        total += rng._rng.randint(0, faces - 1) if faces > 0 else 0
+    result = total
+    if not allow_negatives and result < 0:
+        result = 0
+    return result
+
+
+@pol_function("os", "detach")
+@pol_function("", "detach")
+def detach() -> None:
+    """Detach script from parent (no-op in simulation)."""
+    logger.debug("detach (no-op)")
 
 
 @pol_function("", "SetWarMode")

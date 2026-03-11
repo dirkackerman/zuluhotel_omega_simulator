@@ -70,6 +70,10 @@ program spellstrikescript(attacker, defender, weapon, armor, basedamage, rawdama
 			caster := attacker;
 		endif
 
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric(struct{ "spell_strike_triggered" := 1, "spell_strike_spellid" := spellid, "spell_strike_circle" := circle, "spell_strike_chance" := chance });
+		endif
+
 		var spellparms := { };
 		spellparms[1] := "#MOB";
 		spellparms[2] := caster;

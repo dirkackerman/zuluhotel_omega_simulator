@@ -96,21 +96,52 @@ class ShardData:
         return None
 
     def resolve_config_path(self, pkg_path: str) -> Path | None:
-        """Resolve a POL package config path like ``:combat:settings``.
+        """Resolve a POL package config path like ``:combat:settings`` or ``:*:spells``.
 
         Returns the filesystem path, or None if not resolvable.
+        For wildcard ``:*:name``, returns the first match (use
+        :meth:`resolve_config_paths_wildcard` for merging).
         """
         parts = pkg_path.strip(":").split(":", 1)
         if len(parts) != 2:
             return None
 
         pkg_name, cfg_name = parts
+
+        if pkg_name == "*":
+            # Wildcard: search all packages, return first match
+            for pkg_dir in self._package_map.values():
+                for candidate in [
+                    pkg_dir / "config" / f"{cfg_name}.cfg",
+                    pkg_dir / f"{cfg_name}.cfg",
+                ]:
+                    if candidate.exists() and candidate.is_file():
+                        return candidate
+            return None
+
         pkg_dir = self._package_map.get(pkg_name)
         if pkg_dir is None:
             return None
 
         path = pkg_dir / "config" / f"{cfg_name}.cfg"
         return path if path.exists() else None
+
+    def resolve_config_paths_wildcard(self, cfg_name: str) -> list[Path]:
+        """Resolve all matching config files for a name across packages.
+
+        Used by ``ReadConfigFile(":*:name")`` to merge configs from all
+        packages (POL's wildcard config behavior).
+        """
+        results: list[Path] = []
+        for pkg_dir in self._package_map.values():
+            for candidate in [
+                pkg_dir / "config" / f"{cfg_name}.cfg",
+                pkg_dir / f"{cfg_name}.cfg",
+            ]:
+                if candidate.exists() and candidate.is_file():
+                    results.append(candidate)
+                    break  # one per package
+        return results
 
     def parse_combat_scripts(self) -> dict[Path, object]:
         """Parse mainhit.src and all its includes.

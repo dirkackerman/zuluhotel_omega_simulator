@@ -117,6 +117,9 @@ def execute_hit(
     )
     ctx._config_resolver = config_resolver
 
+    # Seed the shard's eScript RNG (random.inc uses GetGlobalProperty("randomeroseed"))
+    ctx.global_properties["randomeroseed"] = rng_seed if rng_seed else 12345
+
     # Register objects for serial-based lookup
     ctx.register_object(attacker)
     ctx.register_object(defender)
@@ -176,17 +179,26 @@ def execute_hit(
 
         executor.functions.set_override("__RecordSimulatorMetric", _record_metric)
 
-        # mainhit expects: (attacker, defender, weapon, armor, basedamage, rawdamage)
-        program_args = {
-            "attacker": attacker,
-            "defender": defender,
-            "weapon": weapon,
-            "armor": armor,
-            "basedamage": dmg,
-            "rawdamage": dmg,
-        }
-
-        executor.run_program(program_args)
+        # POL behaviour: if the weapon has a hitscript, it REPLACES the
+        # default mainhit program — it is NOT run in addition to it.
+        # Standard weapons get `:combat:mainhit` as their hitscript via
+        # the controlscript `makehitscript.src`.  Enchanted weapons get
+        # their own hitscript (e.g., `:combat:spellstrikescript`).
+        # Both paths receive (attacker, defender, weapon, armor, basedamage, rawdamage).
+        if weapon.hitscript:
+            hitscript_args = [attacker, defender, weapon, armor, dmg, dmg]
+            executor.run_sub_program(weapon.hitscript, hitscript_args)
+        else:
+            # No hitscript on weapon — run the default mainhit program.
+            program_args = {
+                "attacker": attacker,
+                "defender": defender,
+                "weapon": weapon,
+                "armor": armor,
+                "basedamage": dmg,
+                "rawdamage": dmg,
+            }
+            executor.run_program(program_args)
 
         # Collect results from context
         result.final_damage = ctx.total_damage_dealt

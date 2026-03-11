@@ -294,29 +294,70 @@ class Executor:
         return None
 
     def _load_sub_script(self, script_path: str, cache_key: str) -> None:
-        """Parse a sub-script .src file and cache its program block."""
+        """Parse a sub-script .src file and cache its program block.
+
+        When shard_root and package_map are available, uses
+        ``parse_with_includes`` to resolve the sub-script's own
+        ``include`` and ``use`` directives.  Otherwise falls back to
+        single-file parsing.
+        """
         resolved = self._resolve_script_path(script_path)
 
-        from omega.parser.parser import parse_file
+        if self._shard_root is not None and self._package_map is not None:
+            # Full include resolution — handles sub-scripts that include
+            # files with function definitions or constants
+            from omega.parser.parser import parse_with_includes
 
-        result = parse_file(resolved)
-        if result.tree is None:
-            raise RuntimeError(
-                f"Failed to parse sub-script: {script_path} "
-                f"(resolved to {resolved})"
+            results = parse_with_includes(
+                resolved,
+                self._shard_root,
+                package_map=self._package_map,
             )
+            # Register functions/constants from all parsed files
+            for file_path, pr in results.items():
+                if pr.tree is None:
+                    continue
+                for module in extract_use_declarations(pr.tree):
+                    self.functions.add_module(module)
+                for func_def in extract_functions(pr.tree, source_file=str(file_path)):
+                    if not self.functions.has(func_def.name):
+                        self.functions.register(func_def)
+                for const_name, expr_ctx, _is_enum in extract_constants(pr.tree):
+                    if self.scopes.get(const_name) is UNINIT and expr_ctx is not None:
+                        value = self._interpreter.visit(expr_ctx)
+                        self.scopes.define_global(const_name, value, const=True)
 
-        # Extract USE declarations (usually already registered)
-        for module in extract_use_declarations(result.tree):
-            self.functions.add_module(module)
+            # Extract the program block from the entry file
+            entry_result = results.get(resolved.resolve()) or results.get(resolved)
+            if entry_result is None:
+                # Try to find it by matching filename
+                for fp, pr in results.items():
+                    if fp.name == resolved.name:
+                        entry_result = pr
+                        break
+            if entry_result is None or entry_result.tree is None:
+                raise RuntimeError(
+                    f"Failed to parse sub-script: {script_path} "
+                    f"(resolved to {resolved})"
+                )
+            prog = extract_program(entry_result.tree)
+        else:
+            # Fallback: single-file parse (no include resolution)
+            from omega.parser.parser import parse_file
 
-        # Extract any functions defined in the sub-script
-        for func_def in extract_functions(result.tree, source_file=str(resolved)):
-            if not self.functions.has(func_def.name):
-                self.functions.register(func_def)
+            result = parse_file(resolved)
+            if result.tree is None:
+                raise RuntimeError(
+                    f"Failed to parse sub-script: {script_path} "
+                    f"(resolved to {resolved})"
+                )
+            for module in extract_use_declarations(result.tree):
+                self.functions.add_module(module)
+            for func_def in extract_functions(result.tree, source_file=str(resolved)):
+                if not self.functions.has(func_def.name):
+                    self.functions.register(func_def)
+            prog = extract_program(result.tree)
 
-        # Extract the program block
-        prog = extract_program(result.tree)
         if prog is None:
             raise RuntimeError(
                 f"No program declaration in sub-script: {script_path} "

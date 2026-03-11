@@ -27,7 +27,8 @@ def read_config_file(path: Any = None) -> Any:
     """Read and parse a POL config file, with caching.
 
     Resolves package paths (e.g., ":combat:settings") and returns
-    a RuntimeConfigFile wrapper.
+    a RuntimeConfigFile wrapper.  Wildcard paths (":*:name") merge
+    configs from all packages.
     """
     if path is None:
         return None
@@ -42,6 +43,34 @@ def read_config_file(path: Any = None) -> Any:
 
     # Lazy import to avoid circular deps
     from omega.config.accessor import RuntimeConfigFile
+    from omega.config.cfg_parser import parse_config_file as _parse_cfg
+
+    # Handle wildcard ":*:name" — merge configs from all packages
+    if path_str.startswith(":*:") and ctx._config_resolver is not None:
+        cfg_name = path_str[3:]
+        resolver = ctx._config_resolver
+        # Use resolve_config_paths_wildcard if available (ShardData)
+        if hasattr(resolver, '__self__') and hasattr(resolver.__self__, 'resolve_config_paths_wildcard'):
+            paths = resolver.__self__.resolve_config_paths_wildcard(cfg_name)
+        else:
+            # Fallback: single file
+            fs_path = resolver(path_str)
+            paths = [fs_path] if fs_path is not None else []
+
+        if not paths:
+            logger.warning("Config path not resolved", path=path_str)
+            return None
+
+        # Parse and merge all matching configs
+        merged_cfg = _parse_cfg(paths[0])
+        for extra_path in paths[1:]:
+            extra_cfg = _parse_cfg(extra_path)
+            for elem in extra_cfg:
+                merged_cfg.add_element(elem)
+
+        result = RuntimeConfigFile(merged_cfg)
+        ctx.cache_config(path_str, result)
+        return result
 
     # Try to resolve package paths (":combat:settings") via shard resolver
     resolved = Path(path_str)
@@ -330,20 +359,31 @@ def create_item_at_location(
 @pol_function("os", "GetGlobalProperty")
 @pol_function("", "GetGlobalProperty")
 def get_global_property(name: Any = None) -> Any:
-    """Get global server property. Returns sensible defaults."""
+    """Get global server property from context store."""
+    if name is None:
+        return None
+    ctx = get_context()
+    key = str(name)
+    val = ctx.global_properties.get(key)
+    if val is not None:
+        return val
+    # Sensible defaults for properties not yet set
     defaults = {
         "powerHour": 0,
         "PowerHour": 0,
         "RPer": 0,
     }
-    return defaults.get(str(name), None) if name else None
+    return defaults.get(key, None)
 
 
 @pol_function("os", "SetGlobalProperty")
 @pol_function("", "SetGlobalProperty")
 def set_global_property(name: Any = None, value: Any = None) -> None:
-    """Set global property. No-op in simulation."""
-    logger.debug("SetGlobalProperty (no-op)", name=name)
+    """Set global server property in context store."""
+    if name is None:
+        return
+    ctx = get_context()
+    ctx.global_properties[str(name)] = value
 
 
 @pol_function("uo", "EnumerateOnlineCharacters")

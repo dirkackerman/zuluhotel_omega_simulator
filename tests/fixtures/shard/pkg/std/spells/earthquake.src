@@ -1,0 +1,146 @@
+//////////////////////////////////////////////////////////////////////
+// 20010430 Jaleem Added code to destroy magical walls in the area
+//                 of effect of the eathquake.
+//////////////////////////////////////////////////////////////////////
+
+use uo;
+
+include "include/spelldata";
+include "include/classes";
+include "include/client";
+include "include/attributes";
+
+program earthquake( parms, spell_id )
+
+	var circle  := 8;
+	var element := EARTH;
+	var caster;
+	var fromhit;
+		
+	if( parms[1] == "#MOB" )
+		caster := parms[2];
+
+		if( parms[4] )
+			circle := parms[4];
+		endif
+		if( parms[5] )
+			fromhit := parms[5];
+		endif
+	else
+
+        caster := parms;
+		// For scrolls, StartSpellScript isn't working >:(
+		if (TypeOf(parms) == "Array")
+			caster := parms[1];
+			spell_id := parms[2];
+		endif
+		if (TryToCast( caster, spell_id ) != SUCCESS);
+			EraseObjProperty(caster, "#Casting");
+			return 0;
+		endif
+        if( !can_cast(caster, circle) )
+            return;
+		endif
+	endif
+	
+	var sx  := caster.x;
+	var sy  := caster.y;
+	var shp := GetHP(caster);
+	
+	if( caster.x != sx )
+		SendSysMessage( caster, "You lost your concentration." );
+		return 0;
+	elseif( caster.y != sy )
+		SendSysMessage( caster, "You lost your concentration." );
+		return 0;
+	elseif( GetHP(caster) < shp )
+		SendSysMessage( caster, "You were interrupted while casting." );
+		return 0;
+	endif
+
+	var magery := GetEffectiveSkill(caster, SKILLID_MAGERY),okay;
+	var range := ModifyWithMagicEfficiency( caster, magery / 20 );
+
+	var chklos;
+	var victims;
+	if(parms[3])
+		victims := ListMobilesNearLocation( cint(parms[3].x), cint(parms[3].y), cint(parms[3].z), range );
+		chklos := parms[3];
+	else
+		victims := ListMobilesNearLocation( cint(caster.x), cint(caster.y), cint(caster.z), range );
+		chklos := caster;
+	endif
+
+	var immunity, circ, dmg;
+	var Near_Items;
+	var lamp;
+	var radius;
+	var lampdist;
+	PlaySoundEffect( caster, SFX_SPELL_EARTHQUAKE1 );
+	
+	victims := SmartAoE( caster, victims);
+
+	foreach mobile in victims
+		if( mobile.serial != caster.serial )
+			if( CheckLosAt(chklos, mobile.x, mobile.y, mobile.z) )
+				immunity := IsProtected( caster, mobile, circle );
+				if( immunity != IMMUNED )
+					if( immunity == CURSED )
+						circ := circle + circle;
+					else
+						circ := circle;
+					endif
+					dmg := CalcSpellDamage( caster, mobile, circ, AREA_EFFECT_SPELL );
+					send_attack( mobile, caster, SPELLID_EARTHQUAKE );
+					PrintTextAbovePrivate( mobile, "You are tossed about as the earth trembles below your feet!", mobile );
+					PlaySoundEffect( mobile, SFX_SPELL_EARTHQUAKE1 );
+					PlayObjectCenteredEffect( mobile, FX_SPELL_EARTHQUAKE, SPEED_SPELL_EARTHQUAKE, LOOP_SPELL_EARTHQUAKE );
+					okay:=0;
+					if(!mobile.multi.components)
+						okay:=1;
+					endif
+					Near_Items := ListItemsNearLocation(mobile.x, mobile.y, mobile.z,10);
+					foreach thing in Near_Items
+						if (thing.objtype == 0xf156)
+								okay := 0;
+						endif
+					endforeach
+					if (okay != 0) 
+						ApplyElementalDamage( caster, mobile, circ, dmg, element ); 
+					endif
+				endif
+			endif
+		endif
+	endforeach
+
+	PlaySoundEffect( caster, SFX_SPELL_EARTHQUAKE2 );
+
+        foreach item in ListItemsNearLocationOfType (cint(chklos.x), cint(chklos.y), cint(chklos.z), cint(range), UOBJ_STONEWALL_NS)
+			if( GetObjProperty(item, "f") )
+				PlayStationaryEffect( item.x , item.y , item.z , FX_SPELL_DISPEL_FIELD , SPEED_SPELL_DISPEL_FIELD , LOOP_SPELL_DISPEL_FIELD );
+				DestroyItem(item);
+			endif
+        endforeach
+
+        foreach item in ListItemsNearLocationOfType (cint(chklos.x), cint(chklos.y), cint(chklos.z), cint(range), UOBJ_STONEWALL_EW)
+			if( GetObjProperty(item, "f") )
+				PlayStationaryEffect( item.x , item.y , item.z , FX_SPELL_DISPEL_FIELD , SPEED_SPELL_DISPEL_FIELD , LOOP_SPELL_DISPEL_FIELD );
+				DestroyItem(item);
+			endif
+        endforeach
+        
+		foreach item in ListItemsNearLocationOfType (cint(chklos.x), cint(chklos.y), cint(chklos.z), cint(range), UOBJ_EFIELD_NS)
+			if( GetObjProperty(item, "f") )
+				PlayStationaryEffect( item.x , item.y , item.z , FX_SPELL_DISPEL_FIELD , SPEED_SPELL_DISPEL_FIELD , LOOP_SPELL_DISPEL_FIELD );
+                DestroyItem(item);
+			endif
+        endforeach
+
+        foreach item in ListItemsNearLocationOfType (cint(chklos.x), cint(chklos.y), cint(chklos.z), cint(range), UOBJ_EFIELD_EW)
+			if( GetObjProperty(item, "f") )
+				PlayStationaryEffect( item.x , item.y , item.z , FX_SPELL_DISPEL_FIELD , SPEED_SPELL_DISPEL_FIELD , LOOP_SPELL_DISPEL_FIELD );
+                DestroyItem(item);
+			endif
+        endforeach
+
+endprogram

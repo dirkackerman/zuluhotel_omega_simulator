@@ -43,6 +43,7 @@ class RatioStats:
     poison_rate: float = 0.0
     equipment_break_rate: float = 0.0
     reactive_rate: float = 0.0
+    spell_strike_rate: float = 0.0
 
 
 # Bitflag → field name mapping for element types
@@ -264,12 +265,17 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
         1 for r in successes
         if r.metrics.get("reactive_triggered")
     )
+    spell_strikes = sum(
+        1 for r in successes
+        if r.metrics.get("spell_strike_triggered")
+    )
 
     cell.ratios = RatioStats(
         hit_rate=hits / n,
         poison_rate=poisons / n,
         equipment_break_rate=equip_breaks / n,
         reactive_rate=reactives / n,
+        spell_strike_rate=spell_strikes / n,
     )
 
     # Elemental breakdown — aggregate from per-hit metrics

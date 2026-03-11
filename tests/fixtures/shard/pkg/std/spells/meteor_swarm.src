@@ -1,0 +1,100 @@
+use os;
+use uo;
+
+include "include/spelldata";
+include "include/classes";
+include "include/client";
+include "include/attributes";
+
+program cast_meteor( parms, spell_id )
+
+	var circle := 7;
+	var element1 := FIRE;
+	var element2 := EARTH;
+
+	var caster;
+	var cast_on;
+	var fromhit;
+
+	if (parms[1] == "#MOB")
+		caster := parms[2];
+		cast_on := parms[3];
+		if (parms[4])
+			circle := parms[4];
+		endif
+		if (parms[5])
+			fromhit := parms[5];
+		endif
+	else
+
+        caster := parms;
+		// For scrolls, StartSpellScript isn't working >:(
+		if (TypeOf(parms) == "Array")
+			caster := parms[1];
+			spell_id := parms[2];
+		endif
+		if (TryToCast( caster, spell_id ) != SUCCESS);
+			EraseObjProperty(caster, "#Casting");
+			return 0;
+		endif
+        cast_on := CanTargetArea(caster, circle);
+        if (!cast_on)
+            return;
+		endif
+	endif
+
+	detach();
+
+	var dmg;
+	var range := ModifyWithMagicEfficiency( caster , 3 );
+	var victims := ListMobilesNearLocationEx( cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z) , range , 0x03);
+
+	victims := SmartAoE( caster, victims);
+
+	foreach mobile in victims
+		if(mobile != caster)
+			PlayMovingEffect( caster, cast_on, FX_SPELL_METEOR_SWARM , SPEED_SPELL_METEOR_SWARM , LOOP_SPELL_METEOR_SWARM );
+			if( (CheckLosAt( mobile, cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z) ) ) )
+				var immunity := IsProtected( caster , mobile , circle );
+				var circ := circle;
+				if( immunity != IMMUNED )
+					if( immunity == CURSED )
+						circ := circ * 2;
+					endif
+					dmg := CalcSpellDamage( caster , mobile , circ , AREA_EFFECT_SPELL );
+					send_attack(mobile,caster, SPELLID_METEOR_SWARM);
+					PlaySoundEffect( mobile , SFX_SPELL_METEOR_SWARM);
+					PlayMovingEffect( caster, mobile, FX_SPELL_METEOR_SWARM , SPEED_SPELL_METEOR_SWARM , LOOP_SPELL_METEOR_SWARM );
+					ApplyElementalDamage( caster , mobile , circ , dmg / 2 + 0.5 , element1 );
+					ApplyElementalDamage( caster , mobile , circ , dmg / 2 + 0.5 , element2 );
+				
+				endif
+			endif
+
+			PlayMovingEffect( caster, cast_on, FX_SPELL_METEOR_SWARM , SPEED_SPELL_METEOR_SWARM , LOOP_SPELL_METEOR_SWARM );
+
+			sleep(1);
+
+			PlayMovingEffect( caster, cast_on, FX_SPELL_METEOR_SWARM , SPEED_SPELL_METEOR_SWARM , LOOP_SPELL_METEOR_SWARM );
+
+			if( (CheckLosAt( mobile, cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z) ) ) )
+				var immunity := IsProtected( caster , mobile , circle );
+				var circ := circle;
+				if( immunity != IMMUNED )
+					if( immunity == CURSED )
+						circ := circ * 2;
+					endif
+					dmg := CalcSpellDamage( caster , mobile , circ );
+					send_attack(mobile,caster, SPELLID_METEOR_SWARM);
+					PlaySoundEffect( mobile , SFX_SPELL_METEOR_SWARM);
+					PlayMovingEffect( caster, mobile, FX_SPELL_METEOR_SWARM , SPEED_SPELL_METEOR_SWARM , LOOP_SPELL_METEOR_SWARM );
+					ApplyElementalDamage( caster , mobile , circ , dmg / 2 + 0.5 , element1 );
+					ApplyElementalDamage( caster , mobile , circ , dmg / 2 + 0.5 , element2 );
+				
+				endif
+			endif
+			PlayMovingEffect( caster, cast_on, FX_SPELL_METEOR_SWARM , SPEED_SPELL_METEOR_SWARM , LOOP_SPELL_METEOR_SWARM );
+		endif
+    endforeach
+
+endprogram

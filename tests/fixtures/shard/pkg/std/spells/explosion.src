@@ -1,0 +1,71 @@
+use os;
+use uo;
+
+include "include/spelldata";
+include "include/client";
+include "include/attributes";
+
+program cast_explosion( parms, spell_id )
+
+	var circle := 6;
+	var element := FIRE;
+	var caster;
+	var cast_on;
+	var fromhit;
+
+	if (parms[1] == "#MOB")
+		caster := parms[2];
+
+
+		cast_on := parms[3];
+		if (parms[4])
+			circle := parms[4];
+		endif
+		if (parms[5])
+			fromhit := parms[5];
+		endif
+
+	else
+  
+        caster := parms;
+		// For scrolls, StartSpellScript isn't working >:(
+		if (TypeOf(parms) == "Array")
+			caster := parms[1];
+			spell_id := parms[2];
+		endif
+		if (TryToCast( caster, spell_id ) != SUCCESS);
+			EraseObjProperty(caster, "#Casting");
+			return 0;
+		endif
+        cast_on := CanTargetArea( caster , circle );
+        if (!cast_on)
+            return;
+        endif
+	endif
+
+	var dmg;
+	var range := ModifyWithMagicEfficiency( caster , 3 );
+	var victims := ListMobilesNearLocationEx( cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z) , range , 0x03);
+
+	victims := SmartAoE( caster, victims);
+
+	foreach mobile in victims
+		if( CheckLosAt( mobile, cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z) ) )
+			var immunity := IsProtected( caster , mobile , circle );
+			var circ := circle;
+			if( immunity != IMMUNED )
+				if( immunity == CURSED )
+					circ := circ * 2;
+				endif
+			
+				dmg := CalcSpellDamage( caster , mobile , circ , AREA_EFFECT_SPELL );
+				send_attack(mobile,caster, SPELLID_EXPLOSION );
+				PlaySoundEffect( mobile , SFX_SPELL_EXPLOSION );
+				PlayStationaryEffect( cint(mobile.x), cint(mobile.y), cint(mobile.z) , FX_SPELL_EXPLOSION , SPEED_SPELL_EXPLOSION , LOOP_SPELL_EXPLOSION );
+				ApplyElementalDamage( caster , mobile , circ , dmg , element );
+			endif
+		endif
+
+    	endforeach
+
+endprogram

@@ -111,6 +111,32 @@ def _find_package_dir(shard_root: Path, pkg_name: str) -> Path | None:
     return None
 
 
+def discover_spell_scripts(shard_root: Path) -> set[Path]:
+    """Discover spell .src files referenced by hitscriptdesc.cfg Script fields.
+
+    Parses hitscriptdesc.cfg for ``Script`` values (e.g., ``:spells:fireball``)
+    and resolves them to .src files on disk.
+    """
+    scripts: set[Path] = set()
+    cfg_path = shard_root / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
+    if not cfg_path.exists():
+        return scripts
+
+    text = cfg_path.read_text(encoding="utf-8", errors="replace")
+    for match in re.finditer(r'^\s*Script\s+(\S+)', text, re.MULTILINE):
+        script_ref = match.group(1).strip()
+        if script_ref.startswith(":"):
+            parts = script_ref.lstrip(":").split(":", 1)
+            if len(parts) == 2:
+                pkg_name, file_name = parts
+                pkg_dir = _find_package_dir(shard_root, pkg_name)
+                if pkg_dir:
+                    src = pkg_dir / f"{file_name}.src"
+                    if src.exists():
+                        scripts.add(src.resolve())
+    return scripts
+
+
 def discover_package_cfgs(shard_root: Path) -> list[Path]:
     """Find all pkg.cfg files under the shard's pkg/ directory."""
     pkg_root = shard_root / "pkg"
@@ -275,13 +301,27 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
         "pkg/systems/combat/config/itemdesc.cfg",
         "pkg/systems/combat/config/settings.cfg",
         "pkg/systems/combat/config/hitscriptdesc.cfg",
+        "pkg/std/spells/spells.cfg",
+        "pkg/opt/necro/spells.cfg",
+        "pkg/opt/earth/spells.cfg",
+        "pkg/opt/holybook/spells.cfg",
+        "pkg/opt/songbook/spells.cfg",
     ]
     for rel_path in pkg_configs:
         src = shard_root / rel_path
         if src.exists():
             copy_file(src, FIXTURE_DIR / rel_path)
 
-    # 5. Copy .em module files
+    # 5. Copy spell scripts referenced by hitscriptdesc.cfg
+    print("\nDiscovering spell scripts from hitscriptdesc.cfg...")
+    spell_scripts = discover_spell_scripts(shard_root)
+    print(f"  Found {len(spell_scripts)} spell scripts")
+    for src_path in sorted(spell_scripts):
+        rel = src_path.relative_to(shard_root.resolve())
+        dest = FIXTURE_DIR / rel
+        copy_file(src_path, dest)
+
+    # 6. Copy .em module files
     print("\nCopying .em module files...")
     em_dir = shard_root / "scripts" / "modules"
     if em_dir.exists():

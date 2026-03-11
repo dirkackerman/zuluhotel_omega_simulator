@@ -1,0 +1,85 @@
+use uo;
+use os;
+
+include "include/dotempmods";
+include "include/spelldata";
+include "include/client";
+include "include/attributes";
+
+const SPELL_EFFECT_TYPE_MOVING 	:= MOVING_SPELL_PARALYZE;
+const SPELL_EFFECT_ID		:= FX_SPELL_PARALYZE;
+const SPELL_EFFECT_SPEED	:= SPEED_SPELL_PARALYZE;
+const SPELL_EFFECT_LOOP		:= LOOP_SPELL_PARALYZE;
+
+program cast_paralyze( parms, spell_id )
+
+	var circle := 5;
+	var caster;
+	var cast_on;
+	var fromhit;
+
+	if (parms[1] == "#MOB")
+		caster := parms[2];
+
+		cast_on := parms[3];
+		if (parms[4])
+			circle := parms[4];
+		endif
+		if (parms[5])
+			fromhit := parms[5];
+		endif
+
+		send_attack(cast_on, caster, SPELLID_PARALYZE);
+	else
+
+        caster := parms;
+		// For scrolls, StartSpellScript isn't working >:(
+		if (TypeOf(parms) == "Array")
+			caster := parms[1];
+			spell_id := parms[2];
+		endif
+		if (TryToCast( caster, spell_id ) != SUCCESS);
+			EraseObjProperty(caster, "#Casting");
+			return 0;
+		endif
+        cast_on := CanTargetSpell(caster, circle, TGTOPT_HARMFUL + TGTOPT_CHECK_LOS );
+        if (!cast_on)
+            return;
+		endif
+	endif
+
+	if( !fromhit )
+		detach();
+		cast_on := Reflected( caster , cast_on , circle );
+	endif
+	PlayObjectCenteredEffect(cast_on, SPELL_EFFECT_ID, SPELL_EFFECT_SPEED, SPELL_EFFECT_LOOP);
+	PlaySoundEffect( cast_on , SFX_SPELL_PARALYZE );
+	
+	var immunity := IsProtected( caster , cast_on , circle );
+	if( immunity == IMMUNED )
+		return;
+	endif
+	
+	var magery := GetEffectiveSkill(caster, SKILLID_MAGERY);
+	if( immunity == CURSED )
+		SendSysmessage( cast_on , "One of your equipped items increases the effect of the spell!" );
+		magery := magery * 2;
+		circle := circle * 2;
+	endif
+	
+	var prot := GetObjProperty( cast_on , "FreeAction" );
+	if( prot == 1)
+		SendSysmessage( cast_on, "You are magically protected from paralyzing effects" );
+		return;
+	elseif( prot == -1 )
+		magery := magery * 2;
+		circle := circle * 2;
+	endif
+	
+	var amt := 1 + Cint(magery / 30);
+	amt := ModifyWithMagicEfficiency( caster , Resisted( caster , cast_on , circle , amt) );
+	DoTempMod(cast_on, "p", 1, amt);
+    
+endprogram
+
+

@@ -78,6 +78,9 @@ class SimulationContext:
     # Metrics recorded by __RecordSimulatorMetric from eScript
     metrics: dict[str, Any] = field(default_factory=dict)
 
+    # Global properties (GetGlobalProperty/SetGlobalProperty)
+    global_properties: dict[str, Any] = field(default_factory=dict)
+
     # Executor reference for start_script() sub-program dispatch
     executor: Any = None
 

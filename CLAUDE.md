@@ -220,6 +220,7 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 - Spell resistance calculations
 - Reactive armor with spell resistance
 - Expanded stats for magical damage types
+- **POL stub conformance audit**: Review every POL built-in stub in `src/omega/runtime/` against its C++ implementation in `submodules/polserver/pol-core/`. For each stub: (1) read the POL source to understand exact semantics (return values, edge cases, side effects); (2) verify our Python implementation matches; (3) fix any divergences; (4) write a unit test per stub that encodes the POL behaviour so regressions are caught. Priority stubs: `execute_hit` flow (`run_hit_script` vs `apply_damage` dispatch in `charactr.cpp`), `ApplyRawDamage`, `start_script`, `ReadConfigFile`, property bags (`GetObjProperty`/`SetObjProperty`), stat accessors, `Distance`, `Random`/`RandomInt`. This audit prevents bugs like the M18 double-damage issue where our stub behaviour diverged from POL's either/or hitscript dispatch.
 
 ### V3 — Extended Combat
 - HP tracking and kill-time distributions
@@ -231,7 +232,8 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 
 ### Running tests
 ```bash
-pytest                    # everything (785 tests, ~58s)
+pytest                    # everything sequential (~78s)
+pytest -n auto            # parallel via pytest-xdist (~36s, preferred)
 ```
 
 All tests run unconditionally — no markers, no skips, no submodule dependency.
@@ -278,7 +280,8 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **[Changelog to V1.5](./changelog/changelog_to_v1.5.md)** — Per-milestone change summaries for V1.5
 
 ## Commands
-- `uv run pytest` or `python -m pytest` - run tests
+- `uv run pytest -n auto` - run tests in parallel (preferred, ~36s)
+- `uv run pytest` - run tests sequentially (~78s)
 - `python scripts/sync_fixtures.py` - sync shard files into test fixtures (run after submodule update)
 - `python scripts/sync_fixtures.py --dry-run` - preview what would be synced
 - `jupyter lab` - launch notebook interface

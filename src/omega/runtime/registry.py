@@ -89,7 +89,7 @@ def call_builtin(module: str, name: str, args: list[Any]) -> Any:
             return func(*args)
 
     qualified = f"{module}::{name}" if module else name
-    logger.debug(
+    logger.warning(
         f"Unimplemented built-in: {qualified}(… {len(args)} args)",
         module=module or "(global)",
         function=name,

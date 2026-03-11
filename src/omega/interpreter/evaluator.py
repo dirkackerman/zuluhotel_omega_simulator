@@ -648,10 +648,15 @@ class EscriptInterpreter(EscriptParserVisitor):
         suffix: EscriptParser.ExpressionSuffixContext,
         obj_ctx: EscriptParser.ExpressionContext,
     ) -> Any:
-        # Indexing: obj[expr]
+        # Indexing: obj[expr] or obj[start, end] (string substring)
         idx = suffix.indexingSuffix()
         if idx is not None:
             indices = [self.visitExpression(e) for e in idx.expressionList().expression()]
+            # eScript string slicing: str[start, end] → substring (1-based)
+            if isinstance(obj, str) and len(indices) == 2:
+                start = max(1, _to_int(indices[0]))
+                end = _to_int(indices[1])
+                return obj[start - 1 : end]
             result = obj
             for index in indices:
                 result = _get_index(result, index)
@@ -1100,6 +1105,23 @@ def _get_index(obj: Any, index: Any) -> Any:
         if 0 <= idx < len(obj):
             return obj[idx]
         return UNINIT
+    # Fallback for objects supporting __getitem__ (e.g., RuntimeConfigFile)
+    if hasattr(obj, '__getitem__'):
+        try:
+            result = obj[index]
+            return result if result is not None else UNINIT
+        except (KeyError, IndexError, TypeError):
+            logger.debug(
+                "_get_index __getitem__ failed",
+                obj_type=type(obj).__name__,
+                index=repr(index),
+            )
+            return UNINIT
+    logger.warning(
+        "_get_index unhandled type, returning UNINIT",
+        obj_type=type(obj).__name__,
+        index=repr(index),
+    )
     return UNINIT
 
 
@@ -1136,14 +1158,17 @@ def _get_member(obj: Any, name: str) -> Any:
     if obj is None or obj is UNINIT:
         return UNINIT
     lower_name = name.lower()
-    # 1. Direct attribute lookup (exact or lowered)
+    # 1. Direct attribute lookup — try original case first (important for
+    #    objects like RuntimeConfigElement whose __getattr__ is case-sensitive
+    #    and may return None for a wrong-case key), then lowered.
     try:
-        val = getattr(obj, lower_name, UNINIT)
-        if val is not UNINIT:
-            return val
         val = getattr(obj, name, UNINIT)
         if val is not UNINIT:
             return val
+        if lower_name != name:
+            val = getattr(obj, lower_name, UNINIT)
+            if val is not UNINIT:
+                return val
     except Exception:
         pass
     # 2. Underscore-normalised fallback: strip underscores from both the

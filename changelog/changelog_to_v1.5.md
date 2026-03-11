@@ -161,3 +161,33 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Verify default CombatantSpec has empty properties
 
 **Key insight**: The reactive armor instrumentation captures the full pipeline: pre-reduction retaliation, reduction factor, and post-reduction damage. This lets reporting show both the theoretical damage and the actual damage dealt, with the reduction explicitly visible. No eScript or POL function signatures were modified — only `__RecordSimulatorMetric` calls were added.
+
+---
+
+## M18 — Spell Strike Enchantments
+
+**Summary**: Implemented the spell strike hitscript system end-to-end. The `spellstrikescript.src` reads `ChanceOfEffect`, `HitWithSpell`, and `EffectCircle` properties from the weapon, rolls against chance, resolves the spell script via `GetScript(spellid)` (reads `:*:spells` config files), and dispatches the spell via `Start_Script()`. The spell scripts (fireball, lightning, harm, magic arrow, etc.) execute through the sub-script executor, calling `CalcSpellDamage` and `ApplyElementalDamage` to deal elemental spell damage on top of the physical hit.
+
+**Changes**:
+- **Interpreter: `_get_index` fallback** (`evaluator.py`): Added `__getitem__` fallback for objects like `RuntimeConfigFile` that support bracket indexing but aren't EArray/EDict. Logs warning on UNINIT fallback.
+- **Interpreter: `_get_member` case sensitivity** (`evaluator.py`): Try original case before lowered case in `_get_member`. Fixes `RuntimeConfigElement` property access where case matters (e.g., `.Script` vs `.script`).
+- **Interpreter: string slicing** (`evaluator.py`): `str[start, end]` now returns a 1-based substring (eScript convention) instead of being treated as chained indexing. Used by `RandomDiceStr()` in `random.inc`.
+- **`Find()` stub** (`basic_stubs.py`): New POL built-in — 1-based substring search, returns 0 if not found. Used by `RandomDiceStr()` in `random.inc`.
+- **`PlayLightningBoltEffect()` stub** (`basic_stubs.py`): Visual effect no-op for lightning spell.
+- **`send_attack()` stub** (`basic_stubs.py`): Combat notification no-op used by spell scripts.
+- **`spell_strike_rate`** (`stats.py`): Already present from test scaffolding — `RatioStats` field and `aggregate_cell()` counting.
+- **`__RecordSimulatorMetric` instrumentation** (`spellstrikescript.src`): Records `spell_strike_triggered`, `spell_strike_spellid`, `spell_strike_circle`, `spell_strike_chance` via struct merge.
+- **Unimplemented built-in logging** (`registry.py`): Promoted from `debug` to `warning` level for faster diagnosis of missing stubs.
+- **Spell fixture sync** (`sync_fixtures.py`): Added spell script discovery — scans `:*:spells` config files, copies referenced `.src` spell scripts and `spells.cfg` to fixtures. 22 spell scripts added.
+
+**Testing** (10 tests):
+- Verify 100% chance triggers spell strike with correct metrics (spellid, circle, chance)
+- Verify 0% chance does not trigger spell strike
+- Verify spell strike deals additional damage (spell hit >= plain hit)
+- Verify different spell types: Magic Arrow (id=5), Lightning (id=30, AIR), Harm (id=12, WATER)
+- Verify cursed weapon reverses caster/target (spell damages attacker, attacker HP drops)
+- Verify powerplayer gets 0.9 multiplier vs warrior 0.8
+- Verify `spell_strike_rate` aggregation (50% = 2 of 4 hits)
+- Verify `spell_strike_rate` is 0 when no triggers
+
+**Key insight**: Three independent interpreter bugs cascaded to produce a single error: (1) `_get_index` didn't handle `RuntimeConfigFile` objects, so `spellcfg[spellid]` returned UNINIT; (2) `_get_member` tried lowered case first, so `.Script` on `RuntimeConfigElement` returned None (wrong case); (3) `RandomDiceStr()` failed because `Find()` wasn't stubbed and eScript string slicing `str[start, end]` wasn't supported. Fixing all three made the full spell strike chain work.
