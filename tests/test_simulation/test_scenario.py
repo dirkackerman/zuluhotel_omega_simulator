@@ -1,9 +1,12 @@
 """Tests for scenario definitions and materialization."""
 
 import dataclasses
+from pathlib import Path
 
 import pytest
 
+from omega.config.enchantments import Enchantment, EnchantmentRegistry
+from omega.config.spells import Spell
 from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_TACTICS
 from omega.simulation.scenario import (
     ArmorSpec,
@@ -17,6 +20,8 @@ from omega.simulation.scenario import (
     build_combatant,
     build_weapon,
 )
+
+from tests.conftest import FIXTURE_SHARD_ROOT
 
 
 class TestWeaponSpec:
@@ -190,3 +195,111 @@ class TestApplyVariable:
         spec = CombatantSpec(hp=100)
         new = apply_variable(spec, "hp", 500)
         assert new.hp == 500
+
+    def test_apply_weapon_hitscript(self):
+        spec = CombatantSpec(weapon=WeaponSpec())
+        new = apply_variable(spec, "weapon.hitscript", ":combat:spellstrikescript")
+        assert new.weapon.hitscript == ":combat:spellstrikescript"
+
+
+class TestWeaponSpecHitscript:
+    """Tests for WeaponSpec.hitscript and enchantment name resolution."""
+
+    def test_hitscript_default_none(self):
+        spec = WeaponSpec()
+        assert spec.hitscript is None
+
+    def test_build_weapon_no_hitscript(self):
+        spec = WeaponSpec()
+        w = build_weapon(spec)
+        assert w.hitscript is None
+
+    def test_build_weapon_raw_package_path(self):
+        spec = WeaponSpec(hitscript=":combat:spellstrikescript")
+        w = build_weapon(spec)
+        assert w.hitscript == ":combat:spellstrikescript"
+
+    def test_build_weapon_enchantment_name_fireball(self):
+        cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
+        reg = EnchantmentRegistry.from_cfg(cfg)
+        spec = WeaponSpec(hitscript="Fireball")
+        w = build_weapon(spec, enchantment_registry=reg)
+        assert w.hitscript == ":combat:spellstrikescript"
+        assert w.get_property("HitWithSpell") == 18
+
+    def test_build_weapon_enchantment_name_piercing(self):
+        cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
+        reg = EnchantmentRegistry.from_cfg(cfg)
+        spec = WeaponSpec(hitscript="Piercing")
+        w = build_weapon(spec, enchantment_registry=reg)
+        assert w.hitscript == ":combat:piercingscript"
+
+    def test_build_weapon_enchantment_name_planar_fury(self):
+        cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
+        reg = EnchantmentRegistry.from_cfg(cfg)
+        spec = WeaponSpec(hitscript="Planar Fury")
+        w = build_weapon(spec, enchantment_registry=reg)
+        assert w.hitscript == ":combat:dualplanarscript"
+        assert w.get_property("ChanceOfEffect") == 7
+
+    def test_build_weapon_unknown_name_raises(self):
+        spec = WeaponSpec(hitscript="Nonexistent")
+        reg = EnchantmentRegistry()
+        with pytest.raises(ValueError, match="Unknown enchantment name"):
+            build_weapon(spec, enchantment_registry=reg)
+
+    def test_build_combatant_with_hitscript(self):
+        cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
+        reg = EnchantmentRegistry.from_cfg(cfg)
+        spec = CombatantSpec(
+            weapon=WeaponSpec(hitscript="Fireball"),
+        )
+        mob, weapon, armor = build_combatant(spec, enchantment_registry=reg)
+        assert weapon.hitscript == ":combat:spellstrikescript"
+        assert weapon.get_property("HitWithSpell") == 18
+
+
+class TestEnchantWith:
+    """Tests for WeaponSpec.enchant_with()."""
+
+    def test_spell_enchantment(self):
+        spec = WeaponSpec(damage="3d6+2").enchant_with(Enchantment.OF_DAEMONS_BREATH)
+        assert spec.hitscript == ":combat:spellstrikescript"
+        assert spec.properties["HitWithSpell"] == Spell.FIREBALL
+
+    def test_slayer_enchantment(self):
+        spec = WeaponSpec().enchant_with(Enchantment.SILVER)
+        assert spec.hitscript == ":combat:slayerscript"
+        assert spec.properties["SlayType"] == "Undead"
+
+    def test_effect_enchantment(self):
+        spec = WeaponSpec().enchant_with(Enchantment.OF_PIERCING)
+        assert spec.hitscript == ":combat:piercingscript"
+
+    def test_greater_enchantment(self):
+        spec = WeaponSpec().enchant_with(Enchantment.OF_PLANAR_FURY)
+        assert spec.hitscript == ":combat:dualplanarscript"
+        assert spec.properties["ChanceOfEffect"] == 7
+
+    def test_preserves_existing_fields(self):
+        spec = WeaponSpec(name="Claymore", damage="1d20+35", speed=70)
+        enchanted = spec.enchant_with(Enchantment.OF_GAIAS_WRATH)
+        assert enchanted.name == "Claymore"
+        assert enchanted.damage == "1d20+35"
+        assert enchanted.speed == 70
+
+    def test_existing_properties_override_defaults(self):
+        spec = WeaponSpec(
+            properties={"ChanceOfEffect": 30, "EffectCircle": 9},
+        ).enchant_with(Enchantment.OF_DAEMONS_BREATH)
+        # User-set properties take precedence
+        assert spec.properties["ChanceOfEffect"] == 30
+        assert spec.properties["EffectCircle"] == 9
+        # Enchantment still provides HitWithSpell
+        assert spec.properties["HitWithSpell"] == Spell.FIREBALL
+
+    def test_build_weapon_from_enchant_with(self):
+        spec = WeaponSpec(damage="1d20+35").enchant_with(Enchantment.SILVER)
+        w = build_weapon(spec)
+        assert w.hitscript == ":combat:slayerscript"
+        assert w.get_property("SlayType") == "Undead"

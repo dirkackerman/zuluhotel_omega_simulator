@@ -10,6 +10,7 @@ from omega.reporting.plots import (
     damage_vs_parameter,
     elemental_breakdown_chart,
     elemental_vs_parameter,
+    enchantment_comparison,
 )
 from omega.simulation.stats import (
     CellResult,
@@ -165,4 +166,60 @@ class TestElementalVsParameter:
         cells = [_make_cell(variable_values={"x": 1})]
         result = SimulationResult(cells=cells)
         fig = elemental_vs_parameter(result, "x")
+        assert type(fig).__name__ == "Figure"
+
+
+class TestDamageBreakdownElemental:
+    """Test damage_breakdown with elemental data."""
+
+    def test_includes_elemental_bar(self):
+        cell = _make_elemental_cell()
+        fig = damage_breakdown(cell)
+        ax = fig.axes[0]
+        # Should have 4 bars: Base, Absorbed, Final, Elemental
+        patches = ax.patches
+        assert len(patches) == 4
+
+    def test_no_elemental_bar_without_data(self):
+        cell = _make_cell()
+        fig = damage_breakdown(cell)
+        ax = fig.axes[0]
+        assert len(ax.patches) == 3  # Base, Absorbed, Final
+
+    def test_show_elemental_false(self):
+        cell = _make_elemental_cell()
+        fig = damage_breakdown(cell, show_elemental=False)
+        ax = fig.axes[0]
+        assert len(ax.patches) == 3
+
+
+class TestEnchantmentComparison:
+    def test_returns_figure(self):
+        cells = {
+            "Plain": _make_cell(mean=20.0),
+            "Fireball": _make_elemental_cell(mean=30.0),
+        }
+        fig = enchantment_comparison(cells)
+        assert type(fig).__name__ == "Figure"
+
+    def test_custom_title(self):
+        cells = {
+            "A": _make_cell(mean=10.0),
+            "B": _make_cell(mean=20.0),
+        }
+        fig = enchantment_comparison(cells, title="Compare")
+        assert fig.axes[0].get_title() == "Compare"
+
+    def test_single_scenario(self):
+        cells = {"Only": _make_cell(mean=15.0)}
+        fig = enchantment_comparison(cells)
+        assert type(fig).__name__ == "Figure"
+
+    def test_three_scenarios(self):
+        cells = {
+            "Plain": _make_cell(mean=10.0),
+            "Piercing": _make_cell(mean=15.0),
+            "Fireball": _make_elemental_cell(mean=25.0),
+        }
+        fig = enchantment_comparison(cells)
         assert type(fig).__name__ == "Figure"

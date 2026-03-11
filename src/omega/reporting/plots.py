@@ -136,8 +136,12 @@ def damage_breakdown(
     *,
     title: str | None = None,
     figsize: tuple[float, float] = (6, 4),
+    show_elemental: bool = True,
 ) -> Any:
-    """Grouped bar showing base damage, absorbed, and final damage means.
+    """Grouped bar showing base damage, absorbed, final, and elemental means.
+
+    When *show_elemental* is True and elemental data is available, the chart
+    includes an additional bar for total elemental/planar damage.
 
     Parameters
     ----------
@@ -147,6 +151,8 @@ def damage_breakdown(
         Optional figure title.
     figsize:
         Figure size in inches.
+    show_elemental:
+        Include elemental damage bar when data is available.
 
     Returns
     -------
@@ -161,6 +167,12 @@ def damage_breakdown(
     categories = ["Base", "Absorbed", "Final"]
     values = [base, absorbed, final]
     colors = ["#2196F3", "#FF9800", "#4CAF50"]
+
+    elem_total = cell.elemental_breakdown.total_net
+    if show_elemental and elem_total > 0:
+        categories.append("Elemental")
+        values.append(elem_total)
+        colors.append("#E53935")
 
     fig, ax = plt.subplots(figsize=figsize)
 
@@ -431,6 +443,73 @@ def elemental_vs_parameter(
     ax.set_ylabel("Mean Elemental Damage")
     ax.set_title(title or f"Elemental Damage vs. {variable_name}")
     ax.legend(fontsize=8)
+    fig.tight_layout()
+    plt.close(fig)
+    return fig
+
+
+def enchantment_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (10, 5),
+) -> Any:
+    """Side-by-side comparison of enchantment effects on damage.
+
+    Shows grouped bars for each scenario: physical damage (final_damage - elemental)
+    and elemental/enchantment damage, with mean labels.
+
+    Parameters
+    ----------
+    cells:
+        Mapping of scenario label → :class:`CellResult`.
+        E.g. ``{"Plain": plain_cell, "Fireball": fireball_cell, "Piercing": piercing_cell}``
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+    import numpy as np
+
+    labels = list(cells.keys())
+    finals = [cells[l].damage_stats.mean for l in labels]
+    elementals = [cells[l].elemental_breakdown.total_net for l in labels]
+    physicals = [f - e for f, e in zip(finals, elementals)]
+
+    x = np.arange(len(labels))
+    width = 0.3
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    b1 = ax.bar(x - width / 2, physicals, width, label="Physical",
+                color="#78909C", edgecolor="black", linewidth=0.5)
+    b2 = ax.bar(x + width / 2, elementals, width, label="Elemental/Enchantment",
+                color="#E53935", edgecolor="black", linewidth=0.5)
+
+    # Value labels
+    for bars in (b1, b2):
+        for bar in bars:
+            h = bar.get_height()
+            if h > 0:
+                ax.text(bar.get_x() + bar.get_width() / 2, h + 0.3,
+                        f"{h:.1f}", ha="center", va="bottom", fontsize=8)
+
+    # Total damage line
+    ax.plot(x, finals, "ko-", markersize=6, linewidth=1.5, label="Total")
+    for xi, total in zip(x, finals):
+        ax.text(xi, total + 0.8, f"{total:.1f}", ha="center", va="bottom",
+                fontsize=9, fontweight="bold")
+
+    ax.set_xticks(x)
+    ax.set_xticklabels(labels, rotation=15, ha="right")
+    ax.set_ylabel("Mean Damage")
+    ax.set_title(title or "Enchantment Comparison")
+    ax.legend()
     fig.tight_layout()
     plt.close(fig)
     return fig

@@ -44,6 +44,7 @@ class RatioStats:
     equipment_break_rate: float = 0.0
     reactive_rate: float = 0.0
     spell_strike_rate: float = 0.0
+    effect_rate: float = 0.0
 
 
 # Bitflag → field name mapping for element types
@@ -269,6 +270,10 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
         1 for r in successes
         if r.metrics.get("spell_strike_triggered")
     )
+    effects = sum(
+        1 for r in successes
+        if r.metrics.get("effect_triggered")
+    )
 
     cell.ratios = RatioStats(
         hit_rate=hits / n,
@@ -276,29 +281,35 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
         equipment_break_rate=equip_breaks / n,
         reactive_rate=reactives / n,
         spell_strike_rate=spell_strikes / n,
+        effect_rate=effects / n,
     )
 
     # Elemental breakdown — aggregate from per-hit metrics
-    # Accumulate gross, net, prot, healed per element across all hits
+    # Both elemental_applied (inline elemental) and planar_applied (enchantment
+    # planar damage) share the same format: attack_type, dmg_gross, dmg_net, prot, healed.
     elem_gross: dict[str, float] = {}
     elem_net: dict[str, float] = {}
     elem_prot: dict[str, float] = {}
     elem_healed: dict[str, float] = {}
     elem_count = 0
     for r in successes:
-        applied = r.metrics.get("elemental_applied")
-        if not applied:
-            continue
-        elem_count += 1
-        for entry in applied:
-            attack_type = entry.get("attack_type", 0)
-            elem_name = _DMGID_TO_ELEMENT.get(int(attack_type))
-            if elem_name is None:
+        has_elem = False
+        for metric_key in ("elemental_applied", "planar_applied"):
+            applied = r.metrics.get(metric_key)
+            if not applied:
                 continue
-            elem_gross[elem_name] = elem_gross.get(elem_name, 0.0) + float(entry.get("dmg_gross", 0))
-            elem_net[elem_name] = elem_net.get(elem_name, 0.0) + float(entry.get("dmg_net", 0))
-            elem_prot[elem_name] = elem_prot.get(elem_name, 0.0) + float(entry.get("prot", 0))
-            elem_healed[elem_name] = elem_healed.get(elem_name, 0.0) + float(entry.get("healed", 0))
+            has_elem = True
+            for entry in applied:
+                attack_type = entry.get("attack_type", 0)
+                elem_name = _DMGID_TO_ELEMENT.get(int(attack_type))
+                if elem_name is None:
+                    continue
+                elem_gross[elem_name] = elem_gross.get(elem_name, 0.0) + float(entry.get("dmg_gross", 0))
+                elem_net[elem_name] = elem_net.get(elem_name, 0.0) + float(entry.get("dmg_net", 0))
+                elem_prot[elem_name] = elem_prot.get(elem_name, 0.0) + float(entry.get("prot", 0))
+                elem_healed[elem_name] = elem_healed.get(elem_name, 0.0) + float(entry.get("healed", 0))
+        if has_elem:
+            elem_count += 1
 
     if elem_count > 0:
         elements = {}

@@ -53,11 +53,14 @@ program dualplanarscript(attacker, defender, weapon, armor, basedamage, rawdamag
 		// Print("Defender is: " + defender.name);
 
         var spelldmg := (CalcSpellDamage( attacker, targ , 5 ) * 0.5);
+        var spelldmg_before_resist := spelldmg;
         spelldmg := Resisted( attacker , targ , 9 , spelldmg );
 
         // 30% dmg nerf for mages, Paladins and Mystic Archers
+        var class_nerf := 1.0;
         if(GetObjProperty( attacker , CLASSEID_MAGE) || GetObjProperty( attacker , CLASSEID_PALADIN) || GetObjProperty( attacker , CLASSEID_MYSTIC_ARCHER))
            spelldmg *= 0.7;
+           class_nerf := 0.7;
         endif
 
 		// PlayMovingEffect( attacker, targ, FX_SPELL_HOLY_BOLT, SPEED_SPELL_HOLY_BOLT, LOOP_SPELL_HOLY_BOLT );
@@ -85,7 +88,7 @@ program dualplanarscript(attacker, defender, weapon, armor, basedamage, rawdamag
         Sleepms( 250 );
 
         if(DEBUG_MODE)
-            PrintTextAbovePrivate( attacker , "I'm dealing this much spell damage: " +spelldmg, attacker );
+            __RecordSimulatorMetric(struct{ "effect_type" := "dualplanar", "effect_triggered" := 1, "cursed" := GetObjProperty(weapon, "Cursed"), "dualplanar_spelldmg_base" := spelldmg_before_resist, "dualplanar_spelldmg" := spelldmg, "dualplanar_class_nerf" := class_nerf });
         endif
     endif
 

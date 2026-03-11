@@ -20,6 +20,7 @@ from typing import Any
 
 from omega.combat.hit import execute_hit
 from omega.combat.result import HitResult
+from omega.config.enchantments import EnchantmentRegistry
 from omega.interpreter.executor import Executor
 from omega.logging import get_logger
 from omega.model.snapshot import restore, snapshot
@@ -44,6 +45,7 @@ def run_scenario(
     em_modules_dir: Path | None = None,
     shard: Any = None,
     _executor: Executor | None = None,
+    enchantment_registry: EnchantmentRegistry | None = None,
 ) -> CellResult:
     """Run a single scenario (N iterations) and return aggregated results.
 
@@ -81,9 +83,19 @@ def run_scenario(
             "Either parse_results or shard must be provided"
         )
 
+    # Auto-load enchantment registry from shard if needed
+    if enchantment_registry is None and shard is not None:
+        hitscript_cfg = shard.root / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
+        if hitscript_cfg.exists():
+            enchantment_registry = EnchantmentRegistry.from_cfg(hitscript_cfg)
+
     # Build combatants from specs
-    attacker, weapon, _atk_armor = build_combatant(scenario.attacker)
-    defender, _def_weapon, armor = build_combatant(scenario.defender)
+    attacker, weapon, _atk_armor = build_combatant(
+        scenario.attacker, enchantment_registry=enchantment_registry,
+    )
+    defender, _def_weapon, armor = build_combatant(
+        scenario.defender, enchantment_registry=enchantment_registry,
+    )
 
     # Build executor once — reused across all iterations
     cached_executor = _executor or Executor(
@@ -135,6 +147,7 @@ def run_sweep(
     config_resolver: Any = None,
     em_modules_dir: Path | None = None,
     shard: Any = None,
+    enchantment_registry: EnchantmentRegistry | None = None,
 ) -> SimulationResult:
     """Run a full parameter sweep and return results for all cells.
 
@@ -171,6 +184,12 @@ def run_sweep(
         package_map=package_map,
     )
 
+    # Auto-load enchantment registry from shard if needed
+    if enchantment_registry is None and shard is not None:
+        hitscript_cfg = shard.root / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
+        if hitscript_cfg.exists():
+            enchantment_registry = EnchantmentRegistry.from_cfg(hitscript_cfg)
+
     # Build the Cartesian product grid
     if not sweep.variables:
         # No variables — just run the base scenario
@@ -181,6 +200,7 @@ def run_sweep(
             config_resolver=config_resolver,
             em_modules_dir=em_modules_dir,
             _executor=shared_executor,
+            enchantment_registry=enchantment_registry,
         )
         elapsed = time.monotonic() - start
         return SimulationResult(cells=[cell], total_time=elapsed)
@@ -242,6 +262,7 @@ def run_sweep(
             config_resolver=config_resolver,
             em_modules_dir=em_modules_dir,
             _executor=shared_executor,
+            enchantment_registry=enchantment_registry,
         )
         cell.variable_values = dict(zip(var_names, combo))
         cells.append(cell)

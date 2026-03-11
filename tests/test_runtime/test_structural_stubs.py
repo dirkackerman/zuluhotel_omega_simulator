@@ -149,3 +149,43 @@ class TestMiscStubs:
 
     def test_no_op_move_item(self):
         call_builtin("uo", "MoveItemToContainer", [None, None])
+
+
+class TestApplyRawDamageExtended:
+    """Extended ApplyRawDamage tests: negative damage, side effect target serial."""
+
+    def test_negative_damage_ignored(self):
+        m = Mobile()
+        m.hp = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "ApplyRawDamage", [m, -10])
+        assert m.hp == 100
+        assert ctx.total_damage_dealt == 0.0
+
+    def test_null_mobile_ignored(self):
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "ApplyRawDamage", [None, 50])
+        assert ctx.total_damage_dealt == 0.0
+
+    def test_side_effect_target_serial(self):
+        m = Mobile(name="Target")
+        m.hp = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "ApplyRawDamage", [m, 30])
+        assert ctx.side_effects[0].target_serial == m.serial
+
+
+class TestMoveObjectToLocation:
+    """MoveObjectToLocation: no-op stub."""
+
+    def test_no_op(self):
+        m = Mobile(name="Mover")
+        m.x = 100
+        m.y = 200
+        call_builtin("uo", "MoveObjectToLocation", [m, 500, 600, 0, "britannia", 0])
+        # No-op — coordinates should NOT change
+        assert m.x == 100
+        assert m.y == 200

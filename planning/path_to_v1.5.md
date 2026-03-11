@@ -180,14 +180,19 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Implement the 3 greater enchantment types.
 
 **Deliverables**:
-- [ ] `:combat:dualplanarscript` — splits damage between physical and astral paths
-- [ ] `:combat:voidscript` — void damage
-- [ ] `:combat:trielementalscript` — combines 3 elemental damage types
-- [ ] Add `__RecordSimulatorMetric` calls: `DualPlanarPhysical`/`DualPlanarAstral` (split amounts), `VoidDamage`, `TriElementalFire`/`TriElementalAir`/`TriElementalEarth` (per-element amounts)
-- [ ] Integration tests for each
-- [ ] Integration test: greater enchantment metrics recorded in `ctx.metrics`
-- [ ] These scripts likely depend on elemental damage stubs (M12–M13) and potentially astral damage path
-- [ ] POL stub unit tests: add dedicated unit tests for all POL stubs (GetVital, SetVital, GetVitalMaximumValue, SetHP, GetMaxMana, GetMaxStamina, SetMana, SetStamina, MoveObjectToLocation, HealDamage, ApplyRawDamage, etc.) validating current behaviour — return values, clamping, side effect recording, hundredths conversion. These lock in stub semantics so the future POL audit (M22) can detect regressions.
+- [x] `:combat:dualplanarscript` — chance-based HOLY + NECRO planar damage via `ApplyPlanarDamage()`
+- [x] `:combat:voidscript` — +15 base damage bonus, cursed halving, random drain (hp/mana/stamina)
+- [x] `:combat:trielementalscript` — chance-based FIRE + AIR + WATER elemental damage via `ApplyElementalDamage()`
+- [x] `__RecordSimulatorMetric` instrumentation:
+  - `Resisted()` — `list:resisted` with dmg_before, dmg_after, chance, did_resist, circle, evalint, resist
+  - `ApplyPlanarDamage()` — `list:planar_applied` with attack_type, prot, dmg_gross, dmg_net (mirrors `elemental_applied`)
+  - `dualplanarscript` — effect_type, effect_triggered, cursed, spelldmg_base, spelldmg, class_nerf
+  - `voidscript` — effect_type, cursed, base_bonus, rawdmg_before_curse, rawdmg, drain_type, drain_amount
+  - `trielementalscript` — effect_type, effect_triggered, cursed, spelldmg_base, spelldmg, class_nerf
+- [x] Integration tests: 25 tests covering all 3 greater enchantments
+- [x] No new POL stubs needed — all infrastructure from M12–M19 was sufficient
+- [x] 886 tests passing, 0 skipped
+- [x] POL stub unit tests: 43 new unit tests for all POL stubs (GetVital, SetVital, GetVitalMaximumValue, SetHP, GetMaxMana, GetMaxStamina, SetMana, SetStamina, MoveObjectToLocation, HealDamage, ApplyRawDamage) validating current behaviour — return values, clamping, side effect recording, hundredths conversion, null handling. These lock in stub semantics so the future POL audit (M22) can detect regressions.
 
 **Depends on**: M15, M16, M12, M13
 
@@ -200,16 +205,22 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Surface enchantment data in the simulation API and reporting layer.
 
 **Deliverables**:
-- [ ] Add `hitscript` field to `WeaponSpec` for specifying enchantments declaratively
-- [ ] Add enchantment lookup from hitscriptdesc.cfg by name/ID
-- [ ] Update `build_weapon()` to configure hitscript properties on the weapon
-- [ ] Add enchantment effect columns to `summary_table()` (spell strike rate, lifesteal amount, etc.)
-- [ ] Add enchantment comparison plots (e.g., "Normal vs Piercing vs Spell Strike" overlay)
-- [ ] Update `damage_breakdown()` to show elemental + enchantment components
+- [x] Add `hitscript` field to `WeaponSpec` for specifying enchantments declaratively
+- [x] Add enchantment lookup from hitscriptdesc.cfg by name/ID — `EnchantmentRegistry` with `find()`, `by_id()`, `by_type()`
+- [x] Update `build_weapon()` to configure hitscript properties on the weapon — resolves enchantment names via registry
+- [x] Add enchantment effect columns to `summary_table()` — `spell_strike_rate`, `reactive_rate`, `effect_rate`
+- [x] Add enchantment comparison plots — `enchantment_comparison()` with physical/elemental split + total line
+- [x] Update `damage_breakdown()` to show elemental + enchantment components — optional 4th bar when elemental data present
+- [x] Aggregate `planar_applied` metrics alongside `elemental_applied` into `ElementalBreakdown`
+- [x] Auto-load `EnchantmentRegistry` from shard in `run_scenario()`/`run_sweep()`
+- [x] `Enchantment` IntEnum (45 members) and `Spell` IntEnum (132 members) for type-safe weapon configuration
+- [x] `WeaponSpec.enchant_with(Enchantment)` convenience method
+- [x] Fixed `SlayType` (not `SlayerType`), spell enchantments only set `HitWithSpell` (not EffectCircle/ChanceOfEffect)
+- [x] 964 tests passing, 0 skipped
 
 **Depends on**: M14, M17–M20
 
-**Acceptance**: Notebook authors can specify enchantments via `WeaponSpec(hitscript="spellstrike:fireball")` and see enchantment effects in reports.
+**Acceptance**: Notebook authors can specify enchantments via `WeaponSpec(hitscript="Fireball")` and see enchantment effects in reports.
 
 ### M22 — Test Fixture Independence & Documentation
 
@@ -245,8 +256,8 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 | M17 | Reactive Armor | 2 | M15, M16 | **Done** |
 | M18 | Spell Strike Enchantments | 2 | M15, M16, M12 | **Done** |
 | M19 | Effect Enchantments | 2 | M15, M16 | **Done** |
-| M20 | Greater Enchantments | 2 | M15, M16, M12, M13 | Not started |
-| M21 | Enchantment Reporting & WeaponSpec Integration | 3 | M14, M17–M20 | Not started |
+| M20 | Greater Enchantments | 2 | M15, M16, M12, M13 | **Done** |
+| M21 | Enchantment Reporting & WeaponSpec Integration | 3 | M14, M17–M20 | **Done** |
 | M22 | Test Fixture Independence & Documentation | 3 | All | Not started |
 
 ## Dependency Graph

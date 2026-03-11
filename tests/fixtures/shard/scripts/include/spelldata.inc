@@ -204,16 +204,24 @@ function ApplyPlanarDamage( caster, cast_on, circle, dmg, plane )
 	endif
 
 	var resultprot := GetResultingPlaneProtection( cast_on, plane );
+	var dmg_gross := dmg;
 
 	if( resultprot < 100 )
 		dmg := dmg - Cint(dmg * resultprot / 100);
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("list:planar_applied", struct{ "attack_type" := plane, "prot" := resultprot, "dmg_gross" := dmg_gross, "dmg_net" := dmg });
+		endif
 		ApplyTheDamage( cast_on , caster , Resisted( caster, cast_on, circle, dmg ) , DMGID_MAGIC + plane );
 	else
 		// Toadstool - heals x% of the damage that;s over 100. so 120% protection heals 20% of the damage
 		var amt := CDbl(resultprot)/100.0;
-		HealDamage( cast_on , Cint(dmg * CDbl(amt-1)) );
+		var heal_amount := Cint(dmg * CDbl(amt-1));
+		HealDamage( cast_on , heal_amount );
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("list:planar_applied", struct{ "attack_type" := plane, "prot" := resultprot, "dmg_gross" := dmg_gross, "healed" := heal_amount });
+		endif
 	endif
-	
+
 endfunction
 
 
@@ -1010,6 +1018,8 @@ function Resisted( caster , cast_on , circle , dmg )
 		AwardSkillPoints( cast_on , SKILLID_MAGICRESISTANCE , Cint( points / 3 ) );
 	endif
 
+	var dmg_before := dmg;
+	var did_resist := 0;
 	if( Random(100)+1 <= chance )
 		SendSysMessage( cast_on , "You feel yourself resisting magical energy!" );
 		PlaySoundEffect( cast_on , SFX_SPELL_WEAKEN );
@@ -1018,6 +1028,7 @@ function Resisted( caster , cast_on , circle , dmg )
 		if( dmg < 1 )
 			dmg := 1;
 		endif
+		did_resist := 1;
 		AwardSkillPoints( cast_on , SKILLID_MAGICRESISTANCE , points );
 	endif
 
@@ -1033,6 +1044,10 @@ function Resisted( caster , cast_on , circle , dmg )
 
 	if( dmg < 0 )
 		dmg := 1;
+	endif
+
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric("list:resisted", struct{ "dmg_before" := dmg_before, "dmg_after" := dmg, "chance" := chance, "did_resist" := did_resist, "circle" := circle, "evalint" := evalint, "resist" := resist });
 	endif
 
 	return dmg;

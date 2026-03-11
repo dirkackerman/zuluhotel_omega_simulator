@@ -51,36 +51,34 @@ program trielementalscript(attacker, defender, weapon, armor, basedamage, rawdam
         endif
 
         var spelldmg := (CalcSpellDamage( attacker, targ , 5 )*0.5);
-        //Print("Spell damage before resist in TriScript: " + spelldmg);
+        var spelldmg_before_resist := spelldmg;
         spelldmg := Resisted( attacker , targ , 8 , spelldmg );
-		//Print("Spell damage after resist in TriScript: " + spelldmg);
 
         // 30% dmg nerf for mages and Mystic Archers
+        var class_nerf := 1.0;
         if(GetObjProperty(attacker , CLASSEID_MAGE) || GetObjProperty(attacker , CLASSEID_MYSTIC_ARCHER))
             spelldmg *= 0.7;
+            class_nerf := 0.7;
         endif
 
         PlayMovingEffect( attacker , targ , FX_SPELL_FIREBALL , 5 , 1 );
         PlaySoundEffect( attacker , SFX_SPELL_FIREBALL );
         ApplyElementalDamage( attacker , targ , 1 , spelldmg , DMGID_FIRE );
-        //PrintTextAbovePrivate( attacker , "I'm dealing this much spell damage: " +spelldmg, attacker );
         Sleepms( 250 );
 
         PlayLightningBoltEffect( targ );
         PlaySoundEffect( targ , SFX_SPELL_LIGHTNING );
         ApplyElementalDamage( attacker , targ , 1 , spelldmg , DMGID_AIR );
-        //PrintTextAbovePrivate( attacker , "I'm dealing this much spell damage: " +spelldmg, attacker );
         Sleepms( 250 );
 
         PlaySoundEffect( targ , SFX_SPELL_ICE_STRIKE1);
         PlayStationaryEffect( targ.x , targ.y , targ.z , 0x3789, speed:=30, loop:=30);
         PlaySoundEffect( targ , SFX_SPELL_ICE_STRIKE2);
         ApplyElementalDamage( attacker , targ , 1 , spelldmg , DMGID_WATER );
-        //PrintTextAbovePrivate( attacker , "I'm dealing this much spell damage: " +spelldmg, attacker );
         Sleepms( 250 );
 
         if(DEBUG_MODE)
-            PrintTextAbovePrivate( attacker , "I'm dealing this much spell damage: " +spelldmg, attacker );
+            __RecordSimulatorMetric(struct{ "effect_type" := "trielemental", "effect_triggered" := 1, "cursed" := GetObjProperty(weapon, "Cursed"), "trielemental_spelldmg_base" := spelldmg_before_resist, "trielemental_spelldmg" := spelldmg, "trielemental_class_nerf" := class_nerf });
         endif
     endif
 

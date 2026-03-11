@@ -217,3 +217,43 @@ class TestElementalStatColumns:
         result = SimulationResult(cells=[_make_cell()])
         rows = summary_table(result, stats=["elem_total_net"])
         assert rows[0]["elem_total_net"] == 0.0
+
+
+class TestEnchantmentStatColumns:
+    """Test enchantment-related stat columns in summary_table."""
+
+    def test_spell_strike_rate(self):
+        cell = _make_cell()
+        cell.ratios.spell_strike_rate = 0.42
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(result, stats=["spell_strike_rate"])
+        assert rows[0]["spell_strike_rate"] == 0.42
+
+    def test_reactive_rate(self):
+        cell = _make_cell()
+        cell.ratios.reactive_rate = 0.15
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(result, stats=["reactive_rate"])
+        assert rows[0]["reactive_rate"] == 0.15
+
+    def test_effect_rate(self):
+        cell = _make_cell()
+        cell.ratios.effect_rate = 0.33
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(result, stats=["effect_rate"])
+        assert rows[0]["effect_rate"] == 0.33
+
+    def test_all_enchantment_columns(self):
+        cell = _make_cell()
+        cell.ratios.spell_strike_rate = 0.5
+        cell.ratios.reactive_rate = 0.2
+        cell.ratios.effect_rate = 0.3
+        result = SimulationResult(cells=[cell])
+        rows = summary_table(
+            result,
+            stats=["mean", "spell_strike_rate", "reactive_rate", "effect_rate"],
+        )
+        row = rows[0]
+        assert row["spell_strike_rate"] == 0.5
+        assert row["reactive_rate"] == 0.2
+        assert row["effect_rate"] == 0.3

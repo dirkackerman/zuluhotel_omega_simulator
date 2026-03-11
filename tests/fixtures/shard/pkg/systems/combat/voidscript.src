@@ -20,9 +20,12 @@ program voidscript(attacker, defender, weapon, armor, basedamage, rawdamage)
 	var drained;
 	var drainer;
 	
-	rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage + 15 , 1 );
-	
-	if( GetObjProperty( weapon , "Cursed" ) )
+	var base_bonus := 15;
+	rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage + base_bonus , 1 );
+
+	var is_cursed := GetObjProperty( weapon , "Cursed" );
+	var rawdmg_before_curse := rawdamage;
+	if( is_cursed )
 		rawdamage := Cint( rawdamage / 2 );
 		ApplyTheDamage( attacker , attacker , rawdamage );
 		drained := attacker;
@@ -32,21 +35,29 @@ program voidscript(attacker, defender, weapon, armor, basedamage, rawdamage)
 		drained := defender;
 		drainer := attacker;
 	endif
-	
+
 	if(GetObjProperty(defender, "InSafeArea"))
 		return 0;
 	endif
 	var amount := rawdamage/2;
+	var drain_type;
 	case(RandomInt(3))
 		0:
 			SetHP(drainer, GetHP(drainer)+amount);
+			drain_type := "hp";
 		1:
 			SetMana(drained, GetMana(drained) - amount);
 			SetMana(drainer, GetMana(drainer)+amount);
+			drain_type := "mana";
 		2:
 			SetStamina(drained, GetStamina(drained) - amount);
 			SetStamina(drainer, GetStamina(drainer)+amount);
+			drain_type := "stamina";
 	endcase
+
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric(struct{ "effect_type" := "void", "cursed" := is_cursed, "void_base_bonus" := base_bonus, "void_rawdmg_before_curse" := rawdmg_before_curse, "void_rawdmg" := rawdamage, "void_drain_type" := drain_type, "void_drain_amount" := amount });
+	endif
 
 endprogram
 

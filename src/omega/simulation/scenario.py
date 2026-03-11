@@ -13,6 +13,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from omega.config.dice import DiceSpec, parse_dice
+from omega.config.enchantments import (
+    Enchantment,
+    EnchantmentRegistry,
+    enchantment_hitscript,
+    enchantment_properties,
+)
 from omega.model.constants import LAYER_CHEST, LAYER_HAND1, SKILLID_SWORDSMANSHIP
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
@@ -25,7 +31,19 @@ from omega.model.mobile import Mobile
 
 @dataclass(frozen=True)
 class WeaponSpec:
-    """Declarative weapon description."""
+    """Declarative weapon description.
+
+    Use :meth:`enchant_with` to apply a hitscriptdesc.cfg enchantment::
+
+        WeaponSpec(damage="3d6+2").enchant_with(Enchantment.OF_DAEMONS_BREATH)
+
+    Or set ``hitscript`` and ``properties`` directly for full control::
+
+        WeaponSpec(
+            hitscript=":combat:spellstrikescript",
+            properties={"HitWithSpell": Spell.ANGELIC_AURA, "EffectCircle": 9},
+        )
+    """
 
     name: str = "Weapon"
     damage: str = "3d6+2"
@@ -35,7 +53,22 @@ class WeaponSpec:
     quality: float = 1.0
     hp: int = 50
     max_hp: int = 50
+    hitscript: str | None = None
     properties: dict[str, Any] = field(default_factory=dict)
+
+    def enchant_with(self, enchantment: Enchantment) -> WeaponSpec:
+        """Return a new WeaponSpec with the given enchantment applied.
+
+        Sets ``hitscript`` and merges the enchantment's weapon properties
+        into ``properties``.  Existing properties take precedence (so you
+        can override defaults like ``EffectCircle`` or ``ChanceOfEffect``
+        before or after calling this method).
+        """
+        hs = enchantment_hitscript(enchantment)
+        props = enchantment_properties(enchantment)
+        # Enchantment defaults first, then existing properties override
+        merged = {**props, **self.properties}
+        return dataclasses.replace(self, hitscript=hs, properties=merged)
 
 
 @dataclass(frozen=True)
@@ -132,8 +165,18 @@ class ParameterSweep:
 # ---------------------------------------------------------------------------
 
 
-def build_weapon(spec: WeaponSpec) -> Weapon:
-    """Create a :class:`Weapon` from a :class:`WeaponSpec`."""
+def build_weapon(
+    spec: WeaponSpec,
+    *,
+    enchantment_registry: EnchantmentRegistry | None = None,
+) -> Weapon:
+    """Create a :class:`Weapon` from a :class:`WeaponSpec`.
+
+    If ``spec.hitscript`` is set, the weapon is configured with the
+    enchantment.  If it looks like a package path (starts with ``:``) it
+    is used directly.  Otherwise it is treated as an enchantment name and
+    resolved via *enchantment_registry*.
+    """
     w = Weapon(
         name=spec.name,
         damage=parse_dice(spec.damage),
@@ -146,6 +189,26 @@ def build_weapon(spec: WeaponSpec) -> Weapon:
     )
     for k, v in spec.properties.items():
         w.set_property(k, v)
+
+    # Enchantment configuration
+    if spec.hitscript is not None:
+        if spec.hitscript.startswith(":"):
+            # Raw package path — just set the hitscript
+            w.hitscript = spec.hitscript
+        else:
+            # Enchantment name — resolve via registry
+            registry = enchantment_registry or EnchantmentRegistry()
+            entry = registry.find(spec.hitscript)
+            if entry is not None:
+                w.hitscript = entry.hitscript
+                for pk, pv in entry.weapon_properties.items():
+                    w.set_property(pk, pv)
+            else:
+                raise ValueError(
+                    f"Unknown enchantment name: {spec.hitscript!r}. "
+                    f"Use a package path (e.g. ':combat:spellstrikescript') "
+                    f"or load an EnchantmentRegistry from hitscriptdesc.cfg."
+                )
     return w
 
 
@@ -164,7 +227,11 @@ def build_armor(spec: ArmorSpec) -> Armor:
     return a
 
 
-def build_combatant(spec: CombatantSpec) -> tuple[Mobile, Weapon, Armor]:
+def build_combatant(
+    spec: CombatantSpec,
+    *,
+    enchantment_registry: EnchantmentRegistry | None = None,
+) -> tuple[Mobile, Weapon, Armor]:
     """Build a Mobile, Weapon, and Armor from a :class:`CombatantSpec`.
 
     Returns ``(mobile, weapon, armor)`` ready for ``execute_hit()``.
@@ -195,7 +262,11 @@ def build_combatant(spec: CombatantSpec) -> tuple[Mobile, Weapon, Armor]:
         mob.set_property(k, v)
 
     # Weapon
-    weapon = build_weapon(spec.weapon) if spec.weapon is not None else Weapon(name="Fist")
+    weapon = (
+        build_weapon(spec.weapon, enchantment_registry=enchantment_registry)
+        if spec.weapon is not None
+        else Weapon(name="Fist")
+    )
     mob.equip(LAYER_HAND1, weapon)
 
     # Armor — equip on the mobile so defender.ar works in shard scripts

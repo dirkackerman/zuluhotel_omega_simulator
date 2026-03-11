@@ -223,3 +223,133 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Verify no double damage: each effect weapon produces exactly 1 damage_applied entry (hitscript replaces mainhit)
 
 **Key insight**: Three independent interpreter bugs cascaded to produce a single error: (1) `_get_index` didn't handle `RuntimeConfigFile` objects, so `spellcfg[spellid]` returned UNINIT; (2) `_get_member` tried lowered case first, so `.Script` on `RuntimeConfigElement` returned None (wrong case); (3) `RandomDiceStr()` failed because `Find()` wasn't stubbed and eScript string slicing `str[start, end]` wasn't supported. Fixing all three made the full spell strike chain work.
+
+---
+
+## M20 — Greater Enchantments
+
+**Summary**: Implemented all 3 greater-type weapon enchantments end-to-end. No new POL stubs were needed — all infrastructure from M12–M19 was sufficient. Added `Resisted()` and `ApplyPlanarDamage()` instrumentation to spelldata.inc for resistance and planar damage tracking across all spell paths (not just greater enchantments).
+
+**Changes**:
+- **`Resisted()` instrumentation** (`spelldata.inc`): Added `list:resisted` metric recording dmg_before, dmg_after, chance, did_resist, circle, evalint, resist. Captures the full resistance pipeline for any spell path that calls `Resisted()` (spell strikes, greater enchantments, elemental damage).
+- **`ApplyPlanarDamage()` instrumentation** (`spelldata.inc`): Added `list:planar_applied` metric mirroring the existing `elemental_applied` pattern — records attack_type (plane), prot, dmg_gross, dmg_net (or healed for over-protection). Previously untracked.
+- **`dualplanarscript.src` instrumentation**: Records effect_type=dualplanar, effect_triggered, cursed, spelldmg_before_resist, spelldmg (post-resist), class_nerf (0.7 for Mage/Paladin/Mystic Archer, 1.0 otherwise). Applies HOLY + NECRO planar damage via `ApplyPlanarDamage()`.
+- **`voidscript.src` instrumentation**: Records effect_type=void, cursed, base_bonus (extracted to variable to avoid metric drift), rawdmg_before_curse, rawdmg, drain_type (hp/mana/stamina), drain_amount. The +15 base damage constant was extracted to a `base_bonus` variable used by both the calculation and the metric.
+- **`trielementalscript.src` instrumentation**: Records effect_type=trielemental, effect_triggered, cursed, spelldmg_before_resist, spelldmg, class_nerf (0.7 for Mage/Mystic Archer only — no Paladin nerf unlike dualplanar). Applies FIRE + AIR + WATER elemental damage via `ApplyElementalDamage()`.
+
+**Testing** (25 tests):
+- Verify dualplanar triggers at 100% chance with correct metrics (effect_type, triggered, planar_applied)
+- Verify dualplanar does not trigger at 0% chance (physical damage still dealt)
+- Verify dualplanar deals additional damage over plain weapon
+- Verify dualplanar records `list:planar_applied` with HOLY and NECRO entries
+- Verify `list:resisted` entries recorded for planar damage resistance rolls
+- Verify dualplanar cursed: records cursed flag (note: shard script uses targ as caster, not cast_on — damage still goes to defender)
+- Verify dualplanar 0.7 class nerf for Mage and Paladin attackers
+- Verify void executes with effect_type=void metric
+- Verify void base_bonus is recorded (from variable, not hardcoded constant)
+- Verify void deals more damage than plain weapon (+15 bonus)
+- Verify void drain types: all 3 (hp, mana, stamina) proc across seeds
+- Verify void drain_amount equals rawdamage/2
+- Verify void cursed halves rawdamage (rawdmg == int(rawdmg_before_curse / 2))
+- Verify void cursed reverses drainer/drained (attacker loses mana/stamina)
+- Verify void hitscript replaces mainhit (no double damage)
+- Verify trielemental triggers at 100% chance with metrics
+- Verify trielemental does not trigger at 0% chance
+- Verify trielemental deals additional damage over plain weapon
+- Verify trielemental records `list:elemental_applied` with FIRE, AIR, WATER entries
+- Verify trielemental `list:resisted` entries recorded
+- Verify trielemental cursed targets attacker (ApplyElementalDamage uses targ as cast_on)
+- Verify trielemental 0.7 class nerf for Mage attacker
+- Verify trielemental no Paladin nerf (unlike dualplanar — class_nerf=1.0)
+- Verify trielemental protection reduces damage (FireProtection on defender)
+
+**POL stub unit tests** (43 new tests in `test_object_stubs.py` and `test_structural_stubs.py`):
+- `SetHP`: basic set, clamps to max_hp, clamps to 0, records hp_set side effect with delta, null mobile
+- `SetMana`: records mana_changed side effect with delta (decrease and increase), null mobile
+- `SetStamina`: records stamina_changed side effect with delta (decrease and increase)
+- `GetMaxMana`/`GetMaxStamina`: return values, null mobile returns 0
+- `GetVital`: hundredths conversion (life→hp*100, mana→mana*100, stamina→stamina*100), unknown vital returns 0, null mobile returns 0
+- `GetVitalMaximumValue`: hundredths conversion for all 3 vitals, unknown/null returns 0
+- `SetVital`: hundredths→display conversion (15000→150), clamps to max, clamps to 0, records correct side effect kind per vital (hp_set/mana_changed/stamina_changed), returns 1 on success, returns 0 for unknown vital or null mobile
+- `HealDamage`: heals HP, caps at max_hp, records heal side effect, zero/negative amount no-ops, null mobile no-ops
+- `ApplyRawDamage` (extended): negative damage ignored, null mobile ignored, side effect target serial matches mobile
+- `MoveObjectToLocation`: no-op (coordinates unchanged after call)
+
+**Key insight**: Dualplanar and trielemental have asymmetric cursed behavior due to different argument ordering. Dualplanar passes `targ` as the 1st arg (caster) to `ApplyPlanarDamage(targ, defender, ...)`, so damage always goes to defender. Trielemental passes `targ` as the 2nd arg (cast_on) to `ApplyElementalDamage(attacker, targ, ...)`, so cursed correctly redirects damage to attacker. Class nerfs also differ: dualplanar nerfs Mage/Paladin/Mystic Archer; trielemental nerfs only Mage/Mystic Archer.
+
+---
+
+## M21 — Enchantment Reporting & WeaponSpec Integration
+
+**Summary**: Added `EnchantmentRegistry` to parse hitscriptdesc.cfg, `Enchantment` IntEnum (45 members) and `Spell` IntEnum (132 members) for type-safe weapon configuration, and `WeaponSpec.enchant_with()` for declarative enchantment application. Updated the reporting layer with enchantment-specific stats and plots.
+
+### New files
+- `src/omega/config/enchantments.py` — `Enchantment` IntEnum, `EnchantmentEntry` dataclass, `EnchantmentRegistry`, `enchantment_hitscript()` / `enchantment_properties()` helpers, `_ENCHANTMENT_META` baked lookup table
+- `src/omega/config/spells.py` — `Spell` IntEnum with all 132 spell IDs (standard 1-64, necro 65-80, earth 81-96, holy 166-181, songs 182-197)
+- `tests/test_config/test_enchantments.py` — 43 tests for registry, enums, and meta lookup
+
+### Changes
+
+**Enchantment system** (`enchantments.py`):
+- `Enchantment` IntEnum — 45 members matching hitscriptdesc.cfg (18 spell, 17 slayer, 7 effect, 3 greater). Names from display names (e.g. `OF_DAEMONS_BREATH`, `SILVER`, `OF_PLANAR_FURY`).
+- `_ENCHANTMENT_META` dict — maps each enchantment ID to its hitscript path and weapon CProps. Spell enchantments reference `Spell` enum for `HitWithSpell` values. Slayers use `SlayType` (the actual CProp name, not `SlayerType`). Spell enchantments only set `HitWithSpell` — `EffectCircle` and `ChanceOfEffect` are per-weapon customisations, not part of the enchantment definition.
+- `EnchantmentEntry.weapon_properties` — fixed: spell type returns only `HitWithSpell`, slayer type uses `SlayType`
+
+**Simulation API** (`scenario.py`):
+- `WeaponSpec.enchant_with(Enchantment)` — returns a new WeaponSpec with hitscript and properties from the enchantment. Existing properties override enchantment defaults.
+- `WeaponSpec.hitscript: str | None` — also accepts package paths (`:combat:spellstrikescript`) or enchantment names via `build_weapon()` registry resolution
+- `build_weapon()` — resolves enchantment names via `EnchantmentRegistry`, sets weapon properties
+- `build_combatant()` — passes registry through to `build_weapon()`
+
+**Runner** (`runner.py`):
+- `run_scenario()` / `run_sweep()` accept `enchantment_registry` parameter
+- Auto-loads registry from shard's `hitscriptdesc.cfg` when shard is provided
+
+**Stats** (`stats.py`):
+- `RatioStats.effect_rate` — tracks enchantment effect trigger rate
+- `aggregate_cell()` — counts `effect_triggered` metric for effect_rate
+- `aggregate_cell()` — aggregates `planar_applied` metrics (from greater enchantments) alongside `elemental_applied` into unified `ElementalBreakdown`
+
+**Reporting** (`tables.py`):
+- `_get_stat()` exposes `spell_strike_rate`, `reactive_rate`, `effect_rate` columns
+
+**Plots** (`plots.py`):
+- `damage_breakdown()` — new `show_elemental` parameter adds 4th bar for total elemental/planar damage
+- `enchantment_comparison()` — new plot showing physical vs elemental/enchantment damage with total line overlay
+
+### Tests added: 78 new tests (964 total)
+
+**Enum and meta tests** (25):
+- `Enchantment` IntEnum: all 45 members, values match IDs, `Enchantment(6)` resolves to `OF_DAEMONS_BREATH`
+- `Spell` IntEnum: standard/necro/earth/holy/song spells, `Spell(169)` resolves to `ANGELIC_AURA`
+- `enchantment_hitscript()` / `enchantment_properties()`: spell → spellstrikescript + HitWithSpell only, slayer → slayerscript + SlayType, effect → piercingscript, greater → ChanceOfEffect, void → empty
+
+**Registry tests** (24):
+- Parsing: total entries (45), type counts (18 spell, 17 slayer, 7 effect, 3 greater)
+- Lookup by ID, spell name, display name, clean name, slayer type, string ID
+- Case-insensitive matching, missing entries return None
+- Weapon properties: spell (HitWithSpell only, no EffectCircle), slayer (SlayType), effect/greater (CProp/Multiplier)
+- Empty registry behavior, clean_name stripping
+
+**Scenario tests** (16):
+- WeaponSpec.hitscript default None, raw package path, enchantment name resolution (Fireball, Piercing, Planar Fury)
+- `enchant_with()`: spell/slayer/effect/greater, preserves existing fields, existing properties override defaults, build_weapon integration
+- Unknown name raises ValueError, build_combatant passes registry
+
+**Stats tests** (7):
+- effect_rate: all triggered, none, partial
+- planar_applied: creates holy/necro elements, combined with elemental_applied, healed path
+
+**Reporting tests** (12):
+- summary_table: spell_strike_rate, reactive_rate, effect_rate columns, all combined
+- damage_breakdown: elemental bar when data present, no bar without data, show_elemental=False
+- enchantment_comparison: basic rendering, custom title, single/three scenarios
+
+### Test criteria
+- `WeaponSpec(damage="3d6+2").enchant_with(Enchantment.OF_DAEMONS_BREATH)` → hitscript=`:combat:spellstrikescript`, HitWithSpell=Spell.FIREBALL
+- `WeaponSpec().enchant_with(Enchantment.SILVER)` → hitscript=`:combat:slayerscript`, SlayType=`Undead`
+- Existing properties override enchantment defaults (e.g. custom EffectCircle/ChanceOfEffect preserved)
+- Direct property approach also works: `WeaponSpec(hitscript=":combat:spellstrikescript", properties={"HitWithSpell": Spell.ANGELIC_AURA, "EffectCircle": 9})`
+- Planar damage (holy/necro from greater enchantments) appears in elemental breakdown
+- All enchantment rate columns accessible in summary_table
+- All existing tests continue to pass

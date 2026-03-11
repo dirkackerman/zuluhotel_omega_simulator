@@ -269,3 +269,92 @@ class TestAggregateCellElemental:
         # Mean: (10 + 20) / 2 = 15 net, (50 + 0) / 2 = 25 prot
         assert cell.elemental_breakdown.elements["fire"].net == 15.0
         assert cell.elemental_breakdown.elements["fire"].prot == 25.0
+
+
+class TestEffectRate:
+    """Test effect_rate aggregation from HitResult.metrics."""
+
+    def test_effect_rate_all_triggered(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_triggered": 1}),
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_triggered": 1}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.ratios.effect_rate == 1.0
+
+    def test_effect_rate_none_triggered(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True, metrics={}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.ratios.effect_rate == 0.0
+
+    def test_effect_rate_partial(self):
+        hits = [
+            HitResult(final_damage=10.0, success=True,
+                      metrics={"effect_triggered": 1}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+            HitResult(final_damage=10.0, success=True, metrics={}),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.ratios.effect_rate == 0.25
+
+
+class TestPlanarAppliedAggregation:
+    """Test that planar_applied metrics are aggregated into elemental breakdown."""
+
+    def test_planar_applied_creates_elements(self):
+        hits = [
+            HitResult(
+                final_damage=20.0, success=True,
+                metrics={"planar_applied": [
+                    {"attack_type": 0x0020, "dmg_gross": 15, "dmg_net": 10, "prot": 33},
+                    {"attack_type": 0x0010, "dmg_gross": 15, "dmg_net": 12, "prot": 20},
+                ]},
+            ),
+        ]
+        cell = aggregate_cell(hits)
+        eb = cell.elemental_breakdown
+        assert "holy" in eb.elements
+        assert "necro" in eb.elements
+        assert eb.elements["holy"].net == 10.0
+        assert eb.elements["necro"].net == 12.0
+
+    def test_planar_and_elemental_combined(self):
+        """Both elemental_applied and planar_applied contribute to the breakdown."""
+        hits = [
+            HitResult(
+                final_damage=30.0, success=True,
+                metrics={
+                    "elemental_applied": [
+                        {"attack_type": 0x0001, "dmg_gross": 10, "dmg_net": 8, "prot": 20},
+                    ],
+                    "planar_applied": [
+                        {"attack_type": 0x0020, "dmg_gross": 10, "dmg_net": 7, "prot": 30},
+                    ],
+                },
+            ),
+        ]
+        cell = aggregate_cell(hits)
+        eb = cell.elemental_breakdown
+        assert "fire" in eb.elements
+        assert "holy" in eb.elements
+        assert eb.elements["fire"].net == 8.0
+        assert eb.elements["holy"].net == 7.0
+        assert eb.total_net == 15.0
+
+    def test_planar_healed(self):
+        hits = [
+            HitResult(
+                final_damage=10.0, success=True,
+                metrics={"planar_applied": [
+                    {"attack_type": 0x0020, "prot": 150, "dmg_gross": 10, "healed": 5},
+                ]},
+            ),
+        ]
+        cell = aggregate_cell(hits)
+        assert cell.elemental_breakdown.elements["holy"].healed == 5.0
