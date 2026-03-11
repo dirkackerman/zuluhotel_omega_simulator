@@ -110,15 +110,17 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 **Goal**: Implement the reactive armor on-hit script.
 
 **Deliverables**:
-- [ ] Stub `Print()` as a debug-mode logger (like `SendSysMessage`/`PrintTextAbovePrivate`) — needed by enchantment scripts
-- [ ] Parse and include `:combat:reactivearmoronhit.src` in the combat script set
-- [ ] Verify the reactive armor script executes through the sub-script executor
-- [ ] Handle the reactive armor flow: read `ReactiveArmor` property from defender → calculate return damage → apply to attacker
-- [ ] Record reactive damage as a side effect (`"reactive_damage"` kind)
-- [ ] Add `__RecordSimulatorMetric` calls: `ReactiveArmorDamage` (damage reflected), `ReactiveArmorLevel` (property value)
-- [ ] Add `reactive_rate` to `RatioStats`
-- [ ] Integration test: defender with ReactiveArmor property reflects damage to attacker
-- [ ] Integration test: defender without ReactiveArmor property — no change from V1
+- [x] Stub `Print()` as a debug-mode logger (like `SendSysMessage`/`PrintTextAbovePrivate`) — needed by enchantment scripts
+- [x] Parse and include `:combat:reactivearmoronhit.src` in the combat script set
+- [x] Verify the reactive armor script executes through the sub-script executor
+- [x] Handle the reactive armor flow: read `ReactiveArmor` property from defender → calculate return damage → apply to attacker
+- [x] Record reactive damage metrics via `__RecordSimulatorMetric`: retaliation, reduction, damage, additional_damage
+- [x] Add `CombatantSpec.properties` for setting mobile-level properties (e.g., ReactiveArmor)
+- [x] Add `reactive_rate` to `RatioStats`
+- [x] Integration test: defender with ReactiveArmor property reflects damage to attacker (player + NPC paths)
+- [x] Integration test: defender without ReactiveArmor property — no reactive metrics
+- [x] Integration test: ReactiveArmor consumed after trigger
+- [x] Integration test: reactive_rate aggregation
 
 **Depends on**: M15, M16
 
@@ -232,7 +234,7 @@ Weapon enchantments and reactive armor are launched via `start_script()`. This r
 | M14 | Elemental Damage Reporting | 1 | M13 | **Done** |
 | M15 | Sub-Script Executor | 2 | — | **Done** |
 | M16 | Fixture Sync for Enchantment Scripts | 2 | M15 | **Done** |
-| M17 | Reactive Armor | 2 | M15, M16 | Not started |
+| M17 | Reactive Armor | 2 | M15, M16 | **Done** |
 | M18 | Spell Strike Enchantments | 2 | M15, M16, M12 | Not started |
 | M19 | Effect Enchantments | 2 | M15, M16 | Not started |
 | M20 | Greater Enchantments | 2 | M15, M16, M12, M13 | Not started |

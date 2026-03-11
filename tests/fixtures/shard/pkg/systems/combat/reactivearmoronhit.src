@@ -14,11 +14,18 @@ program reactivearmoronhit( parms )
 
 	if( !attacker.IsA(POLCLASS_NPC) )
 		if( !attacker.cmdlevel )
-			ApplyTheDamage( attacker, defender, Cint(retaliation/8) );
+			var actual_dmg := Cint(retaliation/8);
+			if(DEBUG_MODE)
+				__RecordSimulatorMetric(struct{ "reactive_triggered" := 1, "reactive_retaliation" := retaliation, "reactive_reduction" := 8, "reactive_damage" := actual_dmg, "reactive_additional_damage" := actual_dmg });
+			endif
+			ApplyTheDamage( attacker, defender, actual_dmg );
 		endif
 	else
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric(struct{ "reactive_triggered" := 1, "reactive_retaliation" := retaliation, "reactive_reduction" := 1, "reactive_damage" := retaliation, "reactive_additional_damage" := retaliation });
+		endif
 		ApplyTheDamage( attacker, defender, retaliation );
 	endif
-	
+
 endprogram
 

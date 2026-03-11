@@ -72,6 +72,7 @@ class CombatantSpec:
     weapon: WeaponSpec | None = None
     armor: ArmorSpec | None = None
     npc_template: str | None = None
+    properties: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -189,6 +190,10 @@ def build_combatant(spec: CombatantSpec) -> tuple[Mobile, Weapon, Armor]:
     for class_id, level in spec.class_levels.items():
         mob.set_property(class_id, level)
 
+    # Mobile-level properties (e.g., ReactiveArmor)
+    for k, v in spec.properties.items():
+        mob.set_property(k, v)
+
     # Weapon
     weapon = build_weapon(spec.weapon) if spec.weapon is not None else Weapon(name="Fist")
     mob.equip(LAYER_HAND1, weapon)
@@ -254,5 +259,12 @@ def apply_variable(spec: CombatantSpec, parameter: str, value: Any) -> Combatant
         sub_field = parts[1]
         base = spec.armor or ArmorSpec()
         return dataclasses.replace(spec, armor=dataclasses.replace(base, **{sub_field: value}))
+
+    # Mobile properties (e.g., ReactiveArmor)
+    if field_name == "properties" and len(parts) == 2:
+        prop_name = parts[1]
+        new_props = dict(spec.properties)
+        new_props[prop_name] = value
+        return dataclasses.replace(spec, properties=new_props)
 
     raise ValueError(f"Unknown variable parameter: {parameter!r}")

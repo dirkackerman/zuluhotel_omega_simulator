@@ -136,3 +136,28 @@ This changelog tracks progress on V1.5 (Elemental & Enchanted Weapons). See [Pat
 - Verify `sync_fixtures.py --dry-run` previews the enchantment scripts
 
 **Key insight**: Discovery is data-driven — `hitscriptdesc.cfg` is the source of truth for which scripts exist. When the shard adds or removes enchantments, `sync_fixtures.py` automatically adapts without code changes.
+
+---
+
+## M17 — Reactive Armor
+
+**Summary**: Implemented the reactive armor on-hit script end-to-end. When a defender has a `ReactiveArmor` property, the combat pipeline calls `start_script(":combat:reactivearmoronhit", ...)` which reflects damage back to the attacker. Player attackers receive 1/8 retaliation; NPC attackers receive full. All pipeline values (retaliation, reduction factor, actual damage, additional damage) are recorded via `__RecordSimulatorMetric`.
+
+**Changes**:
+- **`reactivearmoronhit.src` instrumentation** (shard submodule): Added `__RecordSimulatorMetric` struct calls inside `if(DEBUG_MODE)` guards in both branches (player/NPC). Records: `reactive_triggered` (1), `reactive_retaliation` (pre-reduction), `reactive_reduction` (8 for players, 1 for NPCs), `reactive_damage` (actual), `reactive_additional_damage` (same as reactive_damage — explicit additional damage tracking).
+- **`CombatantSpec.properties`** (`scenario.py`): New `dict[str, Any]` field — mobile-level properties applied via `set_property()` during `build_combatant()`. Enables setting `ReactiveArmor` on defender specs.
+- **`apply_variable()` extension** (`scenario.py`): Added `properties.<name>` parameter path support for sweep variables.
+- **`RatioStats.reactive_rate`** (`stats.py`): New field tracking the fraction of hits that triggered reactive armor.
+- **`aggregate_cell()`** (`stats.py`): Counts `reactive_triggered` in metrics to compute `reactive_rate`.
+
+**Testing** (8 new tests):
+- Verify player attacker receives 1/8 retaliation damage with correct metrics (retaliation=20, reduction=8, damage=2)
+- Verify NPC attacker receives full retaliation with correct metrics (reduction=1, damage=20)
+- Verify no ReactiveArmor property → no reactive metrics recorded
+- Verify ReactiveArmor property is consumed (erased) after triggering
+- Verify `reactive_rate` computed correctly from metrics (50% = 2 of 4 hits)
+- Verify `reactive_rate` is 0 when no reactive triggers
+- Verify `CombatantSpec.properties` flows through to built mobile
+- Verify default CombatantSpec has empty properties
+
+**Key insight**: The reactive armor instrumentation captures the full pipeline: pre-reduction retaliation, reduction factor, and post-reduction damage. This lets reporting show both the theoretical damage and the actual damage dealt, with the reduction explicitly visible. No eScript or POL function signatures were modified — only `__RecordSimulatorMetric` calls were added.
