@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from omega.simulation.stats import CellResult, SimulationResult
+from omega.simulation.stats import CellResult, SimulationResult, TimingStats
 
 
 def _require_matplotlib():
@@ -540,6 +540,134 @@ def enchantment_comparison(
     ax.set_ylabel("Mean Damage")
     ax.set_title(title or "Enchantment Comparison")
     ax.legend()
+    fig.tight_layout()
+    plt.close(fig)
+    return fig
+
+
+def dps_vs_parameter(
+    result: SimulationResult,
+    variable_name: str,
+    *,
+    show_range: bool = True,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Any:
+    """Line plot of effective DPS vs. a swept parameter.
+
+    Shows effective DPS (accounting for hit rate) with optional damage-per-hit
+    p5–p95 shaded range for context.
+
+    Parameters
+    ----------
+    result:
+        A :class:`SimulationResult` from ``run_sweep()``.
+    variable_name:
+        The variable to plot on the x-axis.
+    show_range:
+        If True, shade the damage p5–p95 range (secondary axis).
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+
+    x_vals = []
+    dps_vals = []
+    delay_vals = []
+    for cell in result.cells:
+        if variable_name not in cell.variable_values:
+            continue
+        ts = cell.timing or TimingStats()
+        x_vals.append(cell.variable_values[variable_name])
+        dps_vals.append(ts.effective_dps)
+        delay_vals.append(ts.swing_delay_ms)
+
+    if not x_vals:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, f"No data for variable: {variable_name}",
+                ha="center", va="center", transform=ax.transAxes)
+        plt.close(fig)
+        return fig
+
+    fig, ax1 = plt.subplots(figsize=figsize)
+    ax1.plot(x_vals, dps_vals, marker="o", linewidth=2, color="#E53935",
+             label="Effective DPS")
+    ax1.set_xlabel(variable_name)
+    ax1.set_ylabel("DPS", color="#E53935")
+    ax1.tick_params(axis="y", labelcolor="#E53935")
+
+    # Secondary axis: swing delay
+    ax2 = ax1.twinx()
+    ax2.plot(x_vals, delay_vals, marker="s", linewidth=1, color="#1E88E5",
+             linestyle="--", alpha=0.7, label="Swing Delay (ms)")
+    ax2.set_ylabel("Swing Delay (ms)", color="#1E88E5")
+    ax2.tick_params(axis="y", labelcolor="#1E88E5")
+
+    ax1.set_title(title or f"DPS vs. {variable_name}")
+
+    # Combined legend
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
+
+    fig.tight_layout()
+    plt.close(fig)
+    return fig
+
+
+def dps_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Any:
+    """Bar chart comparing DPS across named scenarios.
+
+    Shows effective DPS with swing delay annotations.
+
+    Parameters
+    ----------
+    cells:
+        Mapping of scenario label → :class:`CellResult`.
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+
+    labels = list(cells.keys())
+    dps_vals = []
+    delays = []
+    for label in labels:
+        ts = cells[label].timing or TimingStats()
+        dps_vals.append(ts.effective_dps)
+        delays.append(ts.swing_delay_ms)
+
+    fig, ax = plt.subplots(figsize=figsize)
+
+    bars = ax.bar(labels, dps_vals, color="#E53935", edgecolor="black",
+                  linewidth=0.5, alpha=0.85)
+
+    # Label each bar with DPS value and swing delay
+    for bar, dps, delay in zip(bars, dps_vals, delays):
+        h = bar.get_height()
+        ax.text(bar.get_x() + bar.get_width() / 2, h + 0.2,
+                f"{dps:.2f}\n({delay:.0f}ms)",
+                ha="center", va="bottom", fontsize=9, fontweight="bold")
+
+    ax.set_ylabel("Effective DPS")
+    ax.set_title(title or "DPS Comparison")
     fig.tight_layout()
     plt.close(fig)
     return fig

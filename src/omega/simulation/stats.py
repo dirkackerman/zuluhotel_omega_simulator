@@ -157,6 +157,37 @@ class ElementalBreakdown:
         return {name: ed.prot for name, ed in self.elements.items() if ed.prot != 0.0}
 
 
+@dataclass(slots=True)
+class TimingStats:
+    """Swing timing and DPS metrics for a simulation cell.
+
+    Computed from the attacker's weapon speed, DEX, and modifiers using
+    POL's ``schedule_attack()`` formula.  All values are per-cell constants
+    (timing doesn't vary between iterations for the same attacker+weapon).
+    """
+
+    swing_delay_ms: float = 0.0
+    """Swing delay in milliseconds from POL's schedule_attack()."""
+
+    swings_per_second: float = 0.0
+    """Attack rate: ``1000 / swing_delay_ms``."""
+
+    dps_mean: float = 0.0
+    """Mean DPS over all swings (including misses): ``mean_damage * swings_per_second``."""
+
+    dps_on_hit: float = 0.0
+    """Mean DPS for hits only: ``mean_on_hit_damage * swings_per_second``.
+
+    Useful for TTK estimates when hit rate is handled separately.
+    """
+
+    effective_dps: float = 0.0
+    """Effective DPS accounting for hit rate: ``hit_rate * mean_on_hit * swings_per_second``.
+
+    Equivalent to ``dps_mean`` (both include misses in the average).
+    """
+
+
 @dataclass
 class CellResult:
     """Results for a single scenario (one cell in a sweep grid)."""
@@ -169,6 +200,9 @@ class CellResult:
     elemental_breakdown: ElementalBreakdown = field(default_factory=ElementalBreakdown)
     drain_stats: DamageStats = field(default_factory=DamageStats)
     """Stats for effect drain amount (mana/hp/stamina drained per hit)."""
+
+    timing: TimingStats | None = None
+    """Swing timing and DPS metrics.  ``None`` if no timing data available."""
 
     # On-hit variants — stats computed only over swings that connected
     damage_stats_on_hit: DamageStats = field(default_factory=DamageStats)
@@ -382,5 +416,21 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
     ]
     if any(d > 0 for d in drain_amounts_all):
         cell.drain_stats = _compute_damage_stats(drain_amounts_all)
+
+    # Timing / DPS — swing delay is constant across iterations for the same
+    # attacker+weapon combo, so we take it from the first successful result.
+    first_delay = successes[0].swing_delay_ms
+    if first_delay > 0:
+        swings_per_sec = 1000.0 / first_delay
+        mean_dmg = cell.damage_stats.mean
+        mean_on_hit = cell.damage_stats_on_hit.mean
+        hit_rate = cell.ratios.hit_rate
+        cell.timing = TimingStats(
+            swing_delay_ms=first_delay,
+            swings_per_second=swings_per_sec,
+            dps_mean=mean_dmg * swings_per_sec,
+            dps_on_hit=mean_on_hit * swings_per_sec,
+            effective_dps=hit_rate * mean_on_hit * swings_per_sec,
+        )
 
     return cell

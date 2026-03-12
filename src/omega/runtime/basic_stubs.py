@@ -8,6 +8,8 @@ from __future__ import annotations
 import math as pymath
 from typing import Any
 
+import re
+
 from omega.logging import get_logger
 from omega.runtime.context import get_context
 from omega.runtime.registry import pol_function
@@ -24,13 +26,20 @@ logger = get_logger("omega.runtime")
 @pol_function("", "CInt")
 @pol_function("util", "CInt")
 def cint(value: Any = None) -> int:
-    """Convert to integer. None/error → 0."""
+    """Convert to integer. None/error → 0.
+
+    POL uses strtol which parses "3.7" → 3.  We try int() first,
+    then fall back to int(float()) to match.
+    """
     if value is None:
         return 0
     try:
         return int(value)
     except (ValueError, TypeError):
-        return 0
+        try:
+            return int(float(value))
+        except (ValueError, TypeError):
+            return 0
 
 
 @pol_function("", "CDbl")
@@ -65,21 +74,31 @@ def hex_func(value: Any = None) -> str:
 
 
 @pol_function("", "Max")
-def max_func(a: Any = 0, b: Any = 0) -> Any:
-    """Return the larger of two values."""
+def max_func(a: Any = 0, b: Any = 0) -> float:
+    """Return the larger of two values. POL coerces to Double."""
     try:
-        return max(a, b)
-    except TypeError:
-        return a
+        fa = float(a)
+    except (TypeError, ValueError):
+        fa = 0.0
+    try:
+        fb = float(b)
+    except (TypeError, ValueError):
+        fb = 0.0
+    return max(fa, fb)
 
 
 @pol_function("", "Min")
-def min_func(a: Any = 0, b: Any = 0) -> Any:
-    """Return the smaller of two values."""
+def min_func(a: Any = 0, b: Any = 0) -> float:
+    """Return the smaller of two values. POL coerces to Double."""
     try:
-        return min(a, b)
-    except TypeError:
-        return a
+        fa = float(a)
+    except (TypeError, ValueError):
+        fa = 0.0
+    try:
+        fb = float(b)
+    except (TypeError, ValueError):
+        fb = 0.0
+    return min(fa, fb)
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +110,9 @@ def min_func(a: Any = 0, b: Any = 0) -> Any:
 @pol_function("basic", "TypeOf")
 def type_of(value: Any = None) -> str:
     """Return type string matching POL conventions."""
-    if value is None:
+    from omega.interpreter.types import UNINIT
+
+    if value is None or value is UNINIT:
         return "Uninit"
     if isinstance(value, bool):
         return "Integer"  # POL treats bools as ints
@@ -200,14 +221,22 @@ def exp_func(base: Any = 0, power: Any = 0) -> float:
 @pol_function("uo", "Random")
 def random_func(max_val: Any = 1) -> int:
     """Random integer in [1, max_val]. Matches POL's Random()."""
-    return get_rng().random(int(max_val))
+    try:
+        mv = int(max_val)
+    except (TypeError, ValueError):
+        return 0
+    return get_rng().random(mv)
 
 
 @pol_function("", "RandomInt")
 @pol_function("uo", "RandomInt")
 def random_int_func(max_val: Any = 1) -> int:
     """Random integer in [0, max_val-1]. Matches POL's RandomInt()."""
-    return get_rng().random_int(int(max_val))
+    try:
+        mv = int(max_val)
+    except (TypeError, ValueError):
+        return 0
+    return get_rng().random_int(mv)
 
 
 # ---------------------------------------------------------------------------
@@ -219,8 +248,10 @@ def random_int_func(max_val: Any = 1) -> int:
 @pol_function("basic", "SplitWords")
 def split_words(text: Any = "", delim: Any = None) -> list[str]:
     """Split string into array of words."""
+    from omega.interpreter.types import UNINIT
+
     s = str(text) if text is not None else ""
-    if delim is not None:
+    if delim is not None and delim is not UNINIT:
         return s.split(str(delim))
     return s.split()
 
@@ -242,11 +273,18 @@ def upper_func(text: Any = "") -> str:
 def substr_func(text: Any = "", start: Any = 1, length: Any = None) -> str:
     """Substring. POL uses 1-based indexing."""
     s = str(text) if text is not None else ""
-    idx = int(start) - 1  # convert to 0-based
+    try:
+        idx = int(start) - 1  # convert to 0-based
+    except (TypeError, ValueError):
+        idx = 0
     if idx < 0:
         idx = 0
     if length is not None:
-        return s[idx : idx + int(length)]
+        try:
+            ln = int(length)
+        except (TypeError, ValueError):
+            return s[idx:]
+        return s[idx : idx + ln]
     return s[idx:]
 
 
@@ -256,7 +294,10 @@ def find_func(text: Any = "", search: Any = "", start: Any = 1) -> int:
     """Find substring position (1-based). Returns 0 if not found."""
     s = str(text) if text is not None else ""
     needle = str(search) if search is not None else ""
-    offset = max(0, int(start) - 1)
+    try:
+        offset = max(0, int(start) - 1)
+    except (TypeError, ValueError):
+        offset = 0
     pos = s.find(needle, offset)
     return pos + 1 if pos >= 0 else 0
 
@@ -364,6 +405,18 @@ def sleepms(ms: Any = None) -> None:
     pass  # No delays in simulation
 
 
+@pol_function("os", "Sleep")
+@pol_function("", "Sleep")
+def sleep_func(seconds: Any = None) -> None:
+    pass  # No delays in simulation
+
+
+@pol_function("os", "set_script_option")
+@pol_function("", "set_script_option")
+def set_script_option(option: Any = None, value: Any = None) -> None:
+    pass  # No script options in simulation
+
+
 @pol_function("uo", "SetScriptController")
 @pol_function("", "SetScriptController")
 def set_script_controller(mobile: Any = None) -> None:
@@ -450,7 +503,10 @@ def set_priority(value: Any = None) -> int:
 def random_float(below: Any = 1.0) -> float:
     """Return random float in [0, below)."""
     rng = get_rng()
-    limit = float(below) if below is not None else 1.0
+    try:
+        limit = float(below)
+    except (TypeError, ValueError):
+        limit = 1.0
     return rng._rng.random() * limit
 
 
@@ -458,9 +514,13 @@ def random_float(below: Any = 1.0) -> float:
 @pol_function("", "LogE")
 def log_e(value: Any = None) -> float:
     """Natural logarithm."""
-    if value is None or float(value) <= 0:
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
         return 0.0
-    return pymath.log(float(value))
+    if v <= 0:
+        return 0.0
+    return pymath.log(v)
 
 
 @pol_function("util", "RandomDiceRoll")
@@ -471,7 +531,6 @@ def random_dice_roll(dice_string: Any = None, allow_negatives: Any = 0) -> int:
         return 0
     ds = str(dice_string).strip().lower()
     # Parse XdY+Z or XdY-Z
-    import re
     m = re.match(r'(\d+)d(\d+)([+-]\d+)?', ds)
     if not m:
         try:

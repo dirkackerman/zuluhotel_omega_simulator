@@ -1,5 +1,7 @@
 """Tests for control flow: break, continue, return, exit, nesting."""
 
+from unittest.mock import patch
+
 import omega.runtime  # noqa: F401
 
 from .helpers import run_function, run_snippet
@@ -204,3 +206,84 @@ class TestMemberAccess:
         var total := a + b + c;
         """
         assert run_snippet(code, "total") == 600
+
+
+class TestLoopIterationGuard:
+    """Tests for the _MAX_LOOP_ITERATIONS guard on while/do/repeat/cstyle-for."""
+
+    def test_while_loop_guard_breaks_infinite(self):
+        """Infinite while(1) should break at _MAX_LOOP_ITERATIONS."""
+        code = """
+        var x := 0;
+        while (1)
+            x := x + 1;
+        endwhile
+        """
+        with patch("omega.interpreter.evaluator._MAX_LOOP_ITERATIONS", 50):
+            assert run_snippet(code, "x") == 50
+
+    def test_do_loop_guard_breaks_infinite(self):
+        """Infinite do...while(1) should break at _MAX_LOOP_ITERATIONS."""
+        code = """
+        var x := 0;
+        do
+            x := x + 1;
+        dowhile (1);
+        """
+        with patch("omega.interpreter.evaluator._MAX_LOOP_ITERATIONS", 50):
+            assert run_snippet(code, "x") == 50
+
+    def test_repeat_loop_guard_breaks_infinite(self):
+        """Infinite repeat...until(0) should break at _MAX_LOOP_ITERATIONS."""
+        code = """
+        var x := 0;
+        repeat
+            x := x + 1;
+        until (0);
+        """
+        with patch("omega.interpreter.evaluator._MAX_LOOP_ITERATIONS", 50):
+            assert run_snippet(code, "x") == 50
+
+    def test_cstyle_for_loop_guard_breaks_infinite(self):
+        """Infinite for(;;) should break at _MAX_LOOP_ITERATIONS."""
+        code = """
+        var x := 0;
+        for (x := 0; 1; x := x)
+            x := x + 1;
+        endfor
+        """
+        with patch("omega.interpreter.evaluator._MAX_LOOP_ITERATIONS", 50):
+            assert run_snippet(code, "x") == 50
+
+    def test_normal_while_loop_not_affected(self):
+        """A while loop with 100 iterations should complete normally."""
+        code = """
+        var x := 0;
+        while (x < 100)
+            x := x + 1;
+        endwhile
+        """
+        assert run_snippet(code, "x") == 100
+
+    def test_normal_cstyle_for_not_affected(self):
+        """A C-style for loop with 100 iterations should complete normally."""
+        code = """
+        var x := 0;
+        for (x := 0; x < 100; x := x + 1)
+        endfor
+        """
+        assert run_snippet(code, "x") == 100
+
+    def test_break_works_in_guarded_loop(self):
+        """Break should exit before the guard triggers."""
+        code = """
+        var x := 0;
+        while (1)
+            x := x + 1;
+            if (x >= 10)
+                break;
+            endif
+        endwhile
+        """
+        with patch("omega.interpreter.evaluator._MAX_LOOP_ITERATIONS", 50):
+            assert run_snippet(code, "x") == 10

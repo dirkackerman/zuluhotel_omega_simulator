@@ -29,6 +29,13 @@ class HitResult:
     absorbed: float = 0.0
     """Total damage absorbed by armor."""
 
+    swing_delay_ms: float = 0.0
+    """Swing delay in milliseconds for this hit's attacker+weapon combination.
+
+    Calculated from POL's ``schedule_attack()`` formula using weapon speed/delay,
+    attacker DEX, and SwingSpeedIncrease modifiers.
+    """
+
     # Combat flags
     attacker_name: str = ""
     defender_name: str = ""

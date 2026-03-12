@@ -58,6 +58,8 @@ class Mobile(GameObject):
         self.cmdlevel: int = 0
         self.dead: bool = False
         self.hidden: bool = False
+        self.paralyzed: bool = False
+        self.frozen: bool = False
         self.master: Any = None
 
         # World position (used by banishscript etc.)
@@ -65,6 +67,14 @@ class Mobile(GameObject):
         self.y: int = 0
         self.z: int = 0
         self.realm: str = "britannia"
+
+        # Swing timer modifiers
+        self.delay_mod: int = 0
+        """Delay modifier in milliseconds (for delay-based weapons only).
+
+        Added to ``weapon.delay`` in POL's delay-based swing timer path
+        (``charactr.cpp:2855``).  Can be negative.
+        """
 
         # Base stats
         self.str_base: int = 10
@@ -105,6 +115,36 @@ class Mobile(GameObject):
     @property
     def dexterity(self) -> int:
         return self.dex_base + self.dex_mod // 10
+
+    # ------------------------------------------------------------------
+    # Swing speed
+    # ------------------------------------------------------------------
+
+    @property
+    def swing_speed_increase(self) -> int:
+        """Total SwingSpeedIncrease in hundredths (summed from mobile + equipment).
+
+        POL sums ``swing_speed_increase()`` across the character and all
+        equipped items (``charactr.cpp:2867``).  The value is in hundredths:
+        a value of 25 means 25% faster (modifier = 25/100 = 0.25).
+        """
+        total = 0
+        # Mobile's own SwingSpeedIncrease property
+        own = self._properties.get("SwingSpeedIncrease")
+        if own is not None:
+            try:
+                total += int(own)
+            except (TypeError, ValueError):
+                pass
+        # Sum from all equipped items' SwingSpeedIncrease properties
+        for item in self._equipment.values():
+            item_ssi = item.get_property("SwingSpeedIncrease")
+            if item_ssi is not None:
+                try:
+                    total += int(item_ssi)
+                except (TypeError, ValueError):
+                    pass
+        return total
 
     # ------------------------------------------------------------------
     # Skills

@@ -184,6 +184,9 @@ endfunction
 function ApplyTheAstralDamage( who, by_who, dmg, attack_type := DMGID_ASTRAL )
 
 	dmg := Cint(dmg);
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric("list:damage_applied", struct{ "type" := attack_type, "amount" := dmg });
+	endif
 	if( dmg <= 0 )
 		return 0;
 	elseif( who.dead )
@@ -191,8 +194,8 @@ function ApplyTheAstralDamage( who, by_who, dmg, attack_type := DMGID_ASTRAL )
 	elseif( IsImmunedFromThisDamageType( who, dmg, attack_type ) )
 		return 0;
 	endif
-	
-	var factor := 1.0;	
+
+	var factor := 1.0;
 	var master := FindMaster(by_who);
 	if( master )
 		by_who := master;

@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from omega.simulation.stats import CellResult, DamageStats, RatioStats, SimulationResult
+from omega.simulation.stats import CellResult, DamageStats, RatioStats, SimulationResult, TimingStats
 
 # Default stat columns for summary tables
 _DEFAULT_STATS = (
@@ -156,6 +156,9 @@ def _get_stat(cell: CellResult, name: str) -> Any:
 
     ds_hit = cell.damage_stats_on_hit
 
+    # Timing stats — use defaults if not computed
+    ts = cell.timing or TimingStats()
+
     stat_map: dict[str, Any] = {
         "mean": ds.mean,
         "median": ds.median,
@@ -197,6 +200,12 @@ def _get_stat(cell: CellResult, name: str) -> Any:
         # Elemental totals
         "elem_total_net": cell.elemental_breakdown.total_net,
         "elem_total_gross": cell.elemental_breakdown.total_gross,
+        # Timing / DPS
+        "swing_delay_ms": ts.swing_delay_ms,
+        "swings_per_sec": ts.swings_per_second,
+        "dps_mean": ts.dps_mean,
+        "dps_on_hit": ts.dps_on_hit,
+        "effective_dps": ts.effective_dps,
     }
 
     if name in stat_map:

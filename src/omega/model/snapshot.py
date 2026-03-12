@@ -27,9 +27,12 @@ class MobileSnapshot:
     max_stamina: int
     dead: bool
     hidden: bool
+    paralyzed: bool
+    frozen: bool
     str_mod: int
     int_mod: int
     dex_mod: int
+    delay_mod: int
     properties: dict[str, Any]
     equipment_hp: dict[int, int]  # layer → item.hp
 
@@ -54,9 +57,12 @@ def snapshot(mobile: Mobile) -> MobileSnapshot:
         max_stamina=mobile.max_stamina,
         dead=mobile.dead,
         hidden=mobile.hidden,
+        paralyzed=mobile.paralyzed,
+        frozen=mobile.frozen,
         str_mod=mobile.str_mod,
         int_mod=mobile.int_mod,
         dex_mod=mobile.dex_mod,
+        delay_mod=mobile.delay_mod,
         properties=copy.deepcopy(mobile._properties),
         equipment_hp=equip_hp,
     )
@@ -75,9 +81,12 @@ def restore(mobile: Mobile, snap: MobileSnapshot) -> None:
     mobile.max_stamina = snap.max_stamina
     mobile.dead = snap.dead
     mobile.hidden = snap.hidden
+    mobile.paralyzed = snap.paralyzed
+    mobile.frozen = snap.frozen
     mobile.str_mod = snap.str_mod
     mobile.int_mod = snap.int_mod
     mobile.dex_mod = snap.dex_mod
+    mobile.delay_mod = snap.delay_mod
 
     # Restore property bag (deep copy to avoid shared references)
     mobile._properties = copy.deepcopy(snap.properties)

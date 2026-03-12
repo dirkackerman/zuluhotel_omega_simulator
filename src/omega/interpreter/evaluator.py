@@ -42,6 +42,11 @@ _PRIMARY_RULE_TYPES: tuple[type, ...] = (
 
 logger = get_logger("omega.interpreter")
 
+# Maximum iterations for while/do/repeat loops before the interpreter
+# bails out.  Prevents infinite loops from polling scripts (e.g.,
+# astralincapacity.src) where Sleep is a no-op and state never changes.
+_MAX_LOOP_ITERATIONS = 100_000
+
 
 # --- Control flow signals ---
 
@@ -215,7 +220,14 @@ class EscriptInterpreter(EscriptParserVisitor):
         result = None
         par = ctx.parExpression()
         blk = ctx.block()
+        iterations = 0
         while is_truthy(self.visitParExpression(par)):
+            iterations += 1
+            if iterations > _MAX_LOOP_ITERATIONS:
+                logger.warning(
+                    f"While loop exceeded {_MAX_LOOP_ITERATIONS} iterations, breaking",
+                )
+                break
             try:
                 result = self.visitBlock(blk)
             except BreakSignal:
@@ -228,7 +240,14 @@ class EscriptInterpreter(EscriptParserVisitor):
         result = None
         par = ctx.parExpression()
         blk = ctx.block()
+        iterations = 0
         while True:
+            iterations += 1
+            if iterations > _MAX_LOOP_ITERATIONS:
+                logger.warning(
+                    f"Do loop exceeded {_MAX_LOOP_ITERATIONS} iterations, breaking",
+                )
+                break
             try:
                 result = self.visitBlock(blk)
             except BreakSignal:
@@ -243,7 +262,14 @@ class EscriptInterpreter(EscriptParserVisitor):
         result = None
         expr = ctx.expression()
         blk = ctx.block()
+        iterations = 0
         while True:
+            iterations += 1
+            if iterations > _MAX_LOOP_ITERATIONS:
+                logger.warning(
+                    f"Repeat loop exceeded {_MAX_LOOP_ITERATIONS} iterations, breaking",
+                )
+                break
             try:
                 result = self.visitBlock(blk)
             except BreakSignal:
@@ -290,7 +316,14 @@ class EscriptInterpreter(EscriptParserVisitor):
         # init
         self.visitExpression(exprs[0])
         result = None
+        iterations = 0
         while is_truthy(self.visitExpression(exprs[1])):
+            iterations += 1
+            if iterations > _MAX_LOOP_ITERATIONS:
+                logger.warning(
+                    f"C-style for loop exceeded {_MAX_LOOP_ITERATIONS} iterations, breaking",
+                )
+                break
             try:
                 result = self.visitBlock(blk)
             except BreakSignal:

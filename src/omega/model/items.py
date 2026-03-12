@@ -42,6 +42,7 @@ class Weapon(GameObject):
         color: int = 0,
         damage: DiceSpec | None = None,
         speed: int = 50,
+        delay: int = 0,
         attribute: int = 0,
         two_handed: bool = False,
         quality: float = 1.0,
@@ -52,6 +53,13 @@ class Weapon(GameObject):
         super().__init__(objtype=objtype, graphic=graphic, name=name, color=color)
         self.damage: DiceSpec = damage or DiceSpec(count=1, sides=4, bonus=0)
         self.speed: int = speed
+        self.delay: int = delay
+        """Explicit delay in milliseconds (alternative to speed).
+
+        When ``delay > 0``, the delay-based swing timer path is used
+        instead of the speed-based path.  Matches POL's ``WeaponDesc::delay``
+        (``weapon.cpp:87``).
+        """
         self.attribute: int = attribute
         self.two_handed: bool = two_handed
         self.quality: float = quality

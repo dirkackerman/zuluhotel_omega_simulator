@@ -345,7 +345,7 @@ class TestExecuteHitSideEffects:
             base_damage=10, core_hit_check=False,
         )
         assert result.success
-        assert any(se.kind == "poison" for se in result.side_effects)
+        assert any(se.kind == "poison_applied" for se in result.side_effects)
         assert any(se.kind == "damage" for se in result.side_effects)
 
     def test_cursed_armor_doubles_damage(self):

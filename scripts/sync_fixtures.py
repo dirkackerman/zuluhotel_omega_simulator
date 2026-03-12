@@ -250,6 +250,7 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
     # via includes but referenced at runtime via start_script).
     extra_scripts = [
         "pkg/opt/summoning/processpoisonmod.src",   # SetPoison → start_script
+        "pkg/opt/astralfights/astralincapacity.src",  # SetAstralIncapacity → start_script
     ]
     print("\nCopying extra runtime scripts...")
     for rel_path in extra_scripts:

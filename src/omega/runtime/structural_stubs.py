@@ -158,14 +158,34 @@ def get_config_string_keys(cfg: Any = None) -> list[str]:
 def apply_raw_damage(mobile: Any = None, amount: Any = 0) -> None:
     """Apply raw damage to a mobile.
 
-    Subtracts from HP and records in simulation context.
+    Matches POL charactr.cpp:1734-1782:
+    - Returns immediately if target is already dead
+    - Unhides the mobile on damage
+    - Removes paralysis on damage
+    - Rounds float damage (not truncate)
+    - Subtracts from HP and records in simulation context.
     """
     if mobile is None:
         return
 
-    dmg = int(amount) if amount is not None else 0
+    # POL: if (dead()) return;  (charactr.cpp:1738)
+    if getattr(mobile, "dead", False):
+        return
+
+    try:
+        dmg = int(round(float(amount))) if amount is not None else 0
+    except (TypeError, ValueError):
+        return
     if dmg <= 0:
         return
+
+    # POL: if (hidden()) unhide();  (charactr.cpp:1762)
+    if getattr(mobile, "hidden", False):
+        mobile.hidden = False
+
+    # POL: if (paralyzed()) mob_flags_.remove(PARALYZED);  (charactr.cpp:1766)
+    if getattr(mobile, "paralyzed", False):
+        mobile.paralyzed = False
 
     mobile.hp = max(0, mobile.hp - dmg)
     if mobile.hp <= 0:
@@ -306,7 +326,7 @@ def set_poisoned(mobile: Any = None, level: Any = 0) -> None:
         return
     ctx = get_context()
     ctx.record_side_effect(
-        kind="poison",
+        kind="poison_applied",
         target_serial=getattr(mobile, "serial", 0),
         value=int(level) if level else 0,
     )
@@ -329,10 +349,13 @@ def set_paralyzed(mobile: Any = None, flag: Any = None) -> None:
 
 @pol_function("uo", "DestroyItem")
 @pol_function("", "DestroyItem")
-def destroy_item(item: Any = None) -> None:
-    """Destroy an item. Records as side effect."""
+def destroy_item(item: Any = None) -> Any:
+    """Destroy an item. Records as side effect.
+
+    POL returns BLong(1) on success (uomod.cpp:2628).
+    """
     if item is None:
-        return
+        return None
     ctx = get_context()
     ctx.record_side_effect(
         kind="item_destroyed",
@@ -340,6 +363,7 @@ def destroy_item(item: Any = None) -> None:
         detail=getattr(item, "name", "unknown"),
     )
     logger.debug("DestroyItem", item=getattr(item, "name", "?"))
+    return 1
 
 
 @pol_function("uo", "EquipItem")

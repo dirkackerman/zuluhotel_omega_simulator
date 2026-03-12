@@ -19,6 +19,7 @@ from typing import Any
 
 from omega.combat.damage import roll_base_damage
 from omega.combat.result import HitResult
+from omega.combat.timing import calculate_swing_delay
 from omega.interpreter.executor import Executor
 from omega.interpreter.types import EStruct
 from omega.logging import get_logger
@@ -138,10 +139,14 @@ def execute_hit(
     """
     import omega.runtime  # noqa: F401 — ensure stubs are registered
 
+    # Calculate swing delay (constant for a given attacker+weapon, computed once)
+    swing_delay_ms = calculate_swing_delay(attacker, weapon)
+
     result = HitResult(
         attacker_name=attacker.name,
         defender_name=defender.name,
         defender_hp_before=defender.hp,
+        swing_delay_ms=swing_delay_ms,
     )
 
     # Set up RNG

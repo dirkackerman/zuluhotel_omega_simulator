@@ -42,12 +42,16 @@ def set_obj_property(obj: Any = None, name: Any = None, value: Any = None) -> No
 
 @pol_function("uo", "EraseObjProperty")
 @pol_function("", "EraseObjProperty")
-def erase_obj_property(obj: Any = None, name: Any = None) -> None:
-    """Erase a custom property from a game object."""
+def erase_obj_property(obj: Any = None, name: Any = None) -> Any:
+    """Erase a custom property from a game object.
+
+    POL returns BLong(1) on success.
+    """
     if obj is None or name is None:
-        return
+        return 1
     if hasattr(obj, "erase_property"):
         obj.erase_property(str(name))
+    return 1
 
 
 # ---------------------------------------------------------------------------
@@ -107,21 +111,30 @@ def get_intelligence_mod(mobile: Any = None) -> int:
 @pol_function("", "SetStrengthMod")
 def set_strength_mod(mobile: Any = None, value: Any = 0) -> None:
     if mobile is not None:
-        mobile.str_mod = int(value)
+        try:
+            mobile.str_mod = int(value)
+        except (TypeError, ValueError):
+            return
 
 
 @pol_function("vitals", "SetDexterityMod")
 @pol_function("", "SetDexterityMod")
 def set_dexterity_mod(mobile: Any = None, value: Any = 0) -> None:
     if mobile is not None:
-        mobile.dex_mod = int(value)
+        try:
+            mobile.dex_mod = int(value)
+        except (TypeError, ValueError):
+            return
 
 
 @pol_function("vitals", "SetIntelligenceMod")
 @pol_function("", "SetIntelligenceMod")
 def set_intelligence_mod(mobile: Any = None, value: Any = 0) -> None:
     if mobile is not None:
-        mobile.int_mod = int(value)
+        try:
+            mobile.int_mod = int(value)
+        except (TypeError, ValueError):
+            return
 
 
 # ---------------------------------------------------------------------------
@@ -168,7 +181,10 @@ def set_hp(mobile: Any = None, value: Any = 0) -> None:
     """Set HP on a mobile, clamped to [0, max_hp]. Records side effect."""
     if mobile is None:
         return
-    new_val = int(value)
+    try:
+        new_val = int(value)
+    except (TypeError, ValueError):
+        return
     max_hp = getattr(mobile, "max_hp", new_val)
     new_val = max(0, min(new_val, max_hp))
     old_hp = mobile.hp
@@ -189,10 +205,15 @@ def set_hp(mobile: Any = None, value: Any = 0) -> None:
 @pol_function("uo", "SetMana")
 @pol_function("", "SetMana")
 def set_mana(mobile: Any = None, value: Any = 0) -> None:
-    """Set mana on a mobile. Records side effect with delta."""
+    """Set mana on a mobile, clamped to [0, max_mana]. Records side effect with delta."""
     if mobile is None:
         return
-    new_val = int(value)
+    try:
+        new_val = int(value)
+    except (TypeError, ValueError):
+        return
+    max_mana = getattr(mobile, "max_mana", new_val)
+    new_val = max(0, min(new_val, max_mana))
     old_mana = mobile.mana
     mobile.mana = new_val
     delta = new_val - old_mana
@@ -211,10 +232,15 @@ def set_mana(mobile: Any = None, value: Any = 0) -> None:
 @pol_function("uo", "SetStamina")
 @pol_function("", "SetStamina")
 def set_stamina(mobile: Any = None, value: Any = 0) -> None:
-    """Set stamina on a mobile. Records side effect with delta."""
+    """Set stamina on a mobile, clamped to [0, max_stamina]. Records side effect with delta."""
     if mobile is None:
         return
-    new_val = int(value)
+    try:
+        new_val = int(value)
+    except (TypeError, ValueError):
+        return
+    max_stamina = getattr(mobile, "max_stamina", new_val)
+    new_val = max(0, min(new_val, max_stamina))
     old_stamina = mobile.stamina
     mobile.stamina = new_val
     delta = new_val - old_stamina
@@ -303,7 +329,10 @@ def set_vital(mobile: Any = None, vital_id: Any = None, value: Any = 0) -> int:
     max_attr = attrs[1]      # e.g. "max_hp", "max_mana", "max_stamina"
     old_val = getattr(mobile, current_attr, 0)
     # POL stores in hundredths; convert back to display units
-    new_val = max(0, int(value) // 100)
+    try:
+        new_val = max(0, int(value) // 100)
+    except (TypeError, ValueError):
+        return 0
     max_val = getattr(mobile, max_attr, new_val)
     new_val = min(new_val, max_val)
     setattr(mobile, current_attr, new_val)
@@ -329,16 +358,20 @@ def set_vital(mobile: Any = None, vital_id: Any = None, value: Any = 0) -> int:
 @pol_function("vitals", "HealDamage")
 @pol_function("uo", "HealDamage")
 @pol_function("", "HealDamage")
-def heal_damage(mobile: Any = None, amount: Any = 0) -> None:
+def heal_damage(mobile: Any = None, amount: Any = 0) -> Any:
     """Heal a mobile by restoring HP, capped at max_hp.
 
     Records as a side effect for tracking over-protection healing.
+    POL returns BLong(1) on success.
     """
     if mobile is None:
-        return
-    amt = int(amount) if amount is not None else 0
+        return None
+    try:
+        amt = int(amount) if amount is not None else 0
+    except (TypeError, ValueError):
+        return None
     if amt <= 0:
-        return
+        return None
     old_hp = mobile.hp
     mobile.hp = min(getattr(mobile, "max_hp", mobile.hp + amt), mobile.hp + amt)
 
@@ -351,6 +384,7 @@ def heal_damage(mobile: Any = None, amount: Any = 0) -> None:
         value=amt,
     )
     logger.debug("HealDamage", target=getattr(mobile, "name", "?"), amount=amt, hp=mobile.hp)
+    return 1
 
 
 @pol_function("vitals", "SetHpRegenRate")
@@ -370,8 +404,12 @@ def get_effective_skill(mobile: Any = None, skill_id: Any = None) -> int:
     """Get effective skill value (display units, 0-200)."""
     if mobile is None or skill_id is None:
         return 0
+    try:
+        sid = int(skill_id)
+    except (TypeError, ValueError):
+        return 0
     if hasattr(mobile, "get_effective_skill"):
-        return mobile.get_effective_skill(int(skill_id))
+        return mobile.get_effective_skill(sid)
     return 0
 
 
@@ -392,7 +430,11 @@ def get_attribute(
         return 0
     if hasattr(mobile, "get_attribute"):
         tenths = mobile.get_attribute(str(attr_name))
-        if int(precision) == 0:
+        try:
+            prec = int(precision)
+        except (TypeError, ValueError):
+            prec = 0
+        if prec == 0:
             # ATTRIBUTE_PRECISION_NORMAL: return display value
             return tenths // 10
         # ATTRIBUTE_PRECISION_TENTHS: return raw tenths
@@ -403,8 +445,8 @@ def get_attribute(
 @pol_function("", "GetAttributeBaseValue")
 @pol_function("attributes", "GetAttributeBaseValue")
 def get_attribute_base_value(mobile: Any = None, attr_name: Any = None) -> int:
-    """Get base attribute value (same as GetAttribute in V1 — no temp mods)."""
-    return get_attribute(mobile, attr_name)
+    """Get base attribute value in tenths (POL returns av.base(), raw tenths)."""
+    return get_attribute(mobile, attr_name, 1)
 
 
 @pol_function("", "GetBaseSkill")
@@ -422,7 +464,10 @@ def set_base_skill(
     """Set base skill value."""
     if mobile is not None and skill_id is not None and value is not None:
         if hasattr(mobile, "set_skill"):
-            mobile.set_skill(int(skill_id), int(value))
+            try:
+                mobile.set_skill(int(skill_id), int(value))
+            except (TypeError, ValueError):
+                return
 
 
 @pol_function("", "GetAttributeIdBySkillId")
@@ -431,7 +476,10 @@ def get_attribute_id_by_skill_id(skill_id: Any = None) -> str:
     """Convert a numeric skill ID to an attribute name string."""
     if skill_id is None:
         return ""
-    return SKILLID_TO_ATTRIBUTE.get(int(skill_id), "")
+    try:
+        return SKILLID_TO_ATTRIBUTE.get(int(skill_id), "")
+    except (TypeError, ValueError):
+        return ""
 
 
 # ---------------------------------------------------------------------------
@@ -448,8 +496,12 @@ def get_equipment_by_layer(mobile: Any = None, layer: Any = None) -> Any:
     """
     if mobile is None or layer is None:
         return None
+    try:
+        layer_int = int(layer)
+    except (TypeError, ValueError):
+        return None
     if hasattr(mobile, "get_equipped"):
-        return mobile.get_equipped(int(layer))
+        return mobile.get_equipped(layer_int)
     return None
 
 

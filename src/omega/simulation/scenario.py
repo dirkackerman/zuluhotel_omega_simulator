@@ -48,6 +48,7 @@ class WeaponSpec:
     name: str = "Weapon"
     damage: str = "3d6+2"
     speed: int = 50
+    delay: int = 0
     attribute: int = SKILLID_SWORDSMANSHIP
     two_handed: bool = False
     quality: float = 1.0
@@ -181,6 +182,7 @@ def build_weapon(
         name=spec.name,
         damage=parse_dice(spec.damage),
         speed=spec.speed,
+        delay=spec.delay,
         attribute=spec.attribute,
         two_handed=spec.two_handed,
         quality=spec.quality,

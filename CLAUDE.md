@@ -216,10 +216,11 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 - Reactive armor
 
 ### V2 — Spell & Resistance Flows
+- **Virtual time calculation**: POL-conformant swing delay from weapon speed, DEX, and SwingSpeedIncrease — enables DPS metrics for weapon/build comparison
 - Spell casting weapons (spellonhit, spellstrikescript)
 - Spell resistance calculations
 - Reactive armor with spell resistance
-- Expanded stats for magical damage types
+- Expanded stats for magical damage types (+ DPS: mean, on-hit, effective)
 - **POL stub conformance audit**: Review every POL built-in stub in `src/omega/runtime/` against its C++ implementation in `submodules/polserver/pol-core/`. For each stub: (1) read the POL source to understand exact semantics (return values, edge cases, side effects); (2) verify our Python implementation matches; (3) fix any divergences; (4) write a unit test per stub that encodes the POL behaviour so regressions are caught. Priority stubs: `execute_hit` flow (`run_hit_script` vs `apply_damage` dispatch in `charactr.cpp`), `ApplyRawDamage`, `start_script`, `ReadConfigFile`, property bags (`GetObjProperty`/`SetObjProperty`), stat accessors, `Distance`, `Random`/`RandomInt`. This audit prevents bugs like the M18 double-damage issue where our stub behaviour diverged from POL's either/or hitscript dispatch.
 
 ### V3 — Damage Spell Casting
@@ -249,7 +250,7 @@ pytest -n auto            # parallel via pytest-xdist (~36s, preferred)
 All tests run unconditionally — no markers, no skips, no submodule dependency.
 
 ### Test fixture locality principle
-- Tests **never** directly reference the shard submodule. All shard resources are snapshotted into `tests/fixtures/shard/` (246 files, 962 KB).
+- Tests **never** directly reference the shard submodule. All shard resources are snapshotted into `tests/fixtures/shard/` (247 files, 2332 KB).
 - `tests/conftest.py` provides session-scoped fixtures: `fixture_shard` (ShardData), `fixture_parse_results` (parsed combat scripts).
 - `FIXTURE_SHARD_ROOT` from `tests/conftest.py` is the canonical path for all test files needing shard data.
 
@@ -289,7 +290,7 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **[Path to V1.5](./planning/path_to_v1.5.md)** — Elemental & Enchanted Weapons roadmap (M12–M22), three phases: elemental damage, sub-script execution, polish
 - **[Changelog to V1.5](./changelog/changelog_to_v1.5.md)** — Per-milestone change summaries for V1.5
 - **V2 status**: Not started.
-- **[Path to V2](./planning/path_to_v2.md)** — Spell & Resistance Flows roadmap (M-V2.1–M-V2.7): POL stub conformance audit, astral damage validation, reactive armor + resistance integration, notebook enrichment
+- **[Path to V2](./planning/path_to_v2.md)** — Spell & Resistance Flows roadmap (M-V2.1–M-V2.8): POL stub conformance audit, virtual time & DPS metrics, astral damage validation, reactive armor + resistance integration, notebook enrichment
 - **[Changelog to V2](./changelog/changelog_to_v2.md)** — Per-milestone change summaries for V2
 - **[Path to V3](./planning/path_to_v3.md)** — Damage Spell Casting roadmap (M23–M29): spell config, execution engine, single-target + AoE spells, runner/stats, reporting/notebooks, stub audit
 

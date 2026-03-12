@@ -222,6 +222,7 @@ function RecalcAstralDmg( attacker, defender, weapon, armor, byref basedamage, p
 	var rawdamage;
 	weapon := weapon;
 	var absorbed := 0;
+	var meditation_triggered := 0;
 
 	var ar := CInt( GetObjProperty( armor , "Astral" ) ) * 25 * CInt( armor.ar );
 
@@ -266,6 +267,7 @@ function RecalcAstralDmg( attacker, defender, weapon, armor, byref basedamage, p
 
 		if( (Random(100) + 1) <= CInt( meditation * 0.5 ) )
 
+			meditation_triggered := 1;
 			var resist := GetEffectiveSkill( defender , SKILLID_MAGICRESISTANCE );
 			var defint := GetIntelligence(defender);
 
@@ -296,6 +298,10 @@ function RecalcAstralDmg( attacker, defender, weapon, armor, byref basedamage, p
 	rawdamage := rawdamage * 0.5;
 	if( rawdamage < 0 )
 		rawdamage := 0;
+	endif
+
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric(struct{ "astral_basedamage" := basedamage, "astral_rawdamage" := rawdamage, "astral_absorbed" := absorbed, "astral_ar" := ar, "astral_meditation_triggered" := meditation_triggered });
 	endif
 
 	return CInt(rawdamage);

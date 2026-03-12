@@ -35,6 +35,17 @@ class TestSnapshot:
         assert snap.properties[CLASSEID_WARRIOR] == 5
         assert snap.properties["Type"] == "Human"
 
+    def test_captures_frozen(self):
+        m = Mobile()
+        m.frozen = True
+        snap = snapshot(m)
+        assert snap.frozen is True
+
+    def test_captures_frozen_default(self):
+        m = Mobile()
+        snap = snapshot(m)
+        assert snap.frozen is False
+
     def test_captures_equipment_hp(self):
         m = Mobile()
         w = Weapon(name="Sword", hp=50, max_hp=50)
@@ -91,6 +102,24 @@ class TestRestore:
         m.dead = True
         restore(m, snap)
         assert not m.dead
+
+    def test_restores_frozen(self):
+        m = Mobile()
+        m.frozen = True
+        snap = snapshot(m)
+
+        m.frozen = False
+        restore(m, snap)
+        assert m.frozen is True
+
+    def test_restores_frozen_to_false(self):
+        m = Mobile()
+        m.frozen = False
+        snap = snapshot(m)
+
+        m.frozen = True
+        restore(m, snap)
+        assert m.frozen is False
 
     def test_restores_properties(self):
         m = Mobile()
