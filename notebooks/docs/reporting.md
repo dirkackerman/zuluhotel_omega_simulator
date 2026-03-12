@@ -15,6 +15,9 @@ from omega.reporting.plots import (
     elemental_breakdown_chart,
     elemental_vs_parameter,
     enchantment_comparison,
+    # V2 DPS plots
+    dps_vs_parameter,
+    dps_comparison,
 )
 ```
 
@@ -68,6 +71,11 @@ def summary_table(
 | `"effect_rate"` | `ratios.effect_rate` | Fraction of hits firing an effect/greater enchantment (V1.5) |
 | `"elem_total_net"` | `elemental_breakdown.total_net` | Total net elemental damage (V1.5) |
 | `"elem_total_gross"` | `elemental_breakdown.total_gross` | Total gross elemental damage (V1.5) |
+| `"swing_delay_ms"` | `timing.swing_delay_ms` | Swing delay in milliseconds (V2) |
+| `"swings_per_sec"` | `timing.swings_per_second` | Attack rate (V2) |
+| `"dps_mean"` | `timing.dps_mean` | Mean DPS including misses (V2) |
+| `"dps_on_hit"` | `timing.dps_on_hit` | DPS on connected swings only (V2) |
+| `"effective_dps"` | `timing.effective_dps` | Effective DPS accounting for hit rate (V2) |
 | `"errors"` | `error_count` | Number of failed iterations |
 
 **Example:**
@@ -356,6 +364,51 @@ results = {
     "Silver": run_scenario(silver_scenario, shard=shard),
 }
 enchantment_comparison(results, title="Enchantment Effectiveness")
+```
+
+### dps_vs_parameter() (V2)
+
+Dual-axis line plot of DPS and swing delay vs. a swept parameter.
+
+```python
+def dps_vs_parameter(
+    result: SimulationResult,
+    variable_name: str,
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Figure
+```
+
+Left axis shows effective DPS (line), right axis shows swing delay in milliseconds (dashed line). Useful for understanding how DEX or weapon speed affects both attack rate and damage output simultaneously.
+
+```python
+result = run_sweep(dex_sweep, shard=shard)
+dps_vs_parameter(result, "attacker.dex_", title="DPS vs Dexterity")
+```
+
+### dps_comparison() (V2)
+
+Bar chart comparing DPS across named scenarios with delay annotations.
+
+```python
+def dps_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Figure
+```
+
+Each bar shows effective DPS with the swing delay annotated. Useful for comparing weapons with different speeds to see which delivers the best sustained damage output.
+
+```python
+results = {
+    "Slow Axe (Speed 15)": axe_result,
+    "Medium Sword (Speed 50)": sword_result,
+    "Fast Bow (Speed 98)": bow_result,
+}
+dps_comparison(results, title="DPS by Weapon Speed")
 ```
 
 ## Combining tables and plots

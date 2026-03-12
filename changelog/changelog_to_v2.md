@@ -276,4 +276,34 @@ Audited all exact-value assertions across the test suite. All are appropriate �
 
 ## M-V2.8 — Notebook Enrichment & Documentation Update
 
-*Not yet started.*
+Comprehensive update of all documentation pages and notebooks with V2 content: DPS/timing metrics, astral damage path, spell resistance with class modifiers, and stub audit findings.
+
+### Documentation Updates (8 files)
+
+- **concepts.md** — Virtual time & DPS section (swing delay formula, DPS metrics table, plot examples), astral damage pipeline diagram with physical vs astral comparison table, spell resistance & class modifiers (base formula, class modifier tables)
+- **results.md** — `swing_delay_ms` on HitResult, `timing` on CellResult, full TimingStats section with fields, example code, interpretation guide, astral damage metrics section
+- **runtime.md** — Fixed `start_script()` description (V1.5+ dispatches to sub-script executor), V2 stubs (Sleep, set_script_option), loop iteration guard docs, comprehensive V2 stub audit section (M-V2.1 through M-V2.3 findings)
+- **constants-reference.md** — Timing constants (POLCLOCKS_PER_SEC, speed formula numerator, SSI clamp), shard weapon speed range table, astral damage constants, spell resistance constants
+- **messages-and-metrics.md** — V2 astral metrics table (5 new metric keys)
+- **reporting.md** — DPS imports, 5 new DPS stat columns, `dps_vs_parameter()` and `dps_comparison()` plot documentation
+- **examples.md** — 4 new recipes: DPS comparison across weapons (R14), DPS vs Dexterity curve (R15), astral damage analysis (R16), spell resistance by class (R17)
+- **README.md** — V2 features listed, note about V2 sections in all notebooks
+
+### Notebook Updates (4 notebooks)
+
+- **NB01 (basic_damage)** — DPS & Swing Timing section (TimingStats display + DPS table), Astral Damage section (astral mage scenario with per-hit metric inspection). Fixed invalid `max_mana`/`max_stamina` fields in CombatantSpec.
+- **NB02 (skill_sweep)** — DPS vs Dexterity sweep (DEX 25–130, DPS + delay dual-axis plot), DPS vs Weapon Speed sweep (speed 15–95, linear DPS scaling), summary tables with timing columns
+- **NB03 (class_comparison)** — DPS Comparison bar chart across classes, DPS comparison table with timing columns, Spell Resistance by Defender Class section (Hellfire spell strike vs Warrior/Mage/Paladin/Bladesinger/Ranger defenders)
+- **NB05 (enchantments)** — DPS Comparison: Enchanted vs Plain section (6 enchantment types side-by-side), Spell Resistance Impact on Enchantments section (Hellfire vs NPC/Warrior/Mage/Paladin defenders showing class resistance modifiers)
+
+### Bug Fix
+
+- **NB01 astral cell** — Removed invalid `max_mana=500, max_stamina=200` from CombatantSpec (only `mana` and `stamina` are valid fields; max values auto-set in `build_combatant()`)
+
+### Test Scenarios
+
+No new tests — documentation and notebook-only changes. Full suite verified.
+
+### Stats
+
+- 1533 tests passing, 0 skipped

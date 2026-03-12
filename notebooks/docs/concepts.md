@@ -144,9 +144,10 @@ Base Damage (random roll, 5–20 for 3d6+2)
 │    6. Protection enchant               │
 │    7. Mace fighting effects            │
 │                                        │
-│  Astral path (not in V1):             │
-│    Spirit Speak, Meditation resist,    │
-│    astral armor, 50% base reduction    │
+│  Astral path (V2):                     │
+│    Spirit Speak scaling → class bonus  │
+│    → meditation resist → astral armor  │
+│    → 50% reduction → mana/stam drain   │
 │                                        │
 └────────────────────────────────────────┘
     │
@@ -240,6 +241,178 @@ This means the simulator executes the **real shard scripts** — the same `mainh
 
 See [Runtime](runtime.md) for details on how the interpreter, stubs, and context work together.
 
+## Virtual time & DPS (V2)
+
+The simulator models POL's swing timer to compute **damage per second (DPS)** — the primary metric for weapon and build comparison.
+
+### Swing delay formula
+
+Source: `Character::schedule_attack()` in POL's `charactr.cpp:2832–2881`. Clock unit: 1 POL clock = 10ms.
+
+**Speed-based path** (all ZH weapons):
+```
+clocks = 1_500_000 / ((DEX + 100) × SPEED)
+delay_ms = clocks × 10
+```
+
+**Delay-based path** (when `weapon.delay > 0`):
+```
+delay_sum = max(0, weapon.delay + char.delay_mod)
+clocks = (delay_sum × 100) / 1000
+delay_ms = clocks × 10
+```
+
+Both paths then apply **SwingSpeedIncrease** (from equipment/enchantments):
+```
+modifier = clamp(SSI_sum / 100, min=-0.99)
+clocks = round(clocks / (1 + modifier))
+```
+
+The `round()` uses C++ semantics (half away from zero), not Python's banker's rounding.
+
+### DPS metrics
+
+Each `CellResult` includes a `TimingStats` object with:
+
+| Field | Description |
+|-------|-------------|
+| `swing_delay_ms` | Milliseconds between swings |
+| `swings_per_second` | Attack rate: `1000 / swing_delay_ms` |
+| `dps_mean` | Mean DPS over all swings (including misses) |
+| `dps_on_hit` | DPS considering only hits |
+| `effective_dps` | `hit_rate × mean_on_hit × swings_per_second` |
+
+DPS columns are available in `summary_table()` and `comparison_table()`:
+```python
+rows = summary_table(result, stats=["mean", "dps_mean", "swing_delay_ms", "effective_dps"])
+```
+
+### DPS plots
+
+```python
+from omega.reporting.plots import dps_vs_parameter, dps_comparison
+
+# DPS curve across a parameter sweep (dual-axis: damage + delay)
+dps_vs_parameter(result, "attacker.skills.27", title="DPS vs Tactics")
+
+# DPS bar chart comparing named scenarios
+dps_comparison({"Sword": sword_result, "Mace": mace_result})
+```
+
+## Astral damage path (V2)
+
+Astral damage is a completely separate pipeline from physical damage. It drains **mana and stamina** instead of HP, and uses **Spirit Speak** and **Meditation** instead of STR and AR.
+
+### When the astral path triggers
+
+A weapon with the `Astral` property set (`GetObjProperty(weapon, "Astral") == 1`) routes through `RecalcAstralDmg()` instead of `RecalcPhysicalDmg()`.
+
+### Astral pipeline
+
+```
+Base Damage (weapon dice roll)
+    │
+    ▼
+Spirit Speak Scaling
+    basedamage *= (SpiritSpeak + 50 + INT×0.2) / (Tactics + 50 + STR×0.2)
+    │
+    ▼
+EvalInt Multiplier
+    basedamage *= 1 + EvalInt × 0.002
+    │
+    ▼
+Class Bonus (attacker)
+    Mage vs NPC: ClasseBonusByLevel(level - 2)
+    Mage vs Player: ClasseBonusByLevel(level - 2)
+    │
+    ▼
+Class Penalty (defender)
+    Warrior (non-Mage): basedamage *= 5/6
+    │
+    ▼
+Meditation Resistance
+    if Random(1000) >= chance: absorbed via meditation
+    │
+    ▼
+Astral Armor
+    ar = Astral_property × 25 × armor.ar
+    absorbed = basedamage × Pow(ar/5, 0.5) × 0.05
+    │
+    ▼
+50% Base Reduction
+    rawdamage = basedamage × 0.5
+    │
+    ▼
+ApplyTheAstralDamage()
+    Drains mana first, overflow to stamina
+    Does NOT call ApplyRawDamage (no HP change)
+```
+
+### Key differences from physical
+
+| Aspect | Physical | Astral |
+|--------|----------|--------|
+| Resource drained | HP | Mana → Stamina |
+| Scaling skill | Tactics + Anatomy | Spirit Speak + EvalInt |
+| Scaling stat | STR | INT |
+| PvP basedamage scaling | 0.4× | None |
+| Armor system | Physical AR | Astral property × 25 × AR |
+| Base reduction | None | 50% |
+| Incapacity | Death | Frozen (both mana + stamina = 0) |
+
+### Setting up an astral weapon
+
+```python
+weapon = WeaponSpec(
+    name="Astral Blade",
+    damage="3d6+2",
+    properties={"Astral": 1},
+)
+```
+
+The attacker should have Spirit Speak and EvalInt skills for meaningful damage. The defender's Meditation skill provides resistance.
+
+## Spell resistance & class modifiers (V2)
+
+Spell resistance (`Resisted()` in the shard scripts) determines whether spell damage is reduced and by how much. Class membership significantly modifies resistance chances.
+
+### Base resistance formula
+
+```
+chance = ((EvalInt - MagicResistance) / 5) + circle + 1
+```
+
+If `Random(100) < chance`, the spell is **not resisted** (full damage). Otherwise, the damage is reduced based on the EvalInt/MagicResistance ratio.
+
+### Class modifiers
+
+**Defender class bonuses** (higher chance = easier to resist):
+
+| Defender class | Modifier |
+|---------------|----------|
+| Mage | `chance += ClasseBonusByLevel(level - 2) × 15` |
+| Paladin | `chance += ClasseBonusByLevel(level - 2) × 5` |
+| Mystic Archer | `chance += ClasseBonusByLevel(level - 2) × 5` |
+| Warrior (non-Mage) | `chance -= ClasseBonusByLevel(level - 2) × 10`, resist halved |
+
+**Caster class modifiers** (lower chance = harder to resist):
+
+| Caster class | Modifier |
+|-------------|----------|
+| Mage | `chance -= ClasseBonusByLevel(level - 2) × 10` |
+| Warrior (non-Mage) | `chance += ClasseBonusByLevel(level - 2) × 30`, resist doubled |
+
+### Damage scaling on resist
+
+When a spell is resisted, damage is scaled by the EvalInt/MagicResistance ratio:
+- `EvalInt > MagicResistance`: damage amplified (up to ~1.35×)
+- `EvalInt < MagicResistance`: damage reduced (down to floor of 1)
+- `EvalInt == MagicResistance`: no change
+
+### Metrics
+
+Resistance events are captured in `list:resisted` metrics with fields: `dmg_before`, `dmg_after`, `chance`, `did_resist`, `circle`, `evalint`, `resist`.
+
 ## What the simulator covers
 
 ### V1 + V1.5 (current)
@@ -258,8 +431,13 @@ See [Runtime](runtime.md) for details on how the interpreter, stubs, and context
 - `Enchantment` and `Spell` IntEnum types for type-safe weapon configuration
 - `WeaponSpec.enchant_with()` convenience method for applying enchantments
 
+### V2 additions
+- Virtual time calculation — POL-conformant swing delay for DPS metrics
+- Astral damage path — Spirit Speak scaling, meditation resistance, astral armor, 50% reduction
+- Spell resistance with class modifiers — Mage, Warrior, Paladin modify resist chance
+- Comprehensive stub audit against POL C++ source (60+ stubs verified)
+
 ### Not included (future versions)
-- Spell casting and spell resistance (V2)
 - HP tracking across multiple hits / kill-time distributions (V3)
 - Buff/debuff accumulation over time (V3)
 - Group combat (V3)

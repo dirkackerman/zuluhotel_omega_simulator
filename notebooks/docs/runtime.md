@@ -184,7 +184,7 @@ The stubs are organized into three files by complexity:
 - Damage: `ApplyRawDamage()` — the critical stub that modifies HP and records damage
 - Side effects: `SetPoisoned()`, `SetParalyzed()`, `DestroyItem()`
 - Lookup: `SystemFindObjectBySerial()`, `FindGuild()`
-- Script control: `start_script()` — logs a warning and returns `None` (V1: skipped)
+- Script control: `start_script()` — dispatches to sub-script executor (V1.5+)
 
 ### Unimplemented functions
 
@@ -396,3 +396,58 @@ The following POL stubs were added to support sub-script execution:
 - `Find(type, objtype, flags)` — returns empty array (no world search in simulation)
 - `PlayLightningBoltEffect(mobile)` — no-op (visual effect)
 - `send_attack(mobile, target)` — no-op (combat state)
+
+### V2 stubs added for astral path
+
+- `Sleep(seconds)` — no-op (polling loops use this; see loop iteration guard below)
+- `set_script_option(option, value)` — no-op (e.g., `SCRIPTOPT_CAN_ACCESS_OFFLINE_MOBILES`)
+
+### Loop iteration guard (V2)
+
+The interpreter guards all looping constructs (while, do, repeat, C-style for) with a `_MAX_LOOP_ITERATIONS = 100,000` counter. This prevents infinite loops from polling scripts like `astralincapacity.src` where `Sleep()` is a no-op and the exit condition (mana/stamina recovery) never triggers in the simulator. The guard logs a warning and breaks the loop.
+
+## V2 stub audit
+
+V2 performed a comprehensive audit of every POL built-in stub against the POL C++ source code (`polserver/pol-core/`). The audit covered 60+ stubs across three phases and found 24 bugs.
+
+### M-V2.1 — Combat dispatch audit
+
+Audited `ApplyRawDamage`, `start_script`, guild stubs, object lookup against `charactr.cpp`, `osmod.cpp`, `uomod.cpp`.
+
+| Bug | Description |
+|-----|-------------|
+| ApplyRawDamage dead guard | POL returns immediately if target is dead; our stub applied damage to dead mobiles |
+| ApplyRawDamage unhide | POL unhides the mobile on damage; our stub did not |
+| ApplyRawDamage paralysis | POL removes paralysis on damage; our stub did not |
+| ApplyRawDamage rounding | `int(amount)` truncated 23.7→23; changed to `int(round(float(amount)))` |
+| SetPoisoned kind | Recorded `"poison"` but aggregation checked `"poison_applied"` |
+| DestroyItem return | POL returns 1 on success; our stub returned `None` |
+
+### M-V2.2 — Property & stat accessor audit
+
+Audited property bags, stat/vital/skill accessors, equipment stubs against `attributemod.cpp`, `vitalmod.cpp`, `uomod.cpp`.
+
+| Bug | Description |
+|-----|-------------|
+| SetMana clamping | POL clamps to `[0, max]`; our stub didn't clamp |
+| SetStamina clamping | Same issue as SetMana |
+| GetAttributeBaseValue units | POL returns raw tenths; we returned display value |
+| HealDamage return | POL returns 1; our stub returned `None` |
+| EraseObjProperty return | POL returns 1; our stub returned `None` |
+| UNINIT crashes (5) | `int(UNINIT)` raises TypeError in 12+ call sites |
+
+### M-V2.3 — Config, RNG & utility audit
+
+Audited type casts, math, string ops, RNG against `mathmod.cpp`, `basicmod.cpp`, `utilmod.cpp`.
+
+| Bug | Description |
+|-----|-------------|
+| CInt float-string | `CInt("3.7")` should return 3 via `strtol`; we raised ValueError |
+| TypeOf UNINIT | Returned "Unknown" because `value is None` is False for UNINIT |
+| Random/RandomInt UNINIT | `int(max_val)` unguarded for UNINIT |
+| Find UNINIT start | `int(start)` unguarded |
+| SubStr UNINIT | `int(start)` and `int(length)` unguarded |
+| LogE UNINIT | `float(value)` unguarded |
+| RandomFloat UNINIT | `float(below)` unguarded |
+| SplitWords UNINIT delimiter | `str(UNINIT)` → `"UNINIT"` used as delimiter |
+| Max/Min UNINIT | POL coerces to Double; we used Python `max()` which raises TypeError |

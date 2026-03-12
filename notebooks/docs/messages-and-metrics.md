@@ -180,9 +180,11 @@ result.absorbed = float(ctx.metrics.get("absorbed", 0.0))
 
 Metrics are surfaced in `HitResult.metrics` — a dict containing all recorded values for that hit iteration.
 
-### Built-in V1.5 metric keys
+### Built-in metric keys
 
 These metrics are recorded by the instrumented shard scripts:
+
+#### V1.5 metrics
 
 | Metric key | Type | Description |
 |-----------|------|-------------|
@@ -195,6 +197,16 @@ These metrics are recorded by the instrumented shard scripts:
 | `"spell_strike_spell"` | `int` | Spell ID of spell strike that fired |
 | `"spell_strike_damage"` | `float` | Damage dealt by spell strike |
 | `"reactive_damage"` | `float` | Damage reflected by reactive armor |
+
+#### V2 astral metrics
+
+| Metric key | Type | Description |
+|-----------|------|-------------|
+| `"astral_basedamage"` | `int` | Astral base damage after Spirit Speak scaling |
+| `"astral_rawdamage"` | `int` | Astral raw damage after 50% reduction |
+| `"astral_absorbed"` | `int` | Damage absorbed by astral armor |
+| `"astral_ar"` | `int` | Effective astral AR (`Astral × 25 × armor.ar`) |
+| `"astral_meditation_triggered"` | `int` | 1 if meditation resistance fired, 0 otherwise |
 
 ### Accessing metrics per hit
 

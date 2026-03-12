@@ -20,6 +20,9 @@ This documentation is for **notebook authors and game designers** who want to de
 - Simulate elemental weapons with per-element resistance checks (V1.5)
 - Apply weapon enchantments (spell strike, slayer, effects, greaters) via `enchant_with()` (V1.5)
 - Test reactive armor damage reflection (V1.5)
+- Compute DPS metrics with POL-conformant swing timing (V2)
+- Simulate astral damage (Spirit Speak, meditation resistance, mana/stamina drain) (V2)
+- Analyze spell resistance with class modifiers (Mage, Warrior, Paladin) (V2)
 - Capture debug messages from the eScript execution for troubleshooting
 
 ## Quick start
@@ -92,3 +95,5 @@ The `notebooks/` directory ships with working examples:
 - `03_class_comparison.ipynb` — Compare damage output across character classes
 - `04_weapon_comparison.ipynb` — Side-by-side weapon comparison
 - `05_enchantments.ipynb` — Enchantments & elemental damage deep dive (V1.5)
+
+All notebooks include V2 sections for DPS analysis, astral damage, and spell resistance.

@@ -17,6 +17,7 @@ from omega.simulation import (
 from omega.reporting.plots import (
     damage_histogram, damage_vs_parameter,
     damage_breakdown, comparison_breakdown, comparison_overlay,
+    dps_vs_parameter, dps_comparison,
 )
 from omega.reporting.tables import summary_table, comparison_table, format_table_html
 from IPython.display import HTML, display
@@ -628,4 +629,201 @@ reactive_result = results["Reactive Armor"]
 reactive_hits = [h for h in reactive_result.raw_results
                  if any(se.kind == "reactive" for se in h.side_effects)]
 print(f"Reactive triggered: {len(reactive_hits)}/{len(reactive_result.raw_results)} hits")
+```
+
+---
+
+## Recipe 14: DPS comparison across weapons (V2)
+
+**Question**: "Which weapon delivers the best sustained DPS when accounting for attack speed?"
+
+```python
+from omega.reporting.plots import dps_comparison
+
+target = CombatantSpec(
+    name="Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(ar=30),
+)
+
+weapons = {
+    "War Axe (Speed 15)": WeaponSpec(name="War Axe", damage="5d8+5", speed=15),
+    "Longsword (Speed 50)": WeaponSpec(name="Longsword", damage="3d6+2", speed=50),
+    "Short Bow (Speed 98)": WeaponSpec(name="Short Bow", damage="2d4+1", speed=98,
+                                        attribute=SKILLID_ARCHERY),
+}
+
+results = {}
+for label, wpn in weapons.items():
+    skill = wpn.attribute or SKILLID_SWORDSMANSHIP
+    attacker = CombatantSpec(
+        name="Fighter",
+        skills={skill: 100, SKILLID_TACTICS: 100, SKILLID_ANATOMY: 100},
+        str_=100, dex_=100, int_=25,
+        class_levels={CLASSEID_WARRIOR: 5},
+        weapon=wpn,
+    )
+    results[label] = run_scenario(
+        Scenario(attacker=attacker, defender=target, iterations=500, base_seed=42),
+        shard=shard,
+    )
+
+# DPS comparison bar chart with delay annotations
+dps_comparison(results, title="DPS by Weapon Speed")
+
+# Table with DPS columns
+display(HTML(format_table_html(comparison_table(results,
+    stats=["mean", "swing_delay_ms", "effective_dps"]))))
+```
+
+---
+
+## Recipe 15: DPS vs Dexterity curve (V2)
+
+**Question**: "How does Dexterity affect attack speed and DPS?"
+
+```python
+from omega.reporting.plots import dps_vs_parameter
+
+sweep = ParameterSweep(
+    scenario=Scenario(
+        attacker=CombatantSpec(
+            name="Warrior",
+            skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+            str_=100, dex_=50, int_=25,
+            class_levels={CLASSEID_WARRIOR: 5},
+            weapon=WeaponSpec(damage="3d6+2", speed=50),
+        ),
+        defender=CombatantSpec(
+            name="Target", is_npc=True,
+            str_=50, dex_=50, int_=50, hp=500,
+            armor=ArmorSpec(ar=30),
+        ),
+        iterations=500,
+        base_seed=42,
+    ),
+    variables=(
+        Variable.from_range("attacker", "dex_", start=10, stop=130, step=10),
+    ),
+)
+
+result = run_sweep(sweep, shard=shard)
+
+# Dual-axis plot: DPS (left) + swing delay (right)
+dps_vs_parameter(result, "attacker.dex_", title="DPS vs Dexterity")
+
+# Table with timing stats
+rows = summary_table(result, stats=["mean", "swing_delay_ms", "swings_per_sec", "effective_dps"])
+display(HTML(format_table_html(rows)))
+```
+
+---
+
+## Recipe 16: Astral damage analysis (V2)
+
+**Question**: "How does an astral weapon compare to a physical weapon?"
+
+```python
+target = CombatantSpec(
+    name="Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    skills={SKILLID_MEDITATION: 80},
+    armor=ArmorSpec(ar=30),
+)
+
+# Physical warrior
+physical_result = run_scenario(
+    Scenario(
+        attacker=CombatantSpec(
+            name="Physical Warrior",
+            skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100, SKILLID_ANATOMY: 100},
+            str_=100, dex_=100, int_=25,
+            class_levels={CLASSEID_WARRIOR: 5},
+            weapon=WeaponSpec(name="Sword", damage="3d6+2"),
+        ),
+        defender=target,
+        iterations=500,
+        base_seed=42,
+    ),
+    shard=shard,
+)
+
+# Astral mage
+astral_result = run_scenario(
+    Scenario(
+        attacker=CombatantSpec(
+            name="Astral Mage",
+            skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 80,
+                    SKILLID_SPIRITSPEAK: 100, SKILLID_EVALINT: 100},
+            str_=50, dex_=100, int_=100,
+            class_levels={CLASSEID_MAGE: 5},
+            weapon=WeaponSpec(name="Astral Blade", damage="3d6+2",
+                            properties={"Astral": 1}),
+        ),
+        defender=target,
+        iterations=500,
+        base_seed=42,
+    ),
+    shard=shard,
+)
+
+results = {"Physical": physical_result, "Astral": astral_result}
+comparison_overlay(results, title="Physical vs Astral Damage")
+display(HTML(format_table_html(comparison_table(results))))
+
+# Astral-specific metrics
+for hit in astral_result.raw_results[:3]:
+    if "astral_basedamage" in hit.metrics:
+        print(f"  base={hit.metrics['astral_basedamage']}, "
+              f"raw={hit.metrics['astral_rawdamage']}, "
+              f"meditation={hit.metrics['astral_meditation_triggered']}")
+```
+
+---
+
+## Recipe 17: Spell resistance by class (V2)
+
+**Question**: "How does defender class affect spell resistance?"
+
+```python
+from omega.config.enchantments import Enchantment
+
+# Spell strike weapon (Fireball, circle 3)
+weapon = WeaponSpec(name="Enchanted Sword", damage="3d6+2").enchant_with(
+    Enchantment.OF_DAEMONS_BREATH
+)
+
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=weapon,
+)
+
+# Different defender classes, all with Magic Resistance 80
+defender_classes = {
+    "No Class": {},
+    "Warrior L5": {CLASSEID_WARRIOR: 5},
+    "Mage L5": {CLASSEID_MAGE: 5},
+    "Paladin L5": {CLASSEID_PALADIN: 5},
+}
+
+results = {}
+for label, cls in defender_classes.items():
+    defender = CombatantSpec(
+        name=label, is_npc=True,
+        skills={SKILLID_MAGICRESISTANCE: 80},
+        str_=50, dex_=50, int_=50, hp=500,
+        class_levels=cls,
+        armor=ArmorSpec(ar=30),
+    )
+    results[label] = run_scenario(
+        Scenario(attacker=attacker, defender=defender, iterations=500, base_seed=42),
+        shard=shard,
+    )
+
+comparison_overlay(results, title="Spell Damage by Defender Class")
+display(HTML(format_table_html(comparison_table(results,
+    stats=["mean", "spell_strike_rate", "effect_rate"]))))
 ```

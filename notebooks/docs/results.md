@@ -19,6 +19,7 @@ class HitResult:
     raw_damage: int = 0
     final_damage: float = 0.0
     absorbed: float = 0.0
+    swing_delay_ms: float = 0.0    # V2: POL swing timer delay
 
     attacker_name: str = ""
     defender_name: str = ""
@@ -48,6 +49,7 @@ class HitResult:
 | `side_effects` | List of `SideEffect` events recorded during execution. See [Side effects](#side-effects). |
 | `hit_log` | Reserved for future use (per-hit debug log). |
 | `metrics` | Dictionary of custom metrics from `__RecordSimulatorMetric` calls. See [Messages and Metrics](messages-and-metrics.md). Contains per-hit data like elemental breakdowns, enchantment effects, etc. |
+| `swing_delay_ms` | Swing delay in milliseconds from POL's `schedule_attack()` formula. See [Virtual Time](concepts.md#virtual-time--dps-v2). (V2) |
 | `success` | `True` if the script executed without errors. |
 | `error` | Error message if `success` is `False`. |
 
@@ -205,6 +207,7 @@ class CellResult:
     drain_stats: DamageStats = DamageStats()            # overall drain per swing
     damage_stats_on_hit: DamageStats = DamageStats()    # hits only
     drain_stats_on_hit: DamageStats = DamageStats()     # hits with drain only
+    timing: TimingStats | None = None                   # V2: DPS metrics
     raw_results: list[HitResult] = []
     iteration_count: int = 0
     success_count: int = 0
@@ -224,6 +227,7 @@ class CellResult:
 | `elemental_breakdown` | Per-element damage breakdown (V1.5). Only populated for weapons with `ElementalDamage`. See [Elemental breakdown](#elemental-breakdown). |
 | `drain_stats` | Mean drain amount **per swing** (0 for misses and non-drain hits). |
 | `drain_stats_on_hit` | Mean drain amount for **hits that drained** only. |
+| `timing` | `TimingStats` with swing delay and DPS metrics. `None` if no timing data available. See [TimingStats](#timingstats-v2). (V2) |
 | `raw_results` | All individual `HitResult` objects. Available for deep inspection. |
 | `iteration_count` | Total iterations attempted. |
 | `success_count` | Iterations that completed without error. |
@@ -354,6 +358,77 @@ if eb.elements:
     print(f"Total elemental (net):   {eb.total_net:.1f}")
     for name, ed in eb.elements.items():
         print(f"  {name}: {ed.gross:.1f} gross → {ed.net:.1f} net ({ed.prot:.0f}% prot)")
+```
+
+## TimingStats (V2)
+
+Swing timing and DPS metrics computed from the POL swing delay formula.
+
+**Import path:**
+```python
+from omega.simulation import TimingStats
+```
+
+```python
+@dataclass(slots=True)
+class TimingStats:
+    swing_delay_ms: float = 0.0
+    swings_per_second: float = 0.0
+    dps_mean: float = 0.0
+    dps_on_hit: float = 0.0
+    effective_dps: float = 0.0
+```
+
+### Fields
+
+| Field | Description |
+|-------|-------------|
+| `swing_delay_ms` | Milliseconds between swings, from POL's `schedule_attack()` formula. Determined by weapon speed + attacker DEX + SwingSpeedIncrease. |
+| `swings_per_second` | Attack rate: `1000 / swing_delay_ms`. |
+| `dps_mean` | Mean DPS over all swings including misses: `mean_damage × swings_per_second`. |
+| `dps_on_hit` | DPS from connected swings only: `mean_on_hit × swings_per_second`. |
+| `effective_dps` | DPS accounting for hit rate: `hit_rate × mean_on_hit × swings_per_second`. Equivalent to `dps_mean`. |
+
+### Example
+
+```python
+result = run_scenario(scenario, shard=shard)
+ts = result.timing
+
+if ts:
+    print(f"Swing delay: {ts.swing_delay_ms:.0f}ms")
+    print(f"Swings/sec:  {ts.swings_per_second:.2f}")
+    print(f"DPS (mean):  {ts.dps_mean:.1f}")
+    print(f"DPS (on-hit): {ts.dps_on_hit:.1f}")
+    print(f"Effective DPS: {ts.effective_dps:.1f}")
+```
+
+### Interpreting DPS metrics
+
+`dps_mean` and `effective_dps` are identical — both represent the expected damage output per second over many swings. The difference between `dps_mean` and `dps_on_hit` reflects the impact of misses: a weapon with 50% hit rate has `dps_on_hit` ≈ 2× `dps_mean`.
+
+For balance comparison, use `effective_dps` — it captures both damage output and attack speed in a single number.
+
+## Astral damage metrics (V2)
+
+When an astral weapon is used, additional metrics are captured via `__RecordSimulatorMetric`:
+
+| Metric key | Type | Description |
+|-----------|------|-------------|
+| `"astral_basedamage"` | `int` | Base damage after Spirit Speak scaling and class bonuses |
+| `"astral_rawdamage"` | `int` | Raw damage after 50% reduction |
+| `"astral_absorbed"` | `int` | Damage absorbed by astral armor |
+| `"astral_ar"` | `int` | Effective astral AR: `Astral_property × 25 × armor.ar` |
+| `"astral_meditation_triggered"` | `int` | 1 if meditation resistance activated, 0 otherwise |
+
+These are available per-hit in `hit.metrics`:
+
+```python
+for hit in result.raw_results[:3]:
+    if "astral_basedamage" in hit.metrics:
+        print(f"Astral base={hit.metrics['astral_basedamage']}, "
+              f"raw={hit.metrics['astral_rawdamage']}, "
+              f"meditation={hit.metrics['astral_meditation_triggered']}")
 ```
 
 ## Error handling

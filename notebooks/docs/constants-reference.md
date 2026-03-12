@@ -343,3 +343,43 @@ CProps on mobiles that reduce elemental damage. Set via `CombatantSpec.propertie
 | `AcidProtection` | Acid damage (0x80) |
 
 Values represent protection level (0 = none, higher = more resistance).
+
+## Timing constants (V2)
+
+Constants related to the POL swing timer:
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| `POLCLOCKS_PER_SEC` | `100` | POL clock ticks per second (1 clock = 10ms) |
+| Speed formula numerator | `1,500,000` | `100 × 15000` in the speed-based delay formula |
+| SSI clamp minimum | `-0.99` | SwingSpeedIncrease modifier floor (prevents division by near-zero) |
+
+### Shard weapon speed range
+
+From `itemdesc.cfg`, ZH weapons span Speed 15–98:
+
+| Weapon type | Speed | Approx delay @ DEX 100 |
+|------------|:-----:|:----------------------:|
+| Two-handed axe | 15 | 5,710ms |
+| Mace | 30 | 2,500ms |
+| Longsword | 50 | 1,500ms |
+| Whip | 70 | 1,070ms |
+| Short bow | 98 | 770ms |
+
+## Astral damage constants (V2)
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| Astral AR multiplier | `25` | Astral property × 25 × armor.ar = effective astral AR |
+| Base reduction | `0.5` | Astral rawdamage = basedamage × 0.5 |
+| `DMGID_ASTRAL` | `0x0400` | Damage type bitflag for astral |
+
+## Spell resistance constants (V2)
+
+| Constant | Value | Description |
+|----------|-------|-------------|
+| Mage defender bonus | `+15 × ClasseBonusByLevel` | Added to resist chance |
+| Paladin/Mystic Archer defender bonus | `+5 × ClasseBonusByLevel` | Added to resist chance |
+| Warrior defender penalty | `-10 × ClasseBonusByLevel` | Subtracted from resist chance; resist halved |
+| Mage caster penalty | `-10 × ClasseBonusByLevel` | Harder to resist (subtracted from chance) |
+| Warrior caster bonus | `+30 × ClasseBonusByLevel` | Easier to resist (added to chance); resist doubled |
