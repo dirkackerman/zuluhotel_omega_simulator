@@ -161,6 +161,37 @@ class ParameterSweep:
     variables: tuple[Variable, ...] = ()
 
 
+@dataclass(frozen=True)
+class SpellScenario:
+    """A spell simulation scenario — caster vs target(s) for N casts.
+
+    Variable targets for sweeps use ``"caster"`` and ``"target"``
+    (mapped to ``caster`` and ``target`` fields respectively).
+    """
+
+    caster: CombatantSpec
+    target: CombatantSpec | list[CombatantSpec]
+    spell_id: int
+    iterations: int = 1000
+    base_seed: int = 0
+    debug_mode: bool = False
+    npc_mode: bool = False
+    circle_override: int = 0
+
+
+@dataclass(frozen=True)
+class SpellParameterSweep:
+    """A spell scenario with one or more swept variables.
+
+    Variable targets: ``"caster"`` applies to the caster spec,
+    ``"target"`` applies to the target spec(s), ``"spell"`` with
+    ``parameter="spell_id"`` sweeps across spell IDs.
+    """
+
+    scenario: SpellScenario
+    variables: tuple[Variable, ...] = ()
+
+
 # ---------------------------------------------------------------------------
 # Materialization — specs → game objects
 # ---------------------------------------------------------------------------
@@ -238,7 +269,11 @@ def build_combatant(
 
     Returns ``(mobile, weapon, armor)`` ready for ``execute_hit()``.
     """
-    mob = Mobile(name=spec.name, is_npc=spec.is_npc)
+    mob = Mobile(
+        name=spec.name,
+        is_npc=spec.is_npc,
+        npctemplate=spec.npc_template or (spec.name if spec.is_npc else ""),
+    )
     mob.str_base = spec.str_
     mob.int_base = spec.int_
     mob.dex_base = spec.dex_
@@ -263,18 +298,24 @@ def build_combatant(
     for k, v in spec.properties.items():
         mob.set_property(k, v)
 
-    # Weapon
-    weapon = (
-        build_weapon(spec.weapon, enchantment_registry=enchantment_registry)
-        if spec.weapon is not None
-        else Weapon(name="Fist")
-    )
-    mob.equip(LAYER_HAND1, weapon)
+    # Weapon — only equip if specified.  In POL, bare hands means no item
+    # in LAYER_HAND1, so GetEquipmentByLayer returns nothing and TryToCast's
+    # BlocksCastingIfInHand check is skipped entirely.
+    if spec.weapon is not None:
+        weapon = build_weapon(spec.weapon, enchantment_registry=enchantment_registry)
+        mob.equip(LAYER_HAND1, weapon)
+    else:
+        weapon = Weapon(name="Fist")
 
-    # Armor — equip on the mobile so defender.ar works in shard scripts
-    armor = build_armor(spec.armor) if spec.armor is not None else Armor(name="None", ar=0)
-    armor_layer = spec.armor.layer if spec.armor is not None and spec.armor.layer else LAYER_CHEST
-    mob.equip(armor_layer, armor)
+    # Armor — only equip if specified.  Same reasoning: a bare combatant
+    # has no armor item; GetMagicEfficiencyPenalty iterates equipped items
+    # and finds nothing.
+    if spec.armor is not None:
+        armor = build_armor(spec.armor)
+        armor_layer = spec.armor.layer if spec.armor.layer else LAYER_CHEST
+        mob.equip(armor_layer, armor)
+    else:
+        armor = Armor(name="None", ar=0)
 
     return mob, weapon, armor
 

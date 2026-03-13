@@ -291,7 +291,7 @@ Explosion, Chain Lightning, Meteor Swarm, Earthquake, Abyssal Flame, Gust of Air
 
 ---
 
-### M27 — Spell Scenario Runner & Stats
+### M27 — Spell Scenario Runner & Stats ✅
 
 **Goal**: `SpellScenario` and `run_spell_scenario()` that runs N iterations with statistical aggregation.
 

@@ -308,7 +308,8 @@ class TestExecuteHitParms:
 
         from omega.runtime.context import SimulationContext, set_context
 
-        ctx = SimulationContext(attacker=attacker, defender=defender, weapon=weapon)
+        ctx = SimulationContext(attacker=attacker, weapon=weapon)
+        ctx.defender = defender
         ctx.register_object(attacker)
         ctx.register_object(defender)
         set_context(ctx)

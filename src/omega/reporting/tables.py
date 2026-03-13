@@ -206,6 +206,20 @@ def _get_stat(cell: CellResult, name: str) -> Any:
         "dps_mean": ts.dps_mean,
         "dps_on_hit": ts.dps_on_hit,
         "effective_dps": ts.effective_dps,
+        # Spell-specific rates
+        "fizzle_rate": rs.fizzle_rate,
+        "resist_rate": rs.resist_rate,
+        "resist_rate_on_cast": rs.resist_rate_on_cast,
+        # Spell on-cast damage stats
+        "mean_on_cast": cell.damage_stats_on_cast.mean,
+        "median_on_cast": cell.damage_stats_on_cast.median,
+        "min_on_cast": cell.damage_stats_on_cast.min,
+        "max_on_cast": cell.damage_stats_on_cast.max,
+        "std_dev_on_cast": cell.damage_stats_on_cast.std_dev,
+        "p5_on_cast": cell.damage_stats_on_cast.p5,
+        "p95_on_cast": cell.damage_stats_on_cast.p95,
+        # Alias: cast_rate = hit_rate for spell contexts
+        "cast_rate": rs.hit_rate,
     }
 
     if name in stat_map:
@@ -237,6 +251,7 @@ _RATE_STATS = frozenset({
     "hit_rate", "poison_rate", "equipment_break_rate",
     "reactive_rate", "spell_strike_rate", "effect_rate",
     "reactive_rate_on_hit", "spell_strike_rate_on_hit", "effect_rate_on_hit",
+    "fizzle_rate", "resist_rate", "resist_rate_on_cast", "cast_rate",
 })
 
 

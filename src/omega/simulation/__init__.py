@@ -6,9 +6,12 @@ from omega.simulation.scenario import (
     CombatantSpec,
     ParameterSweep,
     Scenario,
+    SpellParameterSweep,
+    SpellScenario,
     Variable,
     WeaponSpec,
 )
+from omega.simulation.spell_runner import run_spell_scenario, run_spell_sweep
 from omega.simulation.stats import (
     CellResult,
     DamageStats,
@@ -16,6 +19,7 @@ from omega.simulation.stats import (
     ElementalBreakdown,
     RatioStats,
     SimulationResult,
+    aggregate_spell_cell,
 )
 
 __all__ = [
@@ -29,8 +33,13 @@ __all__ = [
     "RatioStats",
     "Scenario",
     "SimulationResult",
+    "SpellParameterSweep",
+    "SpellScenario",
     "Variable",
     "WeaponSpec",
+    "aggregate_spell_cell",
     "run_scenario",
+    "run_spell_scenario",
+    "run_spell_sweep",
     "run_sweep",
 ]

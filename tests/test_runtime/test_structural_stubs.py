@@ -272,6 +272,61 @@ class TestApplyRawDamageUNINIT:
 
 
 # ===================================================================
+# ApplyRawDamage vital unit consistency
+# ===================================================================
+
+
+class TestApplyRawDamageUnitConsistency:
+    """Verify ApplyRawDamage uses display units consistently with GetHP/GetVital."""
+
+    def test_hp_matches_gethp_after_damage(self):
+        """After ApplyRawDamage, GetHP must return mob.hp (display)."""
+        m = Mobile()
+        m.hp = 100
+        m.max_hp = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "ApplyRawDamage", [m, 30])
+        assert m.hp == 70
+        assert call_builtin("uo", "GetHP", [m]) == 70
+
+    def test_hp_matches_getvital_after_damage(self):
+        """After ApplyRawDamage, GetVital('life') must return mob.hp * 100."""
+        m = Mobile()
+        m.hp = 100
+        m.max_hp = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "ApplyRawDamage", [m, 30])
+        assert call_builtin("vitals", "GetVital", [m, "life"]) == 7000  # 70 * 100
+
+    def test_damage_not_multiplied_by_100(self):
+        """ApplyRawDamage(mob, 30) must subtract 30, not 3000, from HP."""
+        m = Mobile()
+        m.hp = 100
+        m.max_hp = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "ApplyRawDamage", [m, 30])
+        assert m.hp == 70, (
+            f"HP is {m.hp}, expected 70 — damage value may have been "
+            f"multiplied or divided incorrectly"
+        )
+
+    def test_heal_then_damage_roundtrip(self):
+        """HealDamage and ApplyRawDamage must use same units."""
+        m = Mobile()
+        m.hp = 50
+        m.max_hp = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "HealDamage", [m, 30])
+        assert m.hp == 80
+        call_builtin("uo", "ApplyRawDamage", [m, 30])
+        assert m.hp == 50  # back to original
+
+
+# ===================================================================
 # SetPoisoned
 # ===================================================================
 

@@ -67,6 +67,14 @@ class Weapon(GameObject):
         self.hp: int = hp
         self.max_hp: int = max_hp
 
+    def set_blocks_casting(self, blocks: bool) -> None:
+        """Set whether this weapon blocks spell casting when held.
+
+        Maps to the ``BlocksCastingIfInHand`` config property that
+        TryToCast checks via ``weapcfg[hand1.objtype]``.
+        """
+        self.set_property("BlocksCastingIfInHand", 1 if blocks else 0)
+
     @property
     def desc(self) -> str:
         """Display description (matches POL's item.desc)."""

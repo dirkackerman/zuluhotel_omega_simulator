@@ -1,0 +1,121 @@
+use uo;
+use os;
+use polsys;
+
+include "include/client";
+include "include/classes";
+include "include/spelldata";
+include "include/attributes";
+include "include/dotempmods";
+
+const SPELL_EFFECT_TYPE_MOVING 	:= MOVING_SPELL_WRAITH_BREATH;
+const SPELL_EFFECT_ID		:= FX_SPELL_WRAITH_BREATH;
+const SPELL_EFFECT_SPEED	:= SPEED_SPELL_WRAITH_BREATH;
+const SPELL_EFFECT_LOOP		:= LOOP_SPELL_WRAITH_BREATH;
+
+program wraithbreath( parms )
+
+  	var circle := GetCircle( SPELLID_WRAITH_BREATH );
+	var plane := NECRO;
+	var caster;
+	var cast_on;
+	var fromhit;
+	var wasfrozen := 0;
+
+	if (parms[1] == "#MOB")
+		caster := parms[2];
+		cast_on := parms[3];
+		if (parms[4])
+			circle := parms[4];
+		endif
+		if (parms[5])
+			fromhit := parms[5];
+		endif
+	else
+		caster := parms;	
+
+		if( TryToCast( caster, SPELLID_WRAITH_BREATH ) != SUCCESS )
+			EraseObjProperty( caster , "#Casting" );
+			return;
+		endif
+		SendSysmessage( caster , "Select a target." );
+		cast_on := CanTargetArea( caster , circle );
+	endif
+			
+	if( !cast_on )
+		EraseObjProperty( caster , "#Casting" );
+		return;
+	endif
+
+	var magery	:= GetEffectiveSkill(caster, SKILLID_MAGERY);
+	var range	:= ModifyWithMagicEfficiency( caster , Cint( magery / 30 ) );
+	var maxduration	:= ModifyWithMagicEfficiency( caster , 7 );
+	EraseObjProperty( caster , "#Casting" );
+	var targets	:= ListMobilesNearLocationEx( cint(cast_on.x), cint(cast_on.y), cint(cast_on.z), range, 0x03);
+	var victims	:= array;
+	var duration;
+
+	targets := SmartAoE(caster, targets);
+	
+	foreach mobile in targets
+		if( CheckLosAt( mobile, cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z)) && !mobile.hidden )
+			if (mobile.frozen)
+				continue;
+			endif
+
+			var immunity := IsProtected( caster , mobile , circle );
+			var circ := circle;
+			if( immunity == IMMUNED )
+				continue;
+			endif
+
+			//Reduce time from magic resistance
+			var skillresist := Cint(GetEffectiveSkill(mobile, SKILLID_MAGICRESISTANCE));
+			skillresist := 1.0 + (CDbl(skillresist)*3.5/1000.0);
+			duration := maxduration / skillresist;
+			
+
+			//Reduce time further for mages?
+			var characterClass := GetObjProperty(mobile, "IsMage");
+			var classresist := 1;
+			if (characterClass > 0)
+				classresist := 1+ (CDbl(characterClass)*0.05);
+			endif
+			duration := duration/classresist;
+
+			//Reduce time due to Necro Protection
+			var necroprot := CInt(GetObjProperty(mobile, "NecroProtection"));
+			duration := CInt(duration * (1-(necroprot*0.75)/100));
+			
+			//Reduce 25% if Free Action
+			var freeaction := GetObjProperty(mobile, "FreeAction");
+			if (freeaction)
+				duration := duration * 0.75;
+			endif
+
+			var time := ReadGameClock()+CInt(duration);
+			//Trying to stop NPCs from freezing each other
+			if (mobile.isa(POLCLASS_NPC) && caster.isa(POLCLASS_NPC))
+				IncRevision(mobile);
+				victims.append( {mobile, time} );
+				PlayObjectCenteredEffect( mobile , SPELL_EFFECT_ID , SPELL_EFFECT_SPEED , SPELL_EFFECT_LOOP );
+				PlaySoundEffect( mobile , SFX_SPELL_WRAITH_BREATH );
+				Send_attack( mobile , caster , SPELLID_WRAITH_BREATH );
+				SendSysmessage( mobile , "You get paralyzed from the power of " + caster.name + "'s spell!" );
+			else 
+				mobile.frozen := 1;
+				IncRevision(mobile);
+				victims.append( {mobile, time} );
+				BuffOn(mobile, "paralyze", 1, CInt(duration));
+				PlayObjectCenteredEffect( mobile , SPELL_EFFECT_ID , SPELL_EFFECT_SPEED , SPELL_EFFECT_LOOP );
+				PlaySoundEffect( mobile , SFX_SPELL_WRAITH_BREATH );
+				Send_attack( mobile , caster , SPELLID_WRAITH_BREATH );
+				SendSysmessage( mobile , "You get paralyzed from the power of " + caster.name + "'s spell!" );
+			endif
+		endif
+	endforeach
+
+	start_script("wraith_breath_delay", {victims, maxduration});
+
+
+endprogram

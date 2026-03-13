@@ -39,8 +39,11 @@ class SimulationContext:
     ----------
     attacker:
         The attacking mobile (or None if not yet set).
-    defender:
-        The defending mobile (or None if not yet set).
+    defenders:
+        List of defending mobiles for AoE support. Use the ``defender``
+        property to access the primary target.
+    main_target_index:
+        Index into ``defenders`` for the primary target (default 0).
     weapon:
         The weapon used (or None).
     iteration:
@@ -52,11 +55,31 @@ class SimulationContext:
     """
 
     attacker: Any = None
-    defender: Any = None
+    defenders: list[Any] = field(default_factory=list)
+    main_target_index: int = 0
     weapon: Any = None
     iteration: int = 0
     debug_mode: bool = False
     game_clock: int = 1000
+
+    # Virtual time accumulated within an iteration (milliseconds).
+    # Sleepms/Sleep advance this; ReadGameClock uses it.
+    _virtual_time_ms: int = 0
+
+    @property
+    def defender(self) -> Any:
+        """Primary target — backward compatible with single-defender code."""
+        if not self.defenders:
+            return None
+        return self.defenders[self.main_target_index]
+
+    @defender.setter
+    def defender(self, value: Any) -> None:
+        """Set single defender — backward compatible."""
+        if not self.defenders:
+            self.defenders = [value]
+        else:
+            self.defenders[self.main_target_index] = value
 
     # Side effects recorded during this hit
     side_effects: list[SideEffect] = field(default_factory=list)
@@ -119,8 +142,8 @@ class SimulationContext:
     def reset_hit(self) -> None:
         """Reset per-hit state for the next iteration.
 
-        Preserves config cache and object registry; clears side effects
-        and damage tracking.
+        Preserves config cache, object registry, and defenders list;
+        clears side effects, damage tracking, and virtual time.
         """
         self.side_effects.clear()
         self.total_damage_dealt = 0.0
@@ -128,6 +151,7 @@ class SimulationContext:
         self.metrics.clear()
         self.iteration += 1
         self.game_clock += 1
+        self._virtual_time_ms = 0
 
 
 def get_context() -> SimulationContext:

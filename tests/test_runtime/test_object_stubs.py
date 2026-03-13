@@ -975,3 +975,187 @@ class TestEquipmentAccessorsExtended:
         m = Mobile()
         result = call_builtin("uo", "GetKarma", [m])
         assert result == 0
+
+
+# ===================================================================
+# Vital Unit Consistency
+#
+# Mobile stores vitals in display units (e.g. mob.mana = 100 means
+# 100 mana points).  POL's internal API uses hundredths (100 * 100 =
+# 10000).  These tests verify the conversion chain is correct so that
+# a //100 or *100 mistake in any stub is caught immediately.
+# ===================================================================
+
+
+class TestVitalUnitConsistency:
+    """Round-trip tests verifying display ↔ hundredths conversions."""
+
+    def test_getmana_returns_display_units(self):
+        """GetMana(mob) must return the same value as mob.mana (display)."""
+        m = Mobile()
+        m.mana = 75
+        assert call_builtin("uo", "GetMana", [m]) == 75
+
+    def test_getvital_mana_returns_hundredths(self):
+        """GetVital(mob, 'mana') must return mob.mana * 100."""
+        m = Mobile()
+        m.mana = 75
+        assert call_builtin("vitals", "GetVital", [m, "mana"]) == 7500
+
+    def test_getmana_getvital_roundtrip(self):
+        """GetMana(mob) == GetVital(mob, 'mana') / 100."""
+        m = Mobile()
+        m.mana = 42
+        mana_display = call_builtin("uo", "GetMana", [m])
+        mana_hundredths = call_builtin("vitals", "GetVital", [m, "mana"])
+        assert mana_display == mana_hundredths // 100
+
+    def test_setmana_uses_display_units(self):
+        """SetMana(mob, 60) should set mob.mana to 60 (display)."""
+        m = Mobile()
+        m.mana = 100
+        m.max_mana = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("uo", "SetMana", [m, 60])
+        assert m.mana == 60
+
+    def test_setvital_mana_uses_hundredths(self):
+        """SetVital(mob, 'mana', 6000) should set mob.mana to 60 (display)."""
+        m = Mobile()
+        m.mana = 100
+        m.max_mana = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        call_builtin("vitals", "SetVital", [m, "mana", 6000])
+        assert m.mana == 60
+
+    def test_setmana_setvital_consistency(self):
+        """SetMana(mob, X) and SetVital(mob, 'mana', X*100) produce same result."""
+        m1 = Mobile()
+        m1.mana = 100
+        m1.max_mana = 100
+        ctx1 = SimulationContext()
+        set_context(ctx1)
+        call_builtin("uo", "SetMana", [m1, 60])
+
+        m2 = Mobile()
+        m2.mana = 100
+        m2.max_mana = 100
+        ctx2 = SimulationContext()
+        set_context(ctx2)
+        call_builtin("vitals", "SetVital", [m2, "mana", 6000])
+
+        assert m1.mana == m2.mana == 60
+
+    def test_gethp_returns_display_units(self):
+        """GetHP(mob) must return mob.hp (display)."""
+        m = Mobile()
+        m.hp = 150
+        assert call_builtin("uo", "GetHP", [m]) == 150
+
+    def test_getvital_life_returns_hundredths(self):
+        """GetVital(mob, 'life') must return mob.hp * 100."""
+        m = Mobile()
+        m.hp = 150
+        assert call_builtin("vitals", "GetVital", [m, "life"]) == 15000
+
+    def test_sethp_setvital_life_consistency(self):
+        """SetHP(mob, X) and SetVital(mob, 'life', X*100) produce same result."""
+        m1 = Mobile()
+        m1.hp = 100
+        m1.max_hp = 200
+        ctx1 = SimulationContext()
+        set_context(ctx1)
+        call_builtin("uo", "SetHP", [m1, 80])
+
+        m2 = Mobile()
+        m2.hp = 100
+        m2.max_hp = 200
+        ctx2 = SimulationContext()
+        set_context(ctx2)
+        call_builtin("vitals", "SetVital", [m2, "life", 8000])
+
+        assert m1.hp == m2.hp == 80
+
+    def test_getstamina_returns_display_units(self):
+        """GetStamina(mob) must return mob.stamina (display)."""
+        m = Mobile()
+        m.stamina = 90
+        assert call_builtin("uo", "GetStamina", [m]) == 90
+
+    def test_getvital_stamina_returns_hundredths(self):
+        """GetVital(mob, 'stamina') must return mob.stamina * 100."""
+        m = Mobile()
+        m.stamina = 90
+        assert call_builtin("vitals", "GetVital", [m, "stamina"]) == 9000
+
+    def test_setstamina_setvital_consistency(self):
+        """SetStamina(mob, X) and SetVital(mob, 'stamina', X*100) produce same result."""
+        m1 = Mobile()
+        m1.stamina = 100
+        m1.max_stamina = 100
+        ctx1 = SimulationContext()
+        set_context(ctx1)
+        call_builtin("uo", "SetStamina", [m1, 70])
+
+        m2 = Mobile()
+        m2.stamina = 100
+        m2.max_stamina = 100
+        ctx2 = SimulationContext()
+        set_context(ctx2)
+        call_builtin("vitals", "SetVital", [m2, "stamina", 7000])
+
+        assert m1.stamina == m2.stamina == 70
+
+    def test_escript_getmana_pattern(self):
+        """Verify the shard's eScript GetMana() pattern: GetVital(mob,'mana')/100.
+
+        This is what the shard scripts call.  If our GetVital returns
+        hundredths correctly, dividing by 100 must yield display units.
+        """
+        m = Mobile()
+        m.mana = 83
+        hundredths = call_builtin("vitals", "GetVital", [m, "mana"])
+        display = hundredths // 100  # eScript integer division
+        assert display == 83
+
+    def test_escript_setmana_pattern(self):
+        """Verify the shard's eScript SetMana() pattern: SetVital(mob,'mana', val*100).
+
+        TryToCast does SetMana(caster, GetMana(caster)+manacost) for
+        the mana refund.  GetMana returns display, manacost is display,
+        SetMana sets display.  Verify no unit confusion.
+        """
+        m = Mobile()
+        m.mana = 50
+        m.max_mana = 100
+        ctx = SimulationContext()
+        set_context(ctx)
+        # Simulate shard's refund: SetMana(caster, GetMana(caster) + manacost)
+        current = call_builtin("uo", "GetMana", [m])
+        manacost = 11  # circle 5 mana cost
+        call_builtin("uo", "SetMana", [m, current + manacost])
+        assert m.mana == 61  # 50 + 11
+
+    def test_small_mana_values_no_truncation(self):
+        """Mana values < 100 must NOT be divided by 100.
+
+        Regression: old ConsumeMana had a heuristic that divided values
+        >= 100 by 100.  With mob.mana=5 (a valid low mana), the stub
+        must treat it as 5 display mana, not 0.
+        """
+        m = Mobile()
+        m.mana = 5
+        assert call_builtin("uo", "GetMana", [m]) == 5
+
+    def test_large_mana_values_no_double_conversion(self):
+        """Mana value of 200 must NOT be treated as hundredths.
+
+        Regression: old ConsumeMana had `//100 if >= 100`.  mob.mana=200
+        (e.g., a high-INT mage) must be treated as 200 display mana, not 2.
+        """
+        m = Mobile()
+        m.mana = 200
+        assert call_builtin("uo", "GetMana", [m]) == 200
+        assert call_builtin("vitals", "GetVital", [m, "mana"]) == 20000

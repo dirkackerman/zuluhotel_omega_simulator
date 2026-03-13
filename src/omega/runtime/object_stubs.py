@@ -387,6 +387,14 @@ def heal_damage(mobile: Any = None, amount: Any = 0) -> Any:
     return 1
 
 
+@pol_function("vitals", "RecalcVitals")
+@pol_function("", "RecalcVitals")
+def recalc_vitals(character: Any = None, calc_attribute: Any = 0, calc_vital: Any = 0) -> int:
+    """No-op — stat recalculation not modeled in simulation."""
+    logger.debug("RecalcVitals (no-op in simulation)")
+    return 1
+
+
 @pol_function("vitals", "SetHpRegenRate")
 @pol_function("", "SetHpRegenRate")
 def set_hp_regen_rate(mobile: Any = None, rate: Any = None) -> None:

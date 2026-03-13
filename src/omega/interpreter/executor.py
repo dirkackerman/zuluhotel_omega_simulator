@@ -406,7 +406,7 @@ class Executor:
                 f"(tried {pkg_dir / f'{file_name}.src'})"
             )
         else:
-            # Relative path
+            # Relative path — search scripts/, shard root, then all package dirs
             scripts_dir = self._shard_root / "scripts"
             for candidate in [
                 scripts_dir / f"{path}.src",
@@ -416,6 +416,22 @@ class Executor:
             ]:
                 if candidate.exists():
                     return candidate.resolve()
+
+            # Fallback: search all package directories.
+            # POL resolves relative start_script() paths from the calling
+            # script's package directory.  We don't track the caller, so
+            # search all registered packages.
+            if self._package_map is not None:
+                for pkg_name in self._package_map.names():
+                    pkg_dir = self._package_map.resolve(pkg_name)
+                    if pkg_dir is None:
+                        continue
+                    for candidate in [
+                        pkg_dir / f"{path}.src",
+                        pkg_dir / path,
+                    ]:
+                        if candidate.exists():
+                            return candidate.resolve()
 
             raise FileNotFoundError(f"Sub-script not found: {script_path!r}")
 

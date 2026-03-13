@@ -1,0 +1,34 @@
+# Git
+.git/
+.gitmodules
+
+# Submodules — shard is mounted at runtime, not baked in
+submodules/
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+
+# Tests & fixtures (not needed in container)
+tests/
+planning/
+changelog/
+
+# Notebooks (except web/ which we COPY explicitly)
+notebooks/01_*.ipynb
+notebooks/02_*.ipynb
+notebooks/03_*.ipynb
+notebooks/04_*.ipynb
+notebooks/05_*.ipynb
+notebooks/docs/
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store

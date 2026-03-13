@@ -171,10 +171,10 @@ def execute_hit(
     # Set up simulation context
     ctx = SimulationContext(
         attacker=attacker,
-        defender=defender,
         weapon=weapon,
         debug_mode=debug,
     )
+    ctx.defender = defender
     ctx._config_resolver = config_resolver
 
     # Seed the shard's eScript RNG (random.inc uses GetGlobalProperty("randomeroseed"))

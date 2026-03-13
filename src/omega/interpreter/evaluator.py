@@ -770,6 +770,14 @@ class EscriptInterpreter(EscriptParserVisitor):
         if callable(method):
             return method(*args)
 
+        # Fallback: POL built-in registry (method-call syntax for built-ins).
+        # In eScript, ``mobile.SetParalyzed(0)`` is equivalent to
+        # ``SetParalyzed(mobile, 0)`` — the object becomes the first argument.
+        from omega.runtime.registry import is_registered, call_builtin
+
+        if is_registered("", name):
+            return call_builtin("", name, [obj, *args])
+
         logger.warning("Unknown method call", object_type=type(obj).__name__, method=name)
         return None
 

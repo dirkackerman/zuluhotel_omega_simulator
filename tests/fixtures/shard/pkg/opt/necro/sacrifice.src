@@ -1,0 +1,112 @@
+use uo;
+use os;
+
+include "include/spelldata";
+include "include/classes";
+include "include/client";
+include "include/attributes";
+
+program sacrifice( parms )
+    
+	var circle := GetCircle( SPELLID_SACRIFICE );
+	var plane := NECRO;
+	var caster;
+	var cast_on;
+	var fromhit;
+
+	if (parms[1] == "#MOB")
+		caster := parms[2];
+        if(IsInSafeArea(caster))
+            return;
+        endif
+		cast_on := parms[3];
+		if (parms[4])
+			circle := parms[4];
+		endif
+		if (parms[5])
+			fromhit := parms[5];
+		endif
+
+	else
+		caster := parms;	
+        if(IsInSafeArea(caster))
+            SendSysMessage(caster, "This spell can not be cast here.");
+			EraseObjProperty( caster , "#Casting" );
+            return;
+        endif
+		if( TryToCast( caster, SPELLID_SACRIFICE ) != SUCCESS )
+			EraseObjProperty( caster , "#Casting" );
+			return;
+		endif
+		SendSysmessage(caster, "What pet do you wish to sacrifice?");
+		cast_on := CanTargetSpell( caster , circle , TGTOPT_CHECK_LOS );
+	endif
+			
+	if( !cast_on )
+		EraseObjProperty( caster , "#Casting" );
+		return;
+	endif
+	
+	if( cast_on.script != "tamed" or GetObjProperty( cast_on , "master" ) != caster.serial )
+		EraseObjProperty( caster , "#Casting" );
+		SendSysmessage( caster, "You can only sacrifice one of yours pets" );
+		return;
+	endif
+	
+	var range	:= 4;
+	var hp		:= GetHP(cast_on);
+	var x		:= cast_on.x;
+	var y		:= cast_on.y;
+	var z		:= cast_on.z;
+	
+	PlayLightningBoltEffect( cast_on );
+	SetObjProperty( cast_on , "guardkill" , 1 );
+	ApplyTheDamage( cast_on , caster , GetHP(cast_on) + 3 , plane );
+	EraseObjProperty( caster , "#Casting" );
+
+	var victims	:= ListMobilesNearLocationEx( x , y , z , range , 0x03 );
+	var length	:= len( victims );
+	if( caster in victims )
+		length	:= length - 1;
+	endif
+	
+	if( !length )
+		length	:= 1;
+	endif
+	
+	var dmg	:= Cint( hp / length );
+	dmg := Cint( dmg * ClasseBonus( caster , CLASSEID_MAGE ) );
+
+	if( dmg < 1 )
+		dmg := 1;
+	endif
+	
+	victims := SmartAoE(caster, victims);
+
+	foreach mobile in victims
+
+		if( CheckLosAt( mobile , x , y , z ) and mobile.serial != caster.serial )
+			var immunity := IsProtected( caster , mobile , circle );
+			var circ := circle;
+			var dam  := dmg;
+			
+			if( immunity != IMMUNED )
+				if( immunity == CURSED )
+					circ := circ * 2;
+					dam  := dam * 2;
+				endif
+
+				Send_attack( mobile , caster , SPELLID_SACRIFICE );
+				PlaySoundEffect( mobile , SFX_SPELL_SACRIFICE );
+				PlayStationaryEffect( mobile.x,mobile.y,mobile.z , FX_SPELL_SACRIFICE , SPEED_SPELL_SACRIFICE , LOOP_SPELL_SACRIFICE );
+				if( mobile.npctemplate )
+					ApplyplanarDamage( caster , mobile , circ , dmg , plane );
+				else
+					ApplyplanarDamage( caster , mobile , circ , Cint(dmg / 2) , plane );
+				endif
+			endif
+		endif
+
+	endforeach
+
+endprogram

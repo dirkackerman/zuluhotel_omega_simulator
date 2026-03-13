@@ -64,6 +64,23 @@ class TestWeapon:
         assert w.hp == 49
         assert w.max_hp == 50
 
+    def test_set_blocks_casting_false(self):
+        w = Weapon(name="Fist")
+        w.set_blocks_casting(False)
+        assert w.get_property("BlocksCastingIfInHand") == 0
+
+    def test_set_blocks_casting_true(self):
+        w = Weapon(name="Shield")
+        w.set_blocks_casting(True)
+        assert w.get_property("BlocksCastingIfInHand") == 1
+
+    def test_set_blocks_casting_toggle(self):
+        w = Weapon(name="Staff")
+        w.set_blocks_casting(True)
+        assert w.get_property("BlocksCastingIfInHand") == 1
+        w.set_blocks_casting(False)
+        assert w.get_property("BlocksCastingIfInHand") == 0
+
 
 class TestArmor:
     def test_default_armor(self):

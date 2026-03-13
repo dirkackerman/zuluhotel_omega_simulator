@@ -19,7 +19,7 @@ include "include/random";
 include "include/eventid";
 include "include/classes";
 include "include/damages";
-//include "include/areas";
+include "include/areas";
 include "include/skillpoints";
 include "include/attributes";
 include "include/difficulty";
@@ -278,11 +278,15 @@ function CalcSpellDamage( caster, cast_on, circle, area_spell := SINGLE_TARGET_S
 			dmg := 1;
 		endif
 	endif
-	if(cast_on.npctemplate) 
+	if(cast_on.npctemplate)
 		dmg := CInt(dmg*1.5);
 		if( dmg < 1)
 			dmg := 1;
 		endif
+	endif
+
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric("spell_base_damage", dmg);
 	endif
 
 	return dmg;
@@ -797,19 +801,31 @@ function IsProtected( caster, cast_on, circle, nomsg := 0 )
 		SetObjProperty( item, "MagicImmunity", charges );
 		IncRevision(item);
 		if( !cursed )
+			if(DEBUG_MODE)
+				__RecordSimulatorMetric("list:spell_protection", struct{ "result" := IMMUNED, "circle" := circle, "charges" := charges, "perm_prot" := protlvl });
+			endif
 			if(nomsg)
 				return IMMUNED;
 			endif
 			PrintTextAbovePrivate( cast_on, cstr("Your " + item.desc + " protected you from the spell!"), cast_on );
 			return IMMUNED;
 		else
+			if(DEBUG_MODE)
+				__RecordSimulatorMetric("list:spell_protection", struct{ "result" := CURSED, "circle" := circle, "charges" := charges, "perm_prot" := protlvl });
+			endif
 			return CURSED;
 		endif
 
 	elseif( cmi >= circle )
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("list:spell_protection", struct{ "result" := CURSED, "circle" := circle, "charges" := 0, "perm_prot" := protlvl });
+		endif
 		return CURSED;
 
 	elseif( protlvl >= circle )
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("list:spell_protection", struct{ "result" := IMMUNED, "circle" := circle, "charges" := 0, "perm_prot" := protlvl });
+		endif
 		if(nomsg)
 			return IMMUNED;
 		endif
@@ -818,6 +834,9 @@ function IsProtected( caster, cast_on, circle, nomsg := 0 )
 		return IMMUNED;
 	endif
 
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric("list:spell_protection", struct{ "result" := 0, "circle" := circle, "charges" := 0, "perm_prot" := protlvl });
+	endif
 	return 0;
 
 endfunction
@@ -835,10 +854,16 @@ function ModifyWithMagicEfficiency( who, val )
 
 	var penalty := CInt( GetMagicEfficiencyPenalty( who ) );
 	if( penalty >= 100 )
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric("spell_efficiency_penalty", penalty);
+		endif
 		return 0;
 	endif
 
 	//Print("In MwME: Magic efficiency penalty is: " + penalty + "%" );
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric("spell_efficiency_penalty", penalty);
+	endif
 	return CInt( val * ( 100 - penalty ) / 100 );
 
 endfunction

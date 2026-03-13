@@ -137,6 +137,56 @@ def discover_spell_scripts(shard_root: Path) -> set[Path]:
     return scripts
 
 
+# Damage spell IDs from path_to_v3.md tables (29 spells across 4 schools)
+_DAMAGE_SPELL_IDS = {
+    # Standard (11)
+    5, 12, 18, 30, 37, 42, 43, 49, 51, 55, 57,
+    # Necromancy (8)
+    67, 68, 69, 71, 72, 73, 76, 77,
+    # Earth (5)
+    83, 85, 89, 90, 92,
+    # Holy (5)
+    170, 174, 175, 176, 181,
+}
+
+# Mapping from spells.cfg relative path → package directory for script resolution
+_SPELL_CFG_PATHS = [
+    ("pkg/std/spells/spells.cfg", "pkg/std/spells"),
+    ("pkg/opt/necro/spells.cfg", "pkg/opt/necro"),
+    ("pkg/opt/earth/spells.cfg", "pkg/opt/earth"),
+    ("pkg/opt/holybook/spells.cfg", "pkg/opt/holybook"),
+]
+
+
+def discover_damage_spell_scripts(shard_root: Path) -> set[Path]:
+    """Discover .src files for the 29 damage spells used in V3 spell casting.
+
+    Parses each spells.cfg, finds Script fields for damage spell IDs,
+    and resolves them to .src files relative to their package directory.
+    """
+    scripts: set[Path] = set()
+    for cfg_rel, pkg_rel in _SPELL_CFG_PATHS:
+        cfg_path = shard_root / cfg_rel
+        if not cfg_path.exists():
+            continue
+        pkg_dir = shard_root / pkg_rel
+        text = cfg_path.read_text(encoding="utf-8", errors="replace")
+        current_id: int | None = None
+        for line in text.splitlines():
+            m = re.match(r'^Spell\s+(\d+)', line)
+            if m:
+                current_id = int(m.group(1))
+                continue
+            if current_id is not None and current_id in _DAMAGE_SPELL_IDS:
+                m2 = re.match(r'^\s+Script\s+(\S+)', line)
+                if m2:
+                    script_name = m2.group(1).strip()
+                    src = pkg_dir / f"{script_name}.src"
+                    if src.exists():
+                        scripts.add(src.resolve())
+    return scripts
+
+
 def discover_package_cfgs(shard_root: Path) -> list[Path]:
     """Find all pkg.cfg files under the shard's pkg/ directory."""
     pkg_root = shard_root / "pkg"
@@ -251,6 +301,7 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
     extra_scripts = [
         "pkg/opt/summoning/processpoisonmod.src",   # SetPoison → start_script
         "pkg/opt/astralfights/astralincapacity.src",  # SetAstralIncapacity → start_script
+        "pkg/opt/holybook/astralstorm_damage.src",  # Astral Storm → start_script (damage sub-script)
     ]
     print("\nCopying extra runtime scripts...")
     for rel_path in extra_scripts:
@@ -308,6 +359,11 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
             "equip.cfg (trimmed)",
         )
 
+    # circles.cfg — copy in full
+    circles_cfg = shard_root / "config" / "circles.cfg"
+    if circles_cfg.exists():
+        copy_file(circles_cfg, FIXTURE_DIR / "config" / "circles.cfg")
+
     # Package config files — copy in full
     pkg_configs = [
         "pkg/systems/combat/config/itemdesc.cfg",
@@ -333,7 +389,18 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
         dest = FIXTURE_DIR / rel
         copy_file(src_path, dest)
 
-    # 6. Copy .em module files
+    # 6. Copy damage spell .src scripts for V3 spell casting
+    print("\nDiscovering damage spell scripts from spells.cfg files...")
+    damage_spell_scripts = discover_damage_spell_scripts(shard_root)
+    print(f"  Found {len(damage_spell_scripts)} damage spell scripts")
+    for src_path in sorted(damage_spell_scripts):
+        if src_path in included_files or src_path in spell_scripts:
+            continue  # Already copied
+        rel = src_path.relative_to(shard_root.resolve())
+        dest = FIXTURE_DIR / rel
+        copy_file(src_path, dest)
+
+    # 7. Copy .em module files
     print("\nCopying .em module files...")
     em_dir = shard_root / "scripts" / "modules"
     if em_dir.exists():

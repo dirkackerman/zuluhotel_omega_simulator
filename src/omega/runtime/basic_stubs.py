@@ -310,8 +310,9 @@ def find_func(text: Any = "", search: Any = "", start: Any = 1) -> int:
 @pol_function("os", "ReadGameClock")
 @pol_function("", "ReadGameClock")
 def read_game_clock() -> int:
-    """Return simulated game clock value."""
-    return get_context().game_clock
+    """Return simulated game clock value including virtual time from Sleepms/Sleep."""
+    ctx = get_context()
+    return ctx.game_clock + ctx._virtual_time_ms // 1000
 
 
 # ---------------------------------------------------------------------------
@@ -402,13 +403,29 @@ def set_critical(flag: Any = None) -> None:
 @pol_function("os", "Sleepms")
 @pol_function("", "Sleepms")
 def sleepms(ms: Any = None) -> None:
-    pass  # No delays in simulation
+    """Advance virtual time by *ms* milliseconds."""
+    if ms is None:
+        return
+    try:
+        val = int(ms)
+    except (TypeError, ValueError):
+        return
+    if val > 0:
+        get_context()._virtual_time_ms += val
 
 
 @pol_function("os", "Sleep")
 @pol_function("", "Sleep")
 def sleep_func(seconds: Any = None) -> None:
-    pass  # No delays in simulation
+    """Advance virtual time by *seconds* seconds."""
+    if seconds is None:
+        return
+    try:
+        val = int(seconds)
+    except (TypeError, ValueError):
+        return
+    if val > 0:
+        get_context()._virtual_time_ms += val * 1000
 
 
 @pol_function("os", "set_script_option")
@@ -482,6 +499,18 @@ def play_stationary_effect(*args: Any, **kwargs: Any) -> None:
 def play_lightning_bolt_effect(mobile: Any = None) -> None:
     """Play lightning bolt visual effect (no-op in simulation)."""
     logger.debug("PlayLightningBoltEffect (no-op)")
+
+
+@pol_function("uo", "SpeakPowerWords")
+@pol_function("", "SpeakPowerWords")
+def speak_power_words(
+    who: Any = None,
+    spellid: Any = None,
+    font: Any = None,
+    color: Any = None,
+) -> None:
+    """Speak spell power words (no-op — visual/audio only)."""
+    logger.debug("SpeakPowerWords (no-op)", spellid=spellid)
 
 
 @pol_function("uo", "send_attack")

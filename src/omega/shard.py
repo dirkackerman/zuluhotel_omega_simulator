@@ -30,6 +30,7 @@ class ShardData:
         self.root: Path = shard_root.resolve()
         self._package_map: dict[str, Path] = {}
         self._config_cache: dict[str, ConfigFile] = {}
+        self._spell_registry: object | None = None
 
     @classmethod
     def from_path(cls, shard_root: Path) -> ShardData:
@@ -56,6 +57,39 @@ class ShardData:
     def config_dir(self) -> Path:
         """Path to the shard's config/ directory."""
         return self.root / "config"
+
+    @property
+    def spell_registry(self) -> object:
+        """Lazily build and cache a SpellRegistry from shard config files."""
+        if self._spell_registry is None:
+            from omega.config.spell_registry import SpellRegistry
+
+            circles_path = self.config_dir / "circles.cfg"
+            spell_cfg_paths: list[tuple[Path, str]] = []
+
+            # Standard spells
+            for pkg_name, school in [
+                ("spells", "Standard"),
+                ("Necro", "Necromancy"),
+                ("Earth", "Earth"),
+                ("holybook", "Holy"),
+            ]:
+                pkg_dir = self._package_map.get(pkg_name)
+                if pkg_dir is not None:
+                    cfg = pkg_dir / "spells.cfg"
+                    if cfg.exists():
+                        spell_cfg_paths.append((cfg, school))
+
+            if circles_path.exists() and spell_cfg_paths:
+                self._spell_registry = SpellRegistry.from_cfg(
+                    spell_cfg_paths=spell_cfg_paths,
+                    circles_path=circles_path,
+                )
+            else:
+                # Return empty registry if config files missing
+                self._spell_registry = SpellRegistry()
+
+        return self._spell_registry
 
     @property
     def combat_pkg_dir(self) -> Path | None:
@@ -133,6 +167,10 @@ class ShardData:
         packages (POL's wildcard config behavior).
         """
         results: list[Path] = []
+        # POL's wildcard also searches the root config/ directory
+        root_candidate = self.root / "config" / f"{cfg_name}.cfg"
+        if root_candidate.exists() and root_candidate.is_file():
+            results.append(root_candidate)
         for pkg_dir in self._package_map.values():
             for candidate in [
                 pkg_dir / "config" / f"{cfg_name}.cfg",

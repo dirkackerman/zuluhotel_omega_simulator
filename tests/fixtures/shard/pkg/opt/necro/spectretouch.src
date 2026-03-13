@@ -1,0 +1,83 @@
+use uo;
+use os;
+
+include "include/client";
+include "include/classes";
+include "include/spelldata";
+include "include/attributes";
+
+const SPELL_EFFECT_TYPE_MOVING 	:= MOVING_SPELL_SPECTER_TOUCH;
+const SPELL_EFFECT_ID		:= FX_SPELL_SPECTER_TOUCH;
+const SPELL_EFFECT_SPEED	:= SPEED_SPELL_SPECTER_TOUCH;
+const SPELL_EFFECT_LOOP		:= LOOP_SPELL_SPECTER_TOUCH;
+
+
+program cast_spectretouch( parms )
+	
+	var circle := GetCircle( SPELLID_SPECTER_TOUCH );
+	var plane := NECRO;
+	var caster;
+	var cast_on;
+	var fromhit;
+
+	if (parms[1] == "#MOB")
+		caster := parms[2];
+        if(IsInSafeArea(caster))
+            return;
+        endif
+		cast_on := parms[3];
+		if (parms[4])
+			circle := parms[4];
+		endif
+		if (parms[5])
+			fromhit := parms[5];
+		endif
+
+	else
+		caster := parms;	
+        if(IsInSafeArea(caster))
+            SendSysMessage(caster, "This spell can not be cast here.");
+			EraseObjProperty( caster , "#Casting" );
+            return;
+        endif
+		if( TryToCast( caster, SPELLID_SPECTER_TOUCH ) != SUCCESS )
+			EraseObjProperty( caster , "#Casting" );
+			return;
+		endif
+		SendSysmessage( caster , "Select a target." );
+		cast_on := CanTargetArea( caster , circle );
+	endif
+			
+	if( !cast_on )
+		EraseObjProperty( caster , "#Casting" );
+		return;
+	endif
+		
+	var dmg;
+	var range := ModifyWithMagicEfficiency( caster , Cint( GetEffectiveSkill( caster , SKILLID_MAGERY ) / 30 ) );
+	var victims := ListMobilesNearLocation( cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z) , range );
+	EraseObjProperty( caster , "#Casting" );
+	
+	victims := SmartAoE(caster, victims);
+
+	foreach mobile in victims
+
+		if( CheckLosAt( mobile , cint(cast_on.x) , cint(cast_on.y) , cint(cast_on.z) ) and mobile.dead == 0 )
+			var immunity := IsProtected( caster , mobile , circle );
+			var circ := circle;
+			if( immunity != IMMUNED )
+				if( immunity == CURSED )
+					circ := circ * 2;
+				endif
+			
+				dmg := CalcSpellDamage( caster , mobile , circ , AREA_EFFECT_SPELL );
+				Send_attack( mobile , caster , SPELLID_SPECTER_TOUCH );
+				PlaySoundEffect( mobile , SFX_SPELL_SPECTER_TOUCH );
+				PlayStationaryEffect( cint(mobile.x), cint(mobile.y), cint(mobile.z) , FX_SPELL_SPECTER_TOUCH , SPEED_SPELL_SPECTER_TOUCH , LOOP_SPELL_SPECTER_TOUCH );
+				ApplyplanarDamage( caster , mobile , circ , dmg , plane );
+			endif
+		endif
+
+	endforeach
+
+endprogram

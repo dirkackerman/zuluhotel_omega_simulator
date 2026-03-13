@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from omega.combat.result import HitResult
+from omega.combat.spell_result import SpellResult
 
 
 def _safe_float(val: Any) -> float:
@@ -64,6 +65,14 @@ class RatioStats:
     reactive_rate_on_hit: float = 0.0
     spell_strike_rate_on_hit: float = 0.0
     effect_rate_on_hit: float = 0.0
+
+    # Spell-specific rates
+    fizzle_rate: float = 0.0
+    """Fraction of all iterations where CheckSkill failed (spell fizzled)."""
+    resist_rate: float = 0.0
+    """Fraction of all iterations where target resisted (including fizzles)."""
+    resist_rate_on_cast: float = 0.0
+    """Fraction of successful casts where target resisted."""
 
 
 # Bitflag → field name mapping for element types
@@ -207,10 +216,12 @@ class CellResult:
     # On-hit variants — stats computed only over swings that connected
     damage_stats_on_hit: DamageStats = field(default_factory=DamageStats)
     """Damage stats for hits only (excludes misses with 0 damage)."""
+    damage_stats_on_cast: DamageStats = field(default_factory=DamageStats)
+    """Damage stats for successful casts only (excludes fizzles)."""
     drain_stats_on_hit: DamageStats = field(default_factory=DamageStats)
     """Drain stats for hits only (excludes misses)."""
 
-    raw_results: list[HitResult] = field(default_factory=list)
+    raw_results: list[HitResult | SpellResult] = field(default_factory=list)
     iteration_count: int = 0
     success_count: int = 0
     error_count: int = 0
@@ -432,5 +443,146 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
             dps_on_hit=mean_on_hit * swings_per_sec,
             effective_dps=hit_rate * mean_on_hit * swings_per_sec,
         )
+
+    return cell
+
+
+def _aggregate_elemental_breakdown(
+    results: list[Any],
+) -> ElementalBreakdown:
+    """Aggregate elemental/planar metrics from a list of results.
+
+    Works with both HitResult and SpellResult — both store metrics dicts
+    with ``elemental_applied`` and ``planar_applied`` lists.
+    """
+    elem_gross: dict[str, float] = {}
+    elem_net: dict[str, float] = {}
+    elem_prot: dict[str, float] = {}
+    elem_healed: dict[str, float] = {}
+    elem_count = 0
+
+    for r in results:
+        has_elem = False
+        for metric_key in ("elemental_applied", "planar_applied"):
+            applied = r.metrics.get(metric_key)
+            if not applied:
+                continue
+            has_elem = True
+            for entry in applied:
+                attack_type = entry.get("attack_type", 0)
+                try:
+                    elem_name = _DMGID_TO_ELEMENT.get(int(attack_type))
+                except (TypeError, ValueError):
+                    continue
+                if elem_name is None:
+                    continue
+                elem_gross[elem_name] = elem_gross.get(elem_name, 0.0) + _safe_float(entry.get("dmg_gross", 0))
+                elem_net[elem_name] = elem_net.get(elem_name, 0.0) + _safe_float(entry.get("dmg_net", 0))
+                elem_prot[elem_name] = elem_prot.get(elem_name, 0.0) + _safe_float(entry.get("prot", 0))
+                elem_healed[elem_name] = elem_healed.get(elem_name, 0.0) + _safe_float(entry.get("healed", 0))
+        if has_elem:
+            elem_count += 1
+
+    if elem_count == 0:
+        return ElementalBreakdown()
+
+    elements = {}
+    for name in set(elem_gross) | set(elem_net) | set(elem_healed):
+        elements[name] = ElementDamage(
+            gross=elem_gross.get(name, 0.0) / elem_count,
+            net=elem_net.get(name, 0.0) / elem_count,
+            prot=elem_prot.get(name, 0.0) / elem_count,
+            healed=elem_healed.get(name, 0.0) / elem_count,
+        )
+    return ElementalBreakdown(elements=elements)
+
+
+def aggregate_spell_cell(results: list[SpellResult]) -> CellResult:
+    """Compute all statistics from a list of SpellResult objects.
+
+    Spell-specific counterpart to :func:`aggregate_cell`.  Computes
+    fizzle rate, resist rate, on-cast damage stats, elemental breakdown,
+    and DPS from casting delay.
+    """
+    cell = CellResult(
+        raw_results=results,
+        iteration_count=len(results),
+    )
+
+    if not results:
+        return cell
+
+    # Separate successes (script ran) from errors (script crashed)
+    successes = [r for r in results if r.success]
+    cell.success_count = len(successes)
+    cell.error_count = len(results) - len(successes)
+
+    if not successes:
+        return cell
+
+    n = len(successes)
+
+    # Separate casts (spell fired) from fizzles (CheckSkill or mana failed)
+    casts = [r for r in successes if not r.fizzled]
+    n_casts = len(casts)
+
+    # Damage stats — overall (all iterations, fizzles produce 0 damage)
+    final_damages = [r.final_damage for r in successes]
+    cell.damage_stats = _compute_damage_stats(final_damages)
+
+    # On-cast damage stats (only spells that actually fired)
+    if casts:
+        cast_damages = [r.final_damage for r in casts]
+        cell.damage_stats_on_cast = _compute_damage_stats(cast_damages)
+
+        # On-hit equivalent: casts with damage > 0 (excludes immuned, etc.)
+        hits = [r for r in casts if r.final_damage > 0]
+        if hits:
+            cell.damage_stats_on_hit = _compute_damage_stats(
+                [r.final_damage for r in hits]
+            )
+
+        # Base damage stats from casts only (fizzles have base_damage=0)
+        base_damages = [float(r.base_damage) for r in casts]
+        cell.base_damage_stats = _compute_damage_stats(base_damages)
+
+    # Absorbed stats from cast metrics
+    absorbed_vals = [_safe_float(r.absorbed) for r in successes]
+    cell.absorbed_stats = _compute_damage_stats(absorbed_vals)
+
+    # Resist counting
+    resisted_count = sum(1 for r in casts if r.resisted)
+
+    # Ratios
+    fizzle_rate = (n - n_casts) / n
+    resist_rate = resisted_count / n
+    resist_rate_on_cast = resisted_count / n_casts if n_casts else 0.0
+    cast_rate = n_casts / n  # Analogous to hit_rate
+
+    cell.ratios = RatioStats(
+        hit_rate=cast_rate,
+        fizzle_rate=fizzle_rate,
+        resist_rate=resist_rate,
+        resist_rate_on_cast=resist_rate_on_cast,
+    )
+
+    # Elemental breakdown
+    cell.elemental_breakdown = _aggregate_elemental_breakdown(successes)
+
+    # Timing / DPS — casting delay is constant for the same caster+spell combo
+    # Use first non-fizzled result's casting_delay_ms
+    if casts:
+        first_delay = casts[0].casting_delay_ms
+        if first_delay > 0:
+            casts_per_sec = 1000.0 / first_delay
+            mean_dmg = cell.damage_stats.mean
+            mean_on_cast = cell.damage_stats_on_cast.mean
+            cell.timing = TimingStats(
+                swing_delay_ms=first_delay,
+                swings_per_second=casts_per_sec,
+                dps_mean=mean_dmg * casts_per_sec,
+                dps_on_hit=mean_on_cast * casts_per_sec,
+                effective_dps=cast_rate * mean_on_cast * casts_per_sec,
+            )
 
     return cell
