@@ -584,11 +584,11 @@ class TestGuildStubs:
 
     def test_guild_not_enemy(self):
         guild = call_builtin("uo", "FindGuild", [1])
-        assert guild.IsEnemyGuild(None) is False
+        assert guild.IsEnemyGuild(None) == 0
 
     def test_guild_not_ally(self):
         guild = call_builtin("uo", "FindGuild", [1])
-        assert guild.IsAllyGuild(None) is False
+        assert guild.IsAllyGuild(None) == 0
 
     def test_guild_stub_has_guildid(self):
         """Guild stub has guildid attribute set to 0."""

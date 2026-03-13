@@ -246,14 +246,14 @@ def random_int_func(max_val: Any = 1) -> int:
 
 @pol_function("", "SplitWords")
 @pol_function("basic", "SplitWords")
-def split_words(text: Any = "", delim: Any = None) -> list[str]:
-    """Split string into array of words."""
-    from omega.interpreter.types import UNINIT
+def split_words(text: Any = "", delim: Any = None) -> Any:
+    """Split string into array of words. Returns EArray for POL conformance."""
+    from omega.interpreter.types import EArray, UNINIT
 
     s = str(text) if text is not None else ""
     if delim is not None and delim is not UNINIT:
-        return s.split(str(delim))
-    return s.split()
+        return EArray(s.split(str(delim)))
+    return EArray(s.split())
 
 
 @pol_function("", "Lower")

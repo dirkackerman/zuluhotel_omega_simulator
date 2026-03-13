@@ -515,13 +515,15 @@ def get_equipment_by_layer(mobile: Any = None, layer: Any = None) -> Any:
 
 @pol_function("uo", "ListEquippedItems")
 @pol_function("", "ListEquippedItems")
-def list_equipped_items(mobile: Any = None) -> list[Any]:
-    """Get list of all equipped items."""
+def list_equipped_items(mobile: Any = None) -> Any:
+    """Get array of all equipped items. Returns EArray for POL conformance."""
+    from omega.interpreter.types import EArray
+
     if mobile is None:
-        return []
+        return EArray()
     if hasattr(mobile, "list_equipment"):
-        return list(mobile.list_equipment().values())
-    return []
+        return EArray(list(mobile.list_equipment().values()))
+    return EArray()
 
 
 @pol_function("uo", "GetKarma")

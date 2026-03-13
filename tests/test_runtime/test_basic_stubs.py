@@ -396,8 +396,10 @@ class TestStringOps:
         assert call_builtin("", "SplitWords", [""]) == []
 
     def test_split_words_uninit_text(self):
+        from omega.interpreter.types import EArray
+
         result = call_builtin("", "SplitWords", [UNINIT])
-        assert isinstance(result, list)
+        assert isinstance(result, EArray)
 
     def test_lower(self):
         assert call_builtin("", "Lower", ["HELLO"]) == "hello"

@@ -186,7 +186,7 @@ Both produce the same internal `Combatant` object. Manual mode works without con
 - Distributions: damage histogram, damage breakdown by type, absorbed vs dealt
 - Ratios: hit/miss/crit, poison applied, equipment break chance
 - Curves: damage vs skill level, damage vs AR
-- Hot reload: watch eScript files for changes, re-parse and re-run
+- Hot reload: call `reload_omega()` in notebooks to pick up Python source changes without restarting the kernel. eScript re-parsing requires re-running `shard.parse_combat_scripts()` / `shard.parse_spell_scripts()`
 
 ### Validation
 Hand-calculate 3-5 specific combat scenarios from the eScript source as integration test fixtures. Verify in-game where possible:
@@ -225,13 +225,14 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 
 ### V3 — Damage Spell Casting
 - New simulation type: `execute_spell()` / `run_spell_scenario()` parallel to weapon-hit simulation
-- 31 damage-dealing spells across 4 schools (Standard, Necromancy, Earth, Holy)
+- 29 castable spells across 4 schools (Standard, Necromancy, Earth, Holy): 26 damage-dealing + 3 reclassified as non-damage (Decaying Ray = AR debuff, Wraith's Breath = CC, Sacrifice = pet mechanic)
 - Single-target and AoE spells, executing real shard spell scripts through the interpreter
 - Full spell damage pipeline: CheckSkill (fizzle) → CalcSpellDamage → Resisted → ApplyElementalDamage → ApplyTheDamage
 - Spell-specific stats: fizzle rate, resist rate, elemental breakdown
 - New stubs: CheckSkill, ConsumeMana, CanTargetSpell, ListMobilesNearLocationEx, RandomDiceRoll
 - 3 new notebooks (spell damage, spell comparison, spell resistance)
 - POL stub audit for spell-path stubs
+- See [Spell Catalog](./notebooks/docs/spells.md) for the full spell reference with reclassification notes
 
 ### V4 — Extended Combat
 - HP tracking and kill-time distributions
@@ -247,7 +248,7 @@ pytest                    # everything sequential (~78s)
 pytest -n auto            # parallel via pytest-xdist (~36s, preferred)
 ```
 
-All tests run unconditionally — no markers, no skips, no submodule dependency.
+All tests currently pass — none are permanently skipped or marked xfail. Some integration tests use conditional `pytest.skip()` on script execution failure to allow gradual stub coverage expansion. No submodule dependency.
 
 ### Test fixture locality principle
 - Tests **never** directly reference the shard submodule. All shard resources are snapshotted into `tests/fixtures/shard/` (266 files, 1022 KB).
@@ -292,7 +293,7 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **V2 status**: Complete (M-V2.1–M-V2.8). POL stub conformance audit, virtual time & DPS metrics, astral damage validation, reactive armor + resistance integration, notebook enrichment. 1533 tests.
 - **[Path to V2](./planning/path_to_v2.md)** — Spell & Resistance Flows roadmap (M-V2.1–M-V2.8): POL stub conformance audit, virtual time & DPS metrics, astral damage validation, reactive armor + resistance integration, notebook enrichment
 - **[Changelog to V2](./changelog/changelog_to_v2.md)** — Per-milestone change summaries for V2
-- **V3 status**: In progress — M23–M29 complete. 2196 tests.
+- **V3 status**: Complete (M23–M29). 29 castable spells (26 damage + 3 non-damage), 3 notebooks, full spell damage pipeline. 2201 tests.
 - **[Path to V3](./planning/path_to_v3.md)** — Damage Spell Casting roadmap (M23–M29): spell config, execution engine, single-target + AoE spells, runner/stats, reporting/notebooks, stub audit
 - **[Changelog to V3](./changelog/changelog_to_v3.md)** — Per-milestone change summaries for V3
 

@@ -17,7 +17,7 @@ import omega.runtime  # noqa: F401
 
 from omega.combat.spell import execute_spell
 from omega.combat.spell_result import SpellResult
-from omega.config.spell_registry import DAMAGE_SPELL_IDS
+from omega.config.spell_registry import CASTABLE_SPELL_IDS, DAMAGE_SPELL_IDS
 from omega.config.spells import Spell
 from omega.interpreter.types import UNINIT
 from omega.model.constants import (
@@ -1190,12 +1190,12 @@ class TestUNINITEdgeCases:
         assert result is mob
 
     def test_target_coordinates_uninit_caster(self):
-        """TargetCoordinates(UNINIT) returns 0,0,0 struct."""
+        """TargetCoordinates(UNINIT) returns non-zero default coords."""
         from omega.runtime.structural_stubs import target_coordinates
         ctx = SimulationContext(defenders=[])
         set_context(ctx)
         result = target_coordinates(UNINIT)
-        assert result.get_member("x") == 0
+        assert result.get_member("x") == 100
 
     def test_list_mobiles_near_location_ex_uninit_params(self):
         """ListMobilesNearLocationEx with UNINIT params returns defenders."""
@@ -1265,39 +1265,34 @@ class TestUNINITEdgeCases:
 
 
 class TestSpellPerSpellCoverage:
-    """Ensure every damage spell in DAMAGE_SPELL_IDS has at least basic coverage."""
+    """Ensure every castable spell executes, and every damage spell deals damage."""
 
-    # Spells known not to deal damage in standard NPC mode
-    _ZERO_DAMAGE = frozenset({
-        Spell.DECAYING_RAY,
-        Spell.WRAITHS_BREATH,
-        Spell.SACRIFICE,
+    # Spells in DAMAGE_SPELL_IDS that deal 0 damage in standard NPC mode
+    # (alignment-gated, karma-based, or indirect damage via sub-script)
+    _CONDITIONAL_DAMAGE = frozenset({
         Spell.RISING_FIRE,
         Spell.ASTRAL_STORM,
         Spell.HOLY_BOLT,
         Spell.WRATH_OF_GOD,
     })
 
-    @pytest.mark.parametrize("spell", sorted(DAMAGE_SPELL_IDS, key=lambda s: s.value),
+    @pytest.mark.parametrize("spell", sorted(CASTABLE_SPELL_IDS, key=lambda s: s.value),
                              ids=lambda s: s.name)
     def test_spell_executes_without_error(self, fixture_shard, spell):
-        """Every damage spell executes without errors."""
+        """Every castable spell (damage and non-damage) executes without errors."""
         cell = _run(fixture_shard, spell, iterations=10)
         assert cell.error_count == 0, f"{spell.name} had errors"
 
     @pytest.mark.parametrize(
         "spell",
-        sorted([s for s in DAMAGE_SPELL_IDS
-                if s not in frozenset({
-                    Spell.DECAYING_RAY, Spell.WRAITHS_BREATH, Spell.SACRIFICE,
-                    Spell.RISING_FIRE, Spell.ASTRAL_STORM,
-                    Spell.HOLY_BOLT, Spell.WRATH_OF_GOD,
-                })],
-               key=lambda s: s.value),
+        sorted([s for s in DAMAGE_SPELL_IDS if s not in frozenset({
+            Spell.RISING_FIRE, Spell.ASTRAL_STORM,
+            Spell.HOLY_BOLT, Spell.WRATH_OF_GOD,
+        })], key=lambda s: s.value),
         ids=lambda s: s.name,
     )
     def test_spell_deals_positive_damage(self, fixture_shard, spell):
-        """Non-zero-damage spells deal positive damage."""
+        """Damage spells deal positive damage (excluding conditional-damage spells)."""
         cell = _run(fixture_shard, spell, iterations=50)
         assert cell.damage_stats.mean > 0, f"{spell.name} dealt no damage"
 

@@ -5,7 +5,9 @@ from pathlib import Path
 import pytest
 
 from omega.config.spell_registry import (
+    CASTABLE_SPELL_IDS,
     DAMAGE_SPELL_IDS,
+    NON_DAMAGE_SPELL_IDS,
     CircleConfig,
     SpellEntry,
     SpellRegistry,
@@ -181,12 +183,32 @@ class TestSpellParsing:
 
 
 class TestDamageSpells:
-    def test_damage_spell_count(self):
-        assert len(DAMAGE_SPELL_IDS) == 29
+    def test_castable_spell_count(self):
+        """All 29 castable spells (damage + non-damage with scripts)."""
+        assert len(CASTABLE_SPELL_IDS) == 29
 
-    def test_all_damage_spells_resolvable(self, registry: SpellRegistry):
-        """Every damage spell ID resolves to a SpellEntry."""
-        for spell_id in DAMAGE_SPELL_IDS:
+    def test_damage_spell_count(self):
+        """26 spells that deal direct damage."""
+        assert len(DAMAGE_SPELL_IDS) == 26
+
+    def test_non_damage_spell_count(self):
+        """3 spells reclassified as non-damage (AR debuff, CC, pet mechanic)."""
+        assert len(NON_DAMAGE_SPELL_IDS) == 3
+
+    def test_sets_partition_correctly(self):
+        """DAMAGE + NON_DAMAGE = CASTABLE, no overlap."""
+        assert DAMAGE_SPELL_IDS | NON_DAMAGE_SPELL_IDS == CASTABLE_SPELL_IDS
+        assert DAMAGE_SPELL_IDS & NON_DAMAGE_SPELL_IDS == frozenset()
+
+    def test_non_damage_members(self):
+        """Reclassified non-damage spells are correct."""
+        assert Spell.DECAYING_RAY in NON_DAMAGE_SPELL_IDS
+        assert Spell.WRAITHS_BREATH in NON_DAMAGE_SPELL_IDS
+        assert Spell.SACRIFICE in NON_DAMAGE_SPELL_IDS
+
+    def test_all_castable_spells_resolvable(self, registry: SpellRegistry):
+        """Every castable spell ID resolves to a SpellEntry."""
+        for spell_id in CASTABLE_SPELL_IDS:
             entry = registry.by_id(spell_id)
             assert entry is not None, f"Spell {spell_id!r} ({spell_id.name}) not found in registry"
 
@@ -197,16 +219,17 @@ class TestDamageSpells:
             assert entry.circle > 0, f"Spell {spell_id.name} has circle={entry.circle}"
 
     def test_damage_spells_have_scripts(self, registry: SpellRegistry):
-        for spell_id in DAMAGE_SPELL_IDS:
+        for spell_id in CASTABLE_SPELL_IDS:
             entry = registry.by_id(spell_id)
             assert entry is not None
             assert entry.script, f"Spell {spell_id.name} has empty script"
 
     def test_no_song_damage_spells(self):
-        """No songs should be in the damage spell set."""
+        """No songs should be in any spell set."""
         song_ids = range(182, 198)
         for sid in song_ids:
             assert sid not in DAMAGE_SPELL_IDS
+            assert sid not in CASTABLE_SPELL_IDS
 
     def test_damage_spell_schools(self, registry: SpellRegistry):
         """At least one damage spell from each of the 4 schools."""
@@ -219,7 +242,7 @@ class TestDamageSpells:
     def test_damage_spells_method(self, registry: SpellRegistry):
         """registry.damage_spells() returns the correct list."""
         dmg = registry.damage_spells()
-        assert len(dmg) == 29
+        assert len(dmg) == 26
         ids = {e.id for e in dmg}
         assert ids == set(DAMAGE_SPELL_IDS)
 

@@ -60,10 +60,12 @@ class SpellEntry:
 
 
 # ---------------------------------------------------------------------------
-# Damage spell IDs — the 29 damage-dealing spells for V3
+# Spell ID sets
 # ---------------------------------------------------------------------------
 
-DAMAGE_SPELL_IDS: frozenset[Spell] = frozenset({
+# CASTABLE_SPELL_IDS — all 29 spells with executable scripts in the V3 set.
+# Includes non-damage spells (buffs, debuffs, CC) that have scripts we can run.
+CASTABLE_SPELL_IDS: frozenset[Spell] = frozenset({
     # Standard (11)
     Spell.MAGIC_ARROW, Spell.HARM, Spell.FIREBALL, Spell.LIGHTNING,
     Spell.MIND_BLAST, Spell.ENERGY_BOLT, Spell.EXPLOSION,
@@ -80,6 +82,19 @@ DAMAGE_SPELL_IDS: frozenset[Spell] = frozenset({
     Spell.HOLY_BOLT, Spell.WRATH_OF_GOD, Spell.DIVINE_FURY,
     Spell.ASTRAL_STORM, Spell.APOCALYPSE,
 })
+
+# NON_DAMAGE_SPELL_IDS — spells in CASTABLE_SPELL_IDS that don't deal direct
+# damage.  Decaying Ray is an AR debuff, Wraith's Breath is paralysis/CC,
+# Sacrifice is a pet sacrifice mechanic.
+NON_DAMAGE_SPELL_IDS: frozenset[Spell] = frozenset({
+    Spell.DECAYING_RAY,
+    Spell.WRAITHS_BREATH,
+    Spell.SACRIFICE,
+})
+
+# DAMAGE_SPELL_IDS — the 26 spells that deal direct damage (used for damage
+# analysis).  Excludes the 3 non-damage spells above.
+DAMAGE_SPELL_IDS: frozenset[Spell] = CASTABLE_SPELL_IDS - NON_DAMAGE_SPELL_IDS
 
 
 # ---------------------------------------------------------------------------

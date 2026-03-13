@@ -8,7 +8,7 @@ magic efficiency, and skill/stat scaling.
 
 import pytest
 
-from omega.config.spell_registry import SpellRegistry, DAMAGE_SPELL_IDS
+from omega.config.spell_registry import SpellRegistry, CASTABLE_SPELL_IDS, DAMAGE_SPELL_IDS
 from omega.config.spells import Spell
 from omega.model.constants import (
     SKILLID_MAGERY,
@@ -105,17 +105,23 @@ def _run(
 # C1. Per-Spell Execution — all damage spells execute without error
 # ---------------------------------------------------------------------------
 
-# Spells known to deal 0 damage (buff/debuff/heal disguised as damage spell):
-# Decaying Ray, Wraith's Breath, Sacrifice, Rising Fire, Astral Storm
-_ZERO_DAMAGE_SPELLS = frozenset({
-    Spell.DECAYING_RAY,
-    Spell.WRAITHS_BREATH,
-    Spell.SACRIFICE,
+# Spells that deal 0 damage in standard NPC mode (alignment-gated, karma-based,
+# indirect via sub-script, or non-damage spells in CASTABLE_SPELL_IDS).
+_CONDITIONAL_DAMAGE_SPELLS = frozenset({
     Spell.RISING_FIRE,
     Spell.ASTRAL_STORM,
     # Holy spells heal non-undead targets instead of dealing damage
     Spell.HOLY_BOLT,
     Spell.WRATH_OF_GOD,
+})
+
+# Non-damage spells that have scripts but don't deal direct damage
+# (AR debuff, CC, pet sacrifice). These are in CASTABLE_SPELL_IDS
+# but NOT in DAMAGE_SPELL_IDS.
+_NON_DAMAGE_SPELLS = frozenset({
+    Spell.DECAYING_RAY,
+    Spell.WRAITHS_BREATH,
+    Spell.SACRIFICE,
 })
 
 
@@ -166,7 +172,7 @@ class TestPerSpellExecution:
 
     @pytest.mark.parametrize(
         "spell",
-        [s for s in _SINGLE_TARGET_DAMAGE if s not in _ZERO_DAMAGE_SPELLS],
+        [s for s in _SINGLE_TARGET_DAMAGE if s not in _CONDITIONAL_DAMAGE_SPELLS],
         ids=lambda s: s.name,
     )
     def test_single_target_spells_deal_damage(self, fixture_shard, spell):
@@ -183,9 +189,15 @@ class TestPerSpellExecution:
         cell = _run(fixture_shard, spell, iterations=50)
         assert cell.damage_stats.mean > 0, f"{spell.name} dealt no damage"
 
-    def test_zero_damage_spells(self, fixture_shard):
-        """Known non-damage spells in DAMAGE_SPELL_IDS execute without error."""
-        for spell in _ZERO_DAMAGE_SPELLS:
+    def test_conditional_damage_spells(self, fixture_shard):
+        """Conditional-damage spells execute without error."""
+        for spell in _CONDITIONAL_DAMAGE_SPELLS:
+            cell = _run(fixture_shard, spell, iterations=10)
+            assert cell.error_count == 0, f"{spell.name} had errors"
+
+    def test_non_damage_spells(self, fixture_shard):
+        """Non-damage spells (AR debuff, CC, pet mechanic) execute without error."""
+        for spell in _NON_DAMAGE_SPELLS:
             cell = _run(fixture_shard, spell, iterations=10)
             assert cell.error_count == 0, f"{spell.name} had errors"
 

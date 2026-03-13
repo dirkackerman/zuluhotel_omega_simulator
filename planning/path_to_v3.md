@@ -8,7 +8,7 @@ V3 adds **damage spell casting** as a new simulation type alongside the existing
 
 ## Scope
 
-- **31 damage-dealing spells** across 4 schools (Standard, Necromancy, Earth, Holy)
+- **29 castable spells** across 4 schools (Standard, Necromancy, Earth, Holy) — 26 damage-dealing + 3 reclassified as non-damage during implementation (see M25/M26 changelogs)
 - **Single-target and AoE spells**
 - New `execute_spell()` entry point, `SpellScenario`, spell-specific stats
 - Spell fizzle rate (CheckSkill), resistance rate, elemental protection
@@ -42,9 +42,9 @@ Spell casting is **fully eScript** — no POL core success check. The interprete
 | `HitResult` | `SpellResult` |
 | `Scenario` / `run_scenario()` | `SpellScenario` / `run_spell_scenario()` |
 
-## Damage Spell Catalog (31 spells)
+## Damage Spell Catalog (29 castable spells)
 
-### Standard (12)
+### Standard (11)
 
 | Spell | ID | Circle | Element | Type |
 |---|---|---|---|---|
@@ -208,12 +208,12 @@ Note: `IsProtected`, `Reflected`, `CalcSpellDamage`, `Resisted`, `ApplyElemental
 **Deliverables**:
 - Parse `spells.cfg` — spell ID → name, script path, circle, reagents
 - Parse `circles.cfg` — circle → mana cost, difficulty, delay, point value
-- `sync_fixtures.py` updated to pull all 31 damage spell `.src` files + `spelldata.inc` additions + `spells.cfg` + `circles.cfg`
+- `sync_fixtures.py` updated to pull all 29 castable spell `.src` files + `spelldata.inc` additions + `spells.cfg` + `circles.cfg`
 - `SpellConfig` dataclass for spell metadata lookup
-- Unit tests: config parsing, all 31 spells resolvable by ID
+- Unit tests: config parsing, all 29 spells resolvable by ID
 
 **Acceptance**:
-- `SpellConfig.get(spell_id)` returns circle, script path, mana cost, difficulty for all 31 damage spells
+- `SpellConfig.get(spell_id)` returns circle, script path, mana cost, difficulty for all 29 castable spells
 - Fixture shard contains all damage spell scripts
 
 ---
@@ -242,7 +242,7 @@ Note: `IsProtected`, `Reflected`, `CalcSpellDamage`, `Resisted`, `ApplyElemental
 
 ### M25 — Single-Target Damage Spells
 
-**Goal**: All 20 single-target damage spells executing correctly with validated damage.
+**Goal**: All 19 single-target spells executing correctly with validated damage.
 
 **Deliverables**:
 - Any additional stubs discovered during execution
@@ -255,11 +255,13 @@ Note: `IsProtected`, `Reflected`, `CalcSpellDamage`, `Resisted`, `ApplyElemental
   - PvP scaling applied when both are players
   - Class bonuses affect damage (Mage caster bonus, Warrior penalty)
 
-**Spell list** (20 single-target):
+**Spell list** (19 single-target):
 Magic Arrow, Harm, Fireball, Lightning, Mind Blast, Energy Bolt, Flame Strike, Decaying Ray, Spectre's Touch, Sacrifice, Wraith's Breath, Sorcerer's Bane, Wyvern Strike, Kill, Call Lightning, Ice Strike, Shifting Earth, Holy Bolt, Divine Fury
 
+**Note**: 3 spells were reclassified as non-damage during implementation: Decaying Ray (AR debuff), Wraith's Breath (CC), Sacrifice (pet mechanic). See M25 changelog.
+
 **Acceptance**:
-- All 20 spells execute with `success=True`
+- All 19 spells execute with `success=True`
 - Property-based assertions: higher circle → higher damage, Mage bonus > base, resist halves damage
 - At least 3 spells with hand-calculated damage validation (Fireball, Flame Strike, Kill)
 
@@ -267,7 +269,7 @@ Magic Arrow, Harm, Fireball, Lightning, Mind Blast, Energy Bolt, Flame Strike, D
 
 ### M26 — AoE Damage Spells
 
-**Goal**: All 11 AoE damage spells executing correctly, hitting multiple targets.
+**Goal**: All 10 AoE damage spells executing correctly, hitting multiple targets.
 
 **Deliverables**:
 - `ListMobilesNearLocationEx` stub — returns defender(s) registered in context
@@ -281,11 +283,13 @@ Magic Arrow, Harm, Fireball, Lightning, Mind Blast, Energy Bolt, Flame Strike, D
   - Circle reduction applied (AoE deals less per-target than single-target equivalent)
   - Each target independently resists
 
-**Spell list** (11 AoE):
+**Spell list** (10 AoE):
 Explosion, Chain Lightning, Meteor Swarm, Earthquake, Abyssal Flame, Gust of Air, Rising Fire, Wrath of God, Astral Storm, Apocalypse
 
+**Note**: 3 spells were reclassified during implementation: Gust of Air (single-target, not AoE), Wrath of God (single-target karma-based), Astral Storm (CC + damage sub-script). See M26 changelog.
+
 **Acceptance**:
-- All 11 AoE spells execute against 3+ targets with `success=True`
+- All 10 AoE spells execute against 3+ targets with `success=True`
 - AoE damage < equivalent single-target damage (circle - 3 reduction verified)
 - Per-target resistance works independently
 
@@ -340,7 +344,7 @@ Explosion, Chain Lightning, Meteor Swarm, Earthquake, Abyssal Flame, Gust of Air
 - Update `scenarios.md` — `SpellScenario`, `SpellParameterSweep`
 - Update `combatant-specs.md` — caster-relevant fields (Magery, Eval Int, equipment penalties)
 - Update `examples.md` — spell casting cookbook examples
-- New `spells.md` — spell catalog reference (all 31 damage spells with circle, element, type)
+- New `spells.md` — spell catalog reference (29 castable spells with circle, element, type, reclassification notes)
 - Update `reporting.md` — new spell charts and table columns
 
 **Acceptance**:

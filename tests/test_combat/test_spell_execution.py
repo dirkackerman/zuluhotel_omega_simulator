@@ -6,7 +6,7 @@ import omega.runtime  # noqa: F401
 
 from omega.combat.spell import execute_spell, _resolve_spell_script
 from omega.combat.spell_result import SpellResult
-from omega.config.spell_registry import SpellRegistry, DAMAGE_SPELL_IDS
+from omega.config.spell_registry import SpellRegistry
 from omega.config.spells import Spell
 from omega.model.constants import SKILLID_MAGERY, SKILLID_EVALINT, SKILLID_MAGICRESISTANCE
 from omega.config.dice import DiceSpec
@@ -869,13 +869,17 @@ class TestTargetStubEdgeCases:
         assert target_stub() is None
 
     def test_target_coordinates_no_defender(self):
-        """TargetCoordinates() with no defender returns 0,0,0."""
+        """TargetCoordinates() with no defender returns non-zero defaults.
+
+        Non-zero coords prevent shard scripts from treating the simulated
+        target as a cancelled targeting cursor (``if (!cast_loc.x)``).
+        """
         ctx = SimulationContext(defenders=[])
         set_context(ctx)
         from omega.runtime.structural_stubs import target_coordinates
         result = target_coordinates()
-        assert result.get_member("x") == 0
-        assert result.get_member("y") == 0
+        assert result.get_member("x") == 100
+        assert result.get_member("y") == 100
         assert result.get_member("z") == 0
 
 

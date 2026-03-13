@@ -758,6 +758,7 @@ def spell_comparison(
     ax.set_ylabel("Mean Damage (on cast)")
     ax.set_title(title or "Spell Comparison")
     if len(labels) > 4:
+        ax.set_xticks(range(len(labels)))
         ax.set_xticklabels(labels, rotation=15, ha="right")
     fig.tight_layout()
     plt.close(fig)

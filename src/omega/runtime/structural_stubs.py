@@ -138,35 +138,35 @@ def get_config_string(elem: Any = None, key: Any = None) -> str:
 
 @pol_function("", "GetConfigStringArray")
 @pol_function("cfgfile", "GetConfigStringArray")
-def get_config_string_array(elem: Any = None, key: Any = None) -> list[str]:
+def get_config_string_array(elem: Any = None, key: Any = None) -> EArray:
     """Get all string values for a multi-value config property.
 
     POL's GetConfigStringArray returns an array of all values for a property
     name that appears multiple times in a config element.
     """
     if elem is None or key is None:
-        return []
+        return EArray()
     # RuntimeConfigElement wraps a ConfigElement that has get_all()
     inner = getattr(elem, "_elem", None)
     if inner is not None and hasattr(inner, "get_all"):
-        return list(inner.get_all(str(key)))
+        return EArray(list(inner.get_all(str(key))))
     # Direct ConfigElement
     if hasattr(elem, "get_all"):
-        return list(elem.get_all(str(key)))
-    return []
+        return EArray(list(elem.get_all(str(key))))
+    return EArray()
 
 
 @pol_function("", "GetConfigStringKeys")
 @pol_function("cfgfile", "GetConfigStringKeys")
-def get_config_string_keys(cfg: Any = None) -> list[str]:
+def get_config_string_keys(cfg: Any = None) -> EArray:
     """Get all element names/keys from a config file."""
     if cfg is None:
-        return []
+        return EArray()
     if hasattr(cfg, "_cfg"):
         # RuntimeConfigFile wrapping a ConfigFile
         inner = cfg._cfg
-        return [e.name for e in inner]
-    return []
+        return EArray([e.name for e in inner])
+    return EArray()
 
 
 # ---------------------------------------------------------------------------
@@ -272,11 +272,11 @@ class _GuildStub:
     def __init__(self) -> None:
         self.guildid = 0
 
-    def IsEnemyGuild(self, other: Any = None) -> bool:  # noqa: N802
-        return False
+    def IsEnemyGuild(self, other: Any = None) -> int:  # noqa: N802
+        return 0
 
-    def IsAllyGuild(self, other: Any = None) -> bool:  # noqa: N802
-        return False
+    def IsAllyGuild(self, other: Any = None) -> int:  # noqa: N802
+        return 0
 
 
 _NULL_GUILD = _GuildStub()
@@ -653,17 +653,25 @@ def target_coordinates(character: Any = None) -> Any:
 
     POL's TargetCoordinates() is a blocking call.  We return an EStruct
     with the defender's x/y/z.
+
+    Coordinates default to (100, 100, 0) when the defender has no position
+    set, because many scripts guard with ``if (!cast_loc.x)`` — returning
+    x=0 would be treated as "no target selected" and abort the spell.
     """
     from omega.interpreter.evaluator import EStruct
+
+    # Default to non-zero coords so scripts that check `!cast_loc.x`
+    # don't treat the simulated target as "cancelled targeting cursor".
+    _DEFAULT_X, _DEFAULT_Y, _DEFAULT_Z = 100, 100, 0
 
     ctx = get_context()
     defender = ctx.defender
     if defender is None:
-        return EStruct({"x": 0, "y": 0, "z": 0})
+        return EStruct({"x": _DEFAULT_X, "y": _DEFAULT_Y, "z": _DEFAULT_Z})
     return EStruct({
-        "x": getattr(defender, "x", 0),
-        "y": getattr(defender, "y", 0),
-        "z": getattr(defender, "z", 0),
+        "x": getattr(defender, "x", 0) or _DEFAULT_X,
+        "y": getattr(defender, "y", 0) or _DEFAULT_Y,
+        "z": getattr(defender, "z", _DEFAULT_Z),
     })
 
 
@@ -687,9 +695,9 @@ def check_los_at(
 @pol_function("", "ListHostiles")
 def list_hostiles(
     character: Any = None, range_val: Any = None, flags: Any = None
-) -> list[Any]:
-    """Return empty list — no interruption in simulation."""
-    return []
+) -> EArray:
+    """Return empty array — no interruption in simulation."""
+    return EArray()
 
 
 @pol_function("uo", "ListMobilesNearLocationEx")
@@ -701,13 +709,13 @@ def list_mobiles_near_location_ex(
     range_val: Any = None,
     flags: Any = None,
     realm: Any = None,
-) -> list[Any]:
+) -> EArray:
     """Return all defenders from context for AoE targeting."""
     ctx = get_context()
     result = list(ctx.defenders) if ctx.defenders else []
     if ctx.debug_mode:
         ctx.metrics["aoe_target_count"] = len(result)
-    return result
+    return EArray(result)
 
 
 @pol_function("uo", "ListMobilesNearLocation")
@@ -718,10 +726,11 @@ def list_mobiles_near_location(
     z: Any = None,
     range_val: Any = None,
     realm: Any = None,
-) -> list[Any]:
+) -> EArray:
     """Return all defenders from context for AoE targeting."""
     ctx = get_context()
-    return list(ctx.defenders) if ctx.defenders else []
+    result = list(ctx.defenders) if ctx.defenders else []
+    return EArray(result)
 
 
 @pol_function("uo", "ListItemsNearLocation")
