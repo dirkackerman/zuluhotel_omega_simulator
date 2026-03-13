@@ -260,6 +260,23 @@ def trim_block_config(cfg_path: Path, needed_names: set[str]) -> str:
     return "".join(result)
 
 
+def _patch_debug_mode(path: Path) -> None:
+    """Set ``const DEBUG_MODE := 0`` in a fixture copy of client.inc.
+
+    The shard may ship with DEBUG_MODE set to 1 or 0.  Fixture copies always
+    get 0 so that tests can verify the executor's unconditional override back
+    to 1.
+    """
+    text = path.read_text(encoding="utf-8", errors="replace")
+    patched = re.sub(
+        r'(const\s+DEBUG_MODE\s*:=\s*)\d+',
+        r'\g<1>0',
+        text,
+    )
+    if patched != text:
+        path.write_text(patched, encoding="utf-8")
+
+
 def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
     """Copy shard resources into the fixture directory."""
     if not shard_root.exists():
@@ -274,6 +291,10 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
         else:
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest)
+            # Force DEBUG_MODE to 0 in fixture copies of client.inc so that
+            # tests validate the executor's override (which forces it back to 1).
+            if dest.name == "client.inc":
+                _patch_debug_mode(dest)
         files_copied.append((src, dest))
 
     def write_file(dest: Path, content: str, label: str) -> None:

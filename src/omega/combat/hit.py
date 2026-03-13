@@ -203,6 +203,11 @@ def execute_hit(
         # Make executor available to start_script() stub
         ctx.executor = executor
 
+        # Force DEBUG_MODE=1 in the eScript scope so all __RecordSimulatorMetric
+        # calls in the shard scripts are always active.  The shard may or may not
+        # declare ``const DEBUG_MODE := 1`` — we override unconditionally.
+        executor.scopes.define_global("DEBUG_MODE", 1)
+
         # Inject Python override for __RecordSimulatorMetric so the
         # eScript no-op is replaced with actual metric recording.
         #

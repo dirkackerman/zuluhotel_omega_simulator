@@ -671,3 +671,158 @@ def dps_comparison(
     fig.tight_layout()
     plt.close(fig)
     return fig
+
+
+def spell_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (10, 6),
+    show_fizzle: bool = True,
+    show_resist: bool = True,
+) -> Any:
+    """Bar chart comparing spells by mean on-cast damage.
+
+    Each bar shows ``damage_stats_on_cast.mean`` for a spell scenario,
+    color-coded by element when available.  Fizzle and resist rate
+    annotations are added above each bar.
+
+    Parameters
+    ----------
+    cells:
+        Mapping of spell label → :class:`CellResult`.
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+    show_fizzle:
+        Annotate fizzle rate above each bar.
+    show_resist:
+        Annotate resist rate above each bar.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+
+    if not cells:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, "No spell data", ha="center", va="center",
+                transform=ax.transAxes)
+        ax.set_title(title or "Spell Comparison")
+        plt.close(fig)
+        return fig
+
+    labels = list(cells.keys())
+    means = [cells[l].damage_stats_on_cast.mean for l in labels]
+
+    # Determine bar color from elemental breakdown (dominant element)
+    colors = []
+    for label in labels:
+        cell = cells[label]
+        eb = cell.elemental_breakdown.net_dict()
+        if eb:
+            dominant = max(eb, key=eb.get)
+            colors.append(_ELEMENT_COLORS.get(dominant, "#78909C"))
+        else:
+            colors.append("#78909C")
+
+    fig, ax = plt.subplots(figsize=figsize)
+    bars = ax.bar(labels, means, color=colors, edgecolor="black", linewidth=0.5,
+                  alpha=0.85)
+
+    # Value labels and rate annotations
+    for bar, label in zip(bars, labels):
+        h = bar.get_height()
+        cell = cells[label]
+
+        # Damage value
+        ax.text(bar.get_x() + bar.get_width() / 2, h + 0.3,
+                f"{h:.1f}", ha="center", va="bottom", fontsize=10,
+                fontweight="bold")
+
+        # Rate annotations below the bar label
+        annotations = []
+        if show_fizzle and cell.ratios.fizzle_rate > 0:
+            annotations.append(f"fizzle: {cell.ratios.fizzle_rate:.0%}")
+        if show_resist and cell.ratios.resist_rate_on_cast > 0:
+            annotations.append(f"resist: {cell.ratios.resist_rate_on_cast:.0%}")
+
+        if annotations:
+            ax.text(bar.get_x() + bar.get_width() / 2, -0.5,
+                    "\n".join(annotations), ha="center", va="top",
+                    fontsize=8, color="gray",
+                    transform=ax.get_xaxis_transform())
+
+    ax.set_ylabel("Mean Damage (on cast)")
+    ax.set_title(title or "Spell Comparison")
+    if len(labels) > 4:
+        ax.set_xticklabels(labels, rotation=15, ha="right")
+    fig.tight_layout()
+    plt.close(fig)
+    return fig
+
+
+def fizzle_rate_vs_parameter(
+    result: SimulationResult,
+    variable_name: str,
+    *,
+    show_resist: bool = True,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Any:
+    """Line plot of fizzle rate (and optionally resist rate) vs. a parameter.
+
+    Parameters
+    ----------
+    result:
+        A :class:`SimulationResult` from ``run_spell_sweep()``.
+    variable_name:
+        The variable to plot on the x-axis.
+    show_resist:
+        If True, also plot resist rate on the same axis.
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+
+    x_vals = []
+    fizzle_vals = []
+    resist_vals = []
+    for cell in result.cells:
+        if variable_name not in cell.variable_values:
+            continue
+        x_vals.append(cell.variable_values[variable_name])
+        fizzle_vals.append(cell.ratios.fizzle_rate)
+        resist_vals.append(cell.ratios.resist_rate_on_cast)
+
+    if not x_vals:
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.text(0.5, 0.5, f"No data for variable: {variable_name}",
+                ha="center", va="center", transform=ax.transAxes)
+        plt.close(fig)
+        return fig
+
+    fig, ax = plt.subplots(figsize=figsize)
+    ax.plot(x_vals, fizzle_vals, marker="o", linewidth=2, color="#E53935",
+            label="Fizzle Rate")
+
+    if show_resist:
+        ax.plot(x_vals, resist_vals, marker="s", linewidth=2, color="#1E88E5",
+                label="Resist Rate (on cast)")
+
+    ax.set_xlabel(variable_name)
+    ax.set_ylabel("Rate")
+    ax.set_ylim(-0.05, 1.05)
+    ax.set_title(title or f"Spell Rates vs. {variable_name}")
+    ax.legend()
+    fig.tight_layout()
+    plt.close(fig)
+    return fig

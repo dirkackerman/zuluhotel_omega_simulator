@@ -144,16 +144,16 @@ class TestApplyRawDamagePOLConformance:
         call_builtin("uo", "ApplyRawDamage", [m, 10])
         assert m.paralyzed is False
 
-    def test_float_damage_rounds_correctly(self):
-        """Float damage should round, not truncate: 23.7 → 24."""
+    def test_float_damage_truncates_correctly(self):
+        """Float damage should truncate, not round: 23.7 → 23 (POL static_cast<int>)."""
         m = Mobile()
         m.hp = 100
         ctx = SimulationContext()
         set_context(ctx)
 
         call_builtin("uo", "ApplyRawDamage", [m, 23.7])
-        assert m.hp == 76  # 100 - 24
-        assert ctx.total_damage_dealt == 24.0
+        assert m.hp == 77  # 100 - 23
+        assert ctx.total_damage_dealt == 23.0
 
     def test_float_damage_rounds_down_at_point_four(self):
         """23.4 rounds to 23."""

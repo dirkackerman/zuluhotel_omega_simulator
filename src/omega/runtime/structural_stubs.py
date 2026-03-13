@@ -194,7 +194,12 @@ def apply_raw_damage(mobile: Any = None, amount: Any = 0) -> None:
         return
 
     try:
-        dmg = int(round(float(amount))) if amount is not None else 0
+        # POL's getParam extracts BLong only (executor.cpp:493-501).
+        # If a Double arrives, POL rejects it and returns 0.  In practice
+        # eScript always CInt()s damage before this call, so a float here
+        # indicates a stub path divergence.  We truncate toward zero (C-style
+        # cast) rather than round, matching CInt / static_cast<int> semantics.
+        dmg = int(float(amount)) if amount is not None else 0
     except (TypeError, ValueError):
         return
     if dmg <= 0:
@@ -219,6 +224,9 @@ def apply_raw_damage(mobile: Any = None, amount: Any = 0) -> None:
         target_serial=getattr(mobile, "serial", 0),
         value=dmg,
     )
+
+    if ctx.debug_mode:
+        ctx.metrics["spell_final_applied_damage"] = dmg
 
     logger.debug("ApplyRawDamage", target=getattr(mobile, "name", "?"), amount=dmg, hp_remaining=mobile.hp)
 
@@ -696,7 +704,10 @@ def list_mobiles_near_location_ex(
 ) -> list[Any]:
     """Return all defenders from context for AoE targeting."""
     ctx = get_context()
-    return list(ctx.defenders) if ctx.defenders else []
+    result = list(ctx.defenders) if ctx.defenders else []
+    if ctx.debug_mode:
+        ctx.metrics["aoe_target_count"] = len(result)
+    return result
 
 
 @pol_function("uo", "ListMobilesNearLocation")

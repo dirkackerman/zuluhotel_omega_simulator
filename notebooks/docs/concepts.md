@@ -372,6 +372,41 @@ weapon = WeaponSpec(
 
 The attacker should have Spirit Speak and EvalInt skills for meaningful damage. The defender's Meditation skill provides resistance.
 
+## Spell casting pipeline (V3)
+
+Spell casting uses a different entry point from weapon hits, but shares the damage application stage.
+
+```
+TryToCast (player mode only)
+    │  CheckSkill(Magery, circle×10)
+    │  fizzle → 0 damage, no mana cost
+    │
+    ▼
+CalcSpellDamage
+    │  dice roll → cap check → efficiency penalty → PvP /3
+    │
+    ▼
+Resisted() check
+    │  Chance based on EvalInt vs MagicResistance
+    │  Class modifiers (Mage, Warrior, Paladin)
+    │  resist → damage halved
+    │
+    ▼
+ApplyElementalDamage / ApplyElementalDamageNoResist
+    │  Element-specific protection check
+    │  Over-protection (>100%) → healing
+    │
+    ▼
+ApplyTheDamage()
+    │  PvP 0.6× scaling
+    │  ApplyRawDamage() → subtract HP
+    │
+    ▼
+SpellResult (recorded)
+```
+
+**NPC mode**: Bypasses TryToCast entirely -- no fizzle check, no mana cost. Simulates how NPCs cast spells.
+
 ## Spell resistance & class modifiers (V2)
 
 Spell resistance (`Resisted()` in the shard scripts) determines whether spell damage is reduced and by how much. Class membership significantly modifies resistance chances.
@@ -437,7 +472,15 @@ Resistance events are captured in `list:resisted` metrics with fields: `dmg_befo
 - Spell resistance with class modifiers — Mage, Warrior, Paladin modify resist chance
 - Comprehensive stub audit against POL C++ source (60+ stubs verified)
 
+### V3 additions
+- Direct spell casting via `SpellScenario` and `run_spell_scenario()`
+- 29 damage spells across 4 schools (Standard, Necromancy, Earth, Holy)
+- Full spell pipeline: CheckSkill (fizzle) → CalcSpellDamage → Resisted → Protection → ApplyTheDamage
+- Spell-specific stats: fizzle rate, resist rate, on-cast damage, casting DPS
+- New plots: `spell_comparison()`, `fizzle_rate_vs_parameter()`
+- 3 new notebooks (06, 07, 08) + spell sections in existing notebooks
+
 ### Not included (future versions)
-- HP tracking across multiple hits / kill-time distributions (V3)
-- Buff/debuff accumulation over time (V3)
-- Group combat (V3)
+- HP tracking across multiple hits / kill-time distributions (V4)
+- Buff/debuff accumulation over time (V4)
+- Group combat (V4)

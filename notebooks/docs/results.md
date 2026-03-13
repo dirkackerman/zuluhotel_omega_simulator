@@ -94,6 +94,48 @@ poisoned = [h for h in result.raw_results if any(se.kind == "poison_applied" for
 print(f"Poison applied in {len(poisoned)} / {len(result.raw_results)} hits")
 ```
 
+## SpellResult (V3)
+
+The output of a single spell cast iteration, analogous to `HitResult` for weapon hits.
+
+**Import path:**
+```python
+from omega.combat.spell_result import SpellResult
+```
+
+```python
+@dataclass
+class SpellResult:
+    spell_id: int = 0
+    spell_name: str = ""
+    circle: int = 0
+
+    base_damage: int = 0
+    final_damage: float = 0.0
+
+    fizzled: bool = False
+    resisted: bool = False
+    cast_success: bool = False
+
+    casting_delay_ms: float = 0.0
+    metrics: dict[str, Any] = {}
+    success: bool = True
+    error: str | None = None
+```
+
+| Field | Description |
+|-------|-------------|
+| `spell_id` | Numeric spell ID |
+| `spell_name` | Display name (e.g., "Fireball") |
+| `circle` | Spell circle (1--8) |
+| `base_damage` | CalcSpellDamage output (before resistance) |
+| `final_damage` | Total damage applied (after resistance + protection) |
+| `fizzled` | `True` if CheckSkill failed -- no damage, no mana cost |
+| `resisted` | `True` if target passed resist check -- damage halved |
+| `cast_success` | `True` if TryToCast succeeded (fizzled = False) |
+| `casting_delay_ms` | Casting delay from circles.cfg |
+| `metrics` | Pipeline metrics: `spell_dice_roll`, `spell_base_damage`, `elemental_applied`, etc. |
+
 ## DamageStats
 
 Statistical summary computed from a list of damage values.
@@ -184,6 +226,14 @@ These show the conditional probability given that the swing hit. Misses are excl
 
 When hit rate is 100%, the overall and on-hit rates are identical.
 
+### Spell-specific rates (V3)
+
+| Field | Description |
+|-------|-------------|
+| `fizzle_rate` | Fraction of casts where CheckSkill failed |
+| `resist_rate` | Fraction of all casts where target resisted |
+| `resist_rate_on_cast` | Fraction of successful casts where target resisted |
+
 ```python
 r = result.ratios
 print(f"Hit rate: {r.hit_rate:.1%}")
@@ -228,6 +278,7 @@ class CellResult:
 | `drain_stats` | Mean drain amount **per swing** (0 for misses and non-drain hits). |
 | `drain_stats_on_hit` | Mean drain amount for **hits that drained** only. |
 | `timing` | `TimingStats` with swing delay and DPS metrics. `None` if no timing data available. See [TimingStats](#timingstats-v2). (V2) |
+| `damage_stats_on_cast` | Statistics over final damage for **successful casts only** (fizzles excluded). Spell-specific. (V3) |
 | `raw_results` | All individual `HitResult` objects. Available for deep inspection. |
 | `iteration_count` | Total iterations attempted. |
 | `success_count` | Iterations that completed without error. |

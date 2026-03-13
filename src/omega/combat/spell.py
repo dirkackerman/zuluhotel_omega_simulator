@@ -151,8 +151,9 @@ def execute_spell(
 
     # Seed the shard's eScript RNG
     ctx.global_properties["randomeroseed"] = rng_seed if rng_seed else 12345
-    # Enable DEBUG_MODE for metric recording
-    ctx.global_properties["DEBUG_MODE"] = 1 if debug else 0
+    # Note: DEBUG_MODE is forced to 1 in the executor scope below (after
+    # executor.reset()), not here.  global_properties is for GetGlobalProperty/
+    # SetGlobalProperty stubs, not eScript variable resolution.
 
     # Register objects for serial-based lookup
     ctx.register_object(caster)
@@ -175,6 +176,11 @@ def execute_spell(
 
         # Make executor available to start_script() stub
         ctx.executor = executor
+
+        # Force DEBUG_MODE=1 in the eScript scope so all __RecordSimulatorMetric
+        # calls in the shard scripts are always active.  The shard may or may not
+        # declare ``const DEBUG_MODE := 1`` — we override unconditionally.
+        executor.scopes.define_global("DEBUG_MODE", 1)
 
         # Inject __RecordSimulatorMetric override (same 3 protocols as execute_hit)
         def _record_metric(key_or_metrics: Any = "", value: Any = 0) -> None:

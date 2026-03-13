@@ -316,7 +316,7 @@ Explosion, Chain Lightning, Meteor Swarm, Earthquake, Abyssal Flame, Gust of Air
 
 ---
 
-### M28 — Reporting, Notebooks & Documentation
+### M28 — Reporting, Notebooks & Documentation ✅
 
 **Goal**: Spell-specific reporting, new notebooks, and full documentation update.
 

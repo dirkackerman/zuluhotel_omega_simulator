@@ -396,3 +396,89 @@ class TestFormatTableHtmlRateFormatting:
         html = format_table_html(rows)
         assert "33.0%" in html  # effect_rate as percentage
         assert "10.00" in html  # mean as decimal
+
+
+class TestSpellStatColumns:
+    """Test spell-specific stat columns in summary and comparison tables."""
+
+    def _make_spell_cell(self, **kw) -> CellResult:
+        cell = _make_cell(**kw)
+        cell.ratios.fizzle_rate = 0.25
+        cell.ratios.resist_rate = 0.10
+        cell.ratios.resist_rate_on_cast = 0.133
+        cell.damage_stats_on_cast = DamageStats(
+            count=75, mean=35.0, median=33.0,
+            min=10.0, max=60.0, std_dev=8.0,
+            p5=15.0, p25=28.0, p75=42.0, p95=55.0,
+        )
+        return cell
+
+    def test_fizzle_rate_column(self):
+        result = SimulationResult(cells=[self._make_spell_cell()])
+        rows = summary_table(result, stats=["fizzle_rate"])
+        assert rows[0]["fizzle_rate"] == 0.25
+
+    def test_resist_rate_column(self):
+        result = SimulationResult(cells=[self._make_spell_cell()])
+        rows = summary_table(result, stats=["resist_rate"])
+        assert rows[0]["resist_rate"] == 0.10
+
+    def test_resist_rate_on_cast_column(self):
+        result = SimulationResult(cells=[self._make_spell_cell()])
+        rows = summary_table(result, stats=["resist_rate_on_cast"])
+        assert rows[0]["resist_rate_on_cast"] == 0.133
+
+    def test_cast_rate_column(self):
+        """cast_rate is an alias for hit_rate."""
+        result = SimulationResult(cells=[self._make_spell_cell(hit_rate=0.75)])
+        rows = summary_table(result, stats=["cast_rate"])
+        assert rows[0]["cast_rate"] == 0.75
+
+    def test_mean_on_cast_column(self):
+        result = SimulationResult(cells=[self._make_spell_cell()])
+        rows = summary_table(result, stats=["mean_on_cast"])
+        assert rows[0]["mean_on_cast"] == 35.0
+
+    def test_median_on_cast_column(self):
+        result = SimulationResult(cells=[self._make_spell_cell()])
+        rows = summary_table(result, stats=["median_on_cast"])
+        assert rows[0]["median_on_cast"] == 33.0
+
+    def test_spell_rates_in_comparison_table(self):
+        cells = {
+            "Mage": self._make_spell_cell(),
+            "Warrior": self._make_spell_cell(),
+        }
+        cells["Warrior"].ratios.fizzle_rate = 0.50
+        rows = comparison_table(cells, stats=["fizzle_rate", "mean_on_cast"])
+        fizzle_row = rows[0]
+        assert fizzle_row["stat"] == "fizzle_rate"
+        assert fizzle_row["Mage"] == 0.25
+        assert fizzle_row["Warrior"] == 0.50
+        assert "delta" in fizzle_row
+
+    def test_fizzle_rate_formatted_as_percentage(self):
+        assert _fmt(0.25, stat_name="fizzle_rate") == "25.0%"
+
+    def test_resist_rate_formatted_as_percentage(self):
+        assert _fmt(0.10, stat_name="resist_rate") == "10.0%"
+
+    def test_resist_rate_on_cast_formatted_as_percentage(self):
+        assert _fmt(0.133, stat_name="resist_rate_on_cast") == "13.3%"
+
+    def test_cast_rate_formatted_as_percentage(self):
+        assert _fmt(0.75, stat_name="cast_rate") == "75.0%"
+
+    def test_all_on_cast_columns(self):
+        """All on_cast stat columns should be accessible."""
+        result = SimulationResult(cells=[self._make_spell_cell()])
+        rows = summary_table(result, stats=[
+            "mean_on_cast", "median_on_cast", "min_on_cast", "max_on_cast",
+            "std_dev_on_cast", "p5_on_cast", "p95_on_cast",
+        ])
+        row = rows[0]
+        assert row["mean_on_cast"] == 35.0
+        assert row["min_on_cast"] == 10.0
+        assert row["max_on_cast"] == 60.0
+        assert row["p5_on_cast"] == 15.0
+        assert row["p95_on_cast"] == 55.0

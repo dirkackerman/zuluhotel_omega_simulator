@@ -266,6 +266,10 @@ function CalcSpellDamage( caster, cast_on, circle, area_spell := SINGLE_TARGET_S
 		 CInt( GetEffectiveSkill(caster, SKILLID_MAGERY) / SPELL_DAMAGES_MAGERY_DIVIDER )
 	) ;
 
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric("spell_dice_roll", dmg);
+	endif
+
 	if( dmg > CInt(circle * (13 + circle)) )
 		dmg := CInt(circle * (13 + circle));
 	endif

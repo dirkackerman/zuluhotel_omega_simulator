@@ -243,6 +243,104 @@ The sweep shares a single `Executor` instance across all cells, avoiding redunda
 | 25 cells | 500 | 12,500 | ~33s |
 | 100 cells | 100 | 10,000 | ~27s |
 
+## Spell Scenarios (V3)
+
+Spell scenarios model direct spell casting instead of weapon hits.
+
+**Import path:**
+```python
+from omega.simulation import (
+    SpellScenario, SpellParameterSweep,
+    run_spell_scenario, run_spell_sweep,
+)
+```
+
+### SpellScenario
+
+```python
+@dataclass(frozen=True)
+class SpellScenario:
+    caster: CombatantSpec
+    target: CombatantSpec | list[CombatantSpec]
+    spell_id: int
+    iterations: int = 1000
+    base_seed: int = 0
+    debug_mode: bool = False
+    npc_mode: bool = False
+    circle_override: int = 0
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `caster` | `CombatantSpec` | — | The spell caster. Needs Magery and EvalInt skills. |
+| `target` | `CombatantSpec` or `list` | — | Single target or list for AoE spells. |
+| `spell_id` | `int` | — | Spell ID from `Spell` enum (e.g., `Spell.FIREBALL`). |
+| `iterations` | `int` | `1000` | Number of independent casts. |
+| `base_seed` | `int` | `0` | RNG seed for reproducibility. |
+| `npc_mode` | `bool` | `False` | When `True`, bypasses TryToCast (no fizzle, no mana cost). |
+| `circle_override` | `int` | `0` | Override spell circle for damage calculation. |
+
+### run_spell_scenario()
+
+```python
+def run_spell_scenario(
+    scenario: SpellScenario,
+    *,
+    shard: Any = None,
+    spell_registry: SpellRegistry | None = None,
+) -> CellResult
+```
+
+Returns a `CellResult` with spell-specific stats: `fizzle_rate`, `resist_rate`, `damage_stats_on_cast`, etc.
+
+### SpellParameterSweep
+
+```python
+@dataclass(frozen=True)
+class SpellParameterSweep:
+    scenario: SpellScenario
+    variables: tuple[Variable, ...] = ()
+```
+
+Same `Variable` system as weapon sweeps. Targets: `"caster"`, `"target"`.
+
+### run_spell_sweep()
+
+```python
+def run_spell_sweep(
+    sweep: SpellParameterSweep,
+    *,
+    shard: Any = None,
+    spell_registry: SpellRegistry | None = None,
+) -> SimulationResult
+```
+
+### Example
+
+```python
+from omega.config.spells import Spell
+
+sweep = SpellParameterSweep(
+    scenario=SpellScenario(
+        caster=CombatantSpec(
+            name="Mage",
+            skills={SKILLID_MAGERY: 100, SKILLID_EVALINT: 100},
+            str_=50, dex_=50, int_=120,
+            class_levels={"IsMage": 5},
+        ),
+        target=CombatantSpec(name="Target", is_npc=True, hp=500),
+        spell_id=Spell.FIREBALL,
+        iterations=100,
+        npc_mode=False,
+    ),
+    variables=(
+        Variable.from_range("caster", f"skills.{SKILLID_MAGERY}", 50, 130, 10),
+    ),
+)
+
+result = run_spell_sweep(sweep, shard=shard)
+```
+
 ## Comparing multiple independent scenarios
 
 For scenarios that don't fit a parameter sweep (e.g., different classes, different weapons), run them individually and collect into a dict:

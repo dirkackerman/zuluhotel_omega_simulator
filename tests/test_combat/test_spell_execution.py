@@ -9,6 +9,7 @@ from omega.combat.spell_result import SpellResult
 from omega.config.spell_registry import SpellRegistry, DAMAGE_SPELL_IDS
 from omega.config.spells import Spell
 from omega.model.constants import SKILLID_MAGERY, SKILLID_EVALINT, SKILLID_MAGICRESISTANCE
+from omega.config.dice import DiceSpec
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
 from omega.parser.parser import parse_text, ParseResult
@@ -2022,3 +2023,214 @@ class TestListItemsStubs:
         from omega.runtime.structural_stubs import list_items_near_location_of_type
         result = list_items_near_location_of_type(100, 200, 0, 10, 0x1234)
         assert len(result) == 0
+
+
+# ---------------------------------------------------------------------------
+# M28 — New metric tracking tests
+# ---------------------------------------------------------------------------
+
+
+class TestSpellDiceRollMetric:
+    """Test that spell_dice_roll metric is captured from CalcSpellDamage."""
+
+    def test_dice_roll_present(self, fixture_shard, spell_parse_results, spell_registry):
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL)
+        assert "spell_dice_roll" in result.metrics
+        assert result.metrics["spell_dice_roll"] > 0
+
+    def test_dice_roll_gte_base_damage_player_target(self, fixture_shard, spell_parse_results, spell_registry):
+        """For player targets (no 1.5x NPC multiplier), dice_roll >= base_damage always.
+
+        dice_roll is raw from RandomDiceRoll. base_damage is post-cap, post-efficiency,
+        post-PvP-div — all of which reduce. So dice_roll >= base_damage.
+        NPC targets get *1.5 which can push base_damage ABOVE dice_roll.
+        """
+        target = _make_defender(name="Player", hp=500, is_npc=False)
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL,
+                             target=target)
+        if not result.fizzled and result.base_damage > 0:
+            assert result.metrics["spell_dice_roll"] >= result.base_damage
+
+    def test_dice_roll_different_circles(self, fixture_shard, spell_parse_results, spell_registry):
+        """Higher circle spells roll more dice → higher dice_roll on average."""
+        low_rolls = []
+        high_rolls = []
+        for seed in range(1, 11):
+            t1 = _make_defender(hp=500)
+            t2 = _make_defender(hp=500)
+            r_low = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.MAGIC_ARROW,
+                                rng_seed=seed, target=t1)
+            r_high = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FLAME_STRIKE,
+                                 rng_seed=seed, target=t2)
+            if "spell_dice_roll" in r_low.metrics:
+                low_rolls.append(r_low.metrics["spell_dice_roll"])
+            if "spell_dice_roll" in r_high.metrics:
+                high_rolls.append(r_high.metrics["spell_dice_roll"])
+        if low_rolls and high_rolls:
+            assert sum(high_rolls) / len(high_rolls) > sum(low_rolls) / len(low_rolls)
+
+    def test_dice_roll_present_even_debug_off(self, fixture_shard, spell_parse_results, spell_registry):
+        """spell_dice_roll is guarded by shard const DEBUG_MODE=1, not Python debug flag.
+
+        The shard declares ``const DEBUG_MODE := 1`` in client.inc, so
+        ``if(DEBUG_MODE)`` is always true regardless of the Python debug parameter.
+        """
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL,
+                             debug=False)
+        assert "spell_dice_roll" in result.metrics
+
+
+class TestSpellFinalAppliedDamageMetric:
+    """Test that spell_final_applied_damage is recorded by ApplyRawDamage."""
+
+    def test_metric_present(self, fixture_shard, spell_parse_results, spell_registry):
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL)
+        if result.final_damage > 0:
+            assert "spell_final_applied_damage" in result.metrics
+
+    def test_metric_matches_final_damage(self, fixture_shard, spell_parse_results, spell_registry):
+        """The metric should equal the damage actually applied."""
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL)
+        if result.final_damage > 0:
+            assert result.metrics["spell_final_applied_damage"] == result.final_damage
+
+    def test_metric_not_present_on_fizzle(self, fixture_shard, spell_parse_results, spell_registry):
+        """Fizzled spells don't call ApplyRawDamage, so no metric."""
+        caster = _make_mage(magery=10, mana=100)
+        fizzled_found = False
+        for seed in range(1, 51):
+            t = _make_defender(hp=500)
+            result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL,
+                                 caster=_make_mage(magery=10, mana=100), target=t,
+                                 npc_mode=False, rng_seed=seed)
+            if result.fizzled:
+                fizzled_found = True
+                assert "spell_final_applied_damage" not in result.metrics
+                break
+        assert fizzled_found, "Expected at least one fizzle with Magery=1.0"
+
+    def test_metric_not_present_when_debug_off(self, fixture_shard, spell_parse_results, spell_registry):
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL,
+                             debug=False)
+        assert "spell_final_applied_damage" not in result.metrics
+
+
+class TestAoeTargetCountMetric:
+    """Test that aoe_target_count metric is recorded for AoE spells."""
+
+    def test_metric_present_for_aoe(self, fixture_shard, spell_parse_results, spell_registry):
+        """Chain Lightning is AoE — should record aoe_target_count."""
+        targets = [_make_defender(hp=500) for _ in range(3)]
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry,
+                             Spell.CHAIN_LIGHTNING, target=targets)
+        assert "aoe_target_count" in result.metrics
+        assert result.metrics["aoe_target_count"] == 3
+
+    def test_metric_not_present_for_single_target(self, fixture_shard, spell_parse_results, spell_registry):
+        """Single-target spells don't call ListMobilesNearLocationEx."""
+        result = _exec_spell(fixture_shard, spell_parse_results, spell_registry, Spell.FIREBALL)
+        assert "aoe_target_count" not in result.metrics
+
+    def test_metric_scales_with_target_count(self, fixture_shard, spell_parse_results, spell_registry):
+        """More targets → higher aoe_target_count."""
+        for n in [1, 3, 5]:
+            targets = [_make_defender(hp=500) for _ in range(n)]
+            result = _exec_spell(fixture_shard, spell_parse_results, spell_registry,
+                                 Spell.CHAIN_LIGHTNING, target=targets)
+            if "aoe_target_count" in result.metrics:
+                assert result.metrics["aoe_target_count"] == n
+
+
+# ---------------------------------------------------------------------------
+# DEBUG_MODE Override Tests
+# ---------------------------------------------------------------------------
+
+class TestDebugModeOverride:
+    """Verify the executor always overrides DEBUG_MODE to 1.
+
+    The fixture copy of client.inc has ``const DEBUG_MODE := 0`` (patched by
+    sync_fixtures.py).  The executor must force it to 1 so that all
+    ``__RecordSimulatorMetric`` calls in shard scripts are active.
+    """
+
+    def test_fixture_has_debug_mode_zero(self, fixture_shard):
+        """Precondition: fixture client.inc has DEBUG_MODE := 0."""
+        client_inc = fixture_shard.root / "scripts" / "include" / "client.inc"
+        text = client_inc.read_text()
+        assert "DEBUG_MODE\t:= 0" in text or "DEBUG_MODE := 0" in text, (
+            "Fixture client.inc should have DEBUG_MODE := 0 (set by sync_fixtures.py)"
+        )
+
+    def test_spell_metrics_recorded_despite_fixture_debug_off(
+        self, fixture_shard, spell_parse_results, spell_registry,
+    ):
+        """Shard-side metrics (spell_dice_roll, spell_base_damage) must be
+        recorded even though the fixture has DEBUG_MODE := 0, because the
+        executor overrides it to 1."""
+        result = _exec_spell(
+            fixture_shard, spell_parse_results, spell_registry,
+            Spell.FIREBALL, debug=True,
+        )
+        assert not result.fizzled, "Need a non-fizzled cast to check metrics"
+        assert "spell_dice_roll" in result.metrics, (
+            "spell_dice_roll missing — executor did not override DEBUG_MODE to 1"
+        )
+        assert "spell_base_damage" in result.metrics, (
+            "spell_base_damage missing — executor did not override DEBUG_MODE to 1"
+        )
+        assert result.metrics["spell_dice_roll"] > 0
+        assert result.metrics["spell_base_damage"] > 0
+
+    def test_hit_metrics_recorded_despite_fixture_debug_off(self, fixture_shard):
+        """Weapon-hit shard metrics must also be recorded despite DEBUG_MODE := 0
+        in the fixture, because execute_hit also overrides DEBUG_MODE to 1."""
+        from omega.combat.hit import execute_hit
+
+        attacker = Mobile(name="TestWarrior", is_npc=False)
+        attacker.str_base = 100
+        attacker.dex_base = 100
+        attacker.int_base = 25
+        attacker.hp = 100
+        attacker.max_hp = 100
+        attacker.class_name = "Warrior"
+        attacker.class_level = 5
+        attacker.set_skill(40, 1000)   # Swordsmanship
+        attacker.set_skill(27, 1000)   # Tactics
+        attacker.set_skill(1, 1000)    # Anatomy
+
+        defender = Mobile(name="TestDummy", is_npc=True, npctemplate="test_mob")
+        defender.str_base = 100
+        defender.dex_base = 100
+        defender.int_base = 100
+        defender.hp = 500
+        defender.max_hp = 500
+
+        weapon = Weapon(
+            objtype=0x0F5E, graphic=0x0F5E, name="broadsword",
+            damage=DiceSpec(3, 7, 3), speed=30, attribute=40,
+            two_handed=False,
+        )
+
+        armor = Armor(objtype=0x1415, graphic=0x1415, name="leather",
+                       ar=13, coverage=["body"])
+
+        parse_results = fixture_shard.parse_combat_scripts()
+
+        result = execute_hit(
+            parse_results, attacker, defender, weapon, armor,
+            rng_seed=42, debug=True,
+            config_resolver=fixture_shard.resolve_config_path,
+            em_modules_dir=fixture_shard.root / "scripts" / "modules",
+            shard_root=fixture_shard.root,
+            package_map=fixture_shard.package_map,
+        )
+
+        # Shard-side metrics that live behind if(DEBUG_MODE) guards in the
+        # eScript code (damages.inc, hitscriptinc.inc)
+        assert "damage_applied" in result.metrics, (
+            "damage_applied missing — execute_hit did not override DEBUG_MODE to 1"
+        )
+        assert len(result.metrics["damage_applied"]) > 0
+        assert "damage_before_ar" in result.metrics, (
+            "damage_before_ar missing — execute_hit did not override DEBUG_MODE to 1"
+        )

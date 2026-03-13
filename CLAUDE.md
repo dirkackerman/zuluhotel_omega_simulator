@@ -292,7 +292,7 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **V2 status**: Complete (M-V2.1–M-V2.8). POL stub conformance audit, virtual time & DPS metrics, astral damage validation, reactive armor + resistance integration, notebook enrichment. 1533 tests.
 - **[Path to V2](./planning/path_to_v2.md)** — Spell & Resistance Flows roadmap (M-V2.1–M-V2.8): POL stub conformance audit, virtual time & DPS metrics, astral damage validation, reactive armor + resistance integration, notebook enrichment
 - **[Changelog to V2](./changelog/changelog_to_v2.md)** — Per-milestone change summaries for V2
-- **V3 status**: In progress — M23–M27 complete. 1979 tests.
+- **V3 status**: In progress — M23–M29 complete. 2196 tests.
 - **[Path to V3](./planning/path_to_v3.md)** — Damage Spell Casting roadmap (M23–M29): spell config, execution engine, single-target + AoE spells, runner/stats, reporting/notebooks, stub audit
 - **[Changelog to V3](./changelog/changelog_to_v3.md)** — Per-milestone change summaries for V3
 

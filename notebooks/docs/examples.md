@@ -827,3 +827,112 @@ comparison_overlay(results, title="Spell Damage by Defender Class")
 display(HTML(format_table_html(comparison_table(results,
     stats=["mean", "spell_strike_rate", "effect_rate"]))))
 ```
+
+---
+
+## Recipe 18: Basic spell damage (V3)
+
+**Question**: "How much damage does a Mage's Fireball deal?"
+
+```python
+from omega.config.spells import Spell
+from omega.simulation import SpellScenario, run_spell_scenario
+
+scenario = SpellScenario(
+    caster=CombatantSpec(
+        name="Mage",
+        skills={SKILLID_MAGERY: 100, SKILLID_EVALINT: 100},
+        str_=50, dex_=50, int_=120,
+        class_levels={"IsMage": 5},
+    ),
+    target=CombatantSpec(name="Target", is_npc=True, hp=500, armor=ArmorSpec(ar=30)),
+    spell_id=Spell.FIREBALL,
+    iterations=1000,
+    base_seed=42,
+    npc_mode=False,
+)
+
+result = run_spell_scenario(scenario, shard=shard)
+
+print(f"Mean damage: {result.damage_stats.mean:.1f}")
+print(f"Fizzle rate: {result.ratios.fizzle_rate:.1%}")
+print(f"Resist rate: {result.ratios.resist_rate:.1%}")
+print(f"On-cast mean: {result.damage_stats_on_cast.mean:.1f}")
+
+damage_histogram(result, title="Fireball — 1000 casts")
+```
+
+---
+
+## Recipe 19: Spell fizzle sweep (V3)
+
+**Question**: "How does Magery skill affect Fireball fizzle rate?"
+
+```python
+from omega.config.spells import Spell
+from omega.simulation import SpellParameterSweep, SpellScenario, run_spell_sweep
+from omega.reporting.plots import fizzle_rate_vs_parameter
+
+sweep = SpellParameterSweep(
+    scenario=SpellScenario(
+        caster=CombatantSpec(
+            name="Mage",
+            skills={SKILLID_MAGERY: 100, SKILLID_EVALINT: 100},
+            str_=50, dex_=50, int_=120,
+            class_levels={"IsMage": 5},
+        ),
+        target=CombatantSpec(name="Target", is_npc=True, hp=500),
+        spell_id=Spell.FIREBALL,
+        iterations=200,
+        npc_mode=False,
+    ),
+    variables=(
+        Variable.from_range("caster", f"skills.{SKILLID_MAGERY}", 30, 130, 10),
+    ),
+)
+
+result = run_spell_sweep(sweep, shard=shard)
+fizzle_rate_vs_parameter(result, f"caster.skills.{SKILLID_MAGERY}",
+                         title="Fizzle Rate vs Magery")
+display(HTML(format_table_html(summary_table(result,
+    stats=["mean", "fizzle_rate", "resist_rate", "effective_dps"]))))
+```
+
+---
+
+## Recipe 20: Spell school comparison (V3)
+
+**Question**: "How do spells from different schools compare at similar circles?"
+
+```python
+from omega.config.spells import Spell
+from omega.simulation import SpellScenario, run_spell_scenario
+from omega.reporting.plots import spell_comparison
+
+caster = CombatantSpec(
+    name="Mage",
+    skills={SKILLID_MAGERY: 100, SKILLID_EVALINT: 100},
+    str_=50, dex_=50, int_=120,
+    class_levels={"IsMage": 5},
+)
+target = CombatantSpec(name="Target", is_npc=True, hp=500, armor=ArmorSpec(ar=30))
+
+spells = {
+    "Fireball (Standard)": Spell.FIREBALL,
+    "Abyssal Flame (Necro)": Spell.ABYSSAL_FLAME,
+    "Ice Strike (Earth)": Spell.ICE_STRIKE,
+    "Divine Fury (Holy)": Spell.DIVINE_FURY,
+}
+
+results = {}
+for label, spell_id in spells.items():
+    results[label] = run_spell_scenario(
+        SpellScenario(caster=caster, target=target, spell_id=spell_id,
+                      iterations=500, npc_mode=False),
+        shard=shard,
+    )
+
+spell_comparison(results, title="School Comparison")
+display(HTML(format_table_html(comparison_table(results,
+    stats=["mean", "mean_on_cast", "fizzle_rate", "effective_dps"]))))
+```

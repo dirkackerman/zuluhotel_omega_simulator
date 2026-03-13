@@ -273,3 +273,132 @@ Added `SpellScenario`, `run_spell_scenario()`, `run_spell_sweep()`, and `aggrega
 
 - Tests: 1979 (was 1854, +125 new)
 - Fixture files: 267 (unchanged)
+
+---
+
+## M28 — Reporting, Notebooks & Documentation
+
+Added spell-specific plot functions, metric tracking enhancements, DEBUG_MODE fixture patching, 3 new notebooks, spell sections in all 5 existing notebooks, and full documentation update for V3 spell casting.
+
+### New Files
+
+- **`notebooks/06_spell_damage.ipynb`** — Primary spell showcase: single spell scenario, fizzle analysis, resist analysis, elemental protection sweep, PvP scaling, pipeline metrics, casting DPS
+- **`notebooks/07_spell_comparison.ipynb`** — Spell comparison: circle scaling (C1→C7), school comparison (Standard vs Necro vs Earth vs Holy), AoE vs single-target, NPC vs player mode
+- **`notebooks/08_spell_resistance.ipynb`** — Resistance deep-dive: resist vs MagicResistance sweep, EvalInt scaling, class modifiers, protection stacking, over-protection healing
+- **`notebooks/docs/spells.md`** — Spell catalog reference (29 damage spells with circle, element, type, school)
+
+### Changes
+
+**Reporting**:
+- **`src/omega/reporting/plots.py`** — Added `spell_comparison()` (grouped bar chart by spell, color-coded by element, with fizzle/resist annotations) and `fizzle_rate_vs_parameter()` (dual-line plot of fizzle + resist rates across swept parameter)
+
+**Metric Tracking**:
+- **`src/omega/runtime/object_stubs.py`** — `ApplyRawDamage` records `ctx.metrics["spell_final_applied_damage"]` in debug mode
+- **`src/omega/runtime/structural_stubs.py`** — `ListMobilesNearLocationEx` records `ctx.metrics["aoe_target_count"]` in debug mode
+- **`submodules/zuluhotel_omega_2.5/scripts/include/spelldata.inc`** — Added `__RecordSimulatorMetric("spell_dice_roll", dmg)` in CalcSpellDamage after RandomDiceRoll, inside existing `if(DEBUG_MODE)` guard
+
+**DEBUG_MODE Fixture Patching**:
+- **`scripts/sync_fixtures.py`** — Added `_patch_debug_mode()` that replaces `const DEBUG_MODE := 1` with `const DEBUG_MODE := 0` in fixture copies of `client.inc`. This proves the executor's `define_global("DEBUG_MODE", 1)` override works correctly — fixtures have DEBUG_MODE=0 but metrics are still recorded.
+
+**Notebooks (enriched)**:
+- **`notebooks/01_basic_damage.ipynb`** — Added "Spell Casting Comparison (V3)" section with Fireball scenario, histogram, comparison table
+- **`notebooks/02_skill_sweep.ipynb`** — Added "Spell Damage vs Magery (V3)" section with Magery sweep, fizzle rate plot, summary table
+- **`notebooks/03_class_comparison.ipynb`** — Added "Spell Damage by Caster Class (V3)" section with Mage/Paladin/Warrior comparison
+- **`notebooks/04_weapon_comparison.ipynb`** — Added "Weapon vs Spell DPS (V3)" section comparing Warrior weapon DPS vs Mage Fireball DPS
+- **`notebooks/05_enchantments.ipynb`** — Added "Spell Strike vs Direct Casting (V3)" section
+
+**Documentation**:
+- **`notebooks/docs/README.md`** — Updated with V3 capabilities, notebooks 06-08, spells.md reference
+- **`notebooks/docs/reporting.md`** — Added `spell_comparison()`, `fizzle_rate_vs_parameter()`, 11 spell stat columns
+- **`notebooks/docs/scenarios.md`** — Added `SpellScenario`, `SpellParameterSweep`, `run_spell_scenario`, `run_spell_sweep`
+- **`notebooks/docs/results.md`** — Added `SpellResult`, spell `RatioStats`, `damage_stats_on_cast`
+- **`notebooks/docs/concepts.md`** — Added spell casting pipeline diagram, V3 additions
+- **`notebooks/docs/examples.md`** — Added Recipe 18 (basic spell), Recipe 19 (fizzle sweep), Recipe 20 (school comparison)
+
+### Tests
+
+- **`tests/test_reporting/test_plots.py`** — Tests for `spell_comparison()` and `fizzle_rate_vs_parameter()`: returns figure, custom titles, single/empty cells, show_fizzle/show_resist toggles
+- **`tests/test_reporting/test_tables.py`** — Tests for spell stat columns: fizzle_rate, resist_rate, resist_rate_on_cast, cast_rate, mean_on_cast, median_on_cast
+- **`tests/test_combat/test_spell_execution.py`** — Tests for `spell_dice_roll` metric, `aoe_target_count` metric, `spell_final_applied_damage` metric, DEBUG_MODE override verification (3 tests proving fixture has DEBUG_MODE=0 but executor override produces metrics)
+- **`tests/test_runtime/test_object_stubs.py`** — Tests for ApplyRawDamage metric recording in debug mode
+- **`tests/test_simulation/test_spell_runner_shard.py`** — Fixed 2 skipped tests (HOLY_BOLT, WRATH_OF_GOD) by filtering `_ZERO_DAMAGE_SPELLS` from parametrize
+
+### Key Design Decisions
+
+- **DEBUG_MODE patching in sync_fixtures**: Fixtures have `DEBUG_MODE := 0` (matching what a non-simulator environment would see), while the executor always overrides to 1. This validates the override mechanism end-to-end.
+- **POL wrapper metrics over `__RecordSimulatorMetric`**: `spell_final_applied_damage` and `aoe_target_count` are recorded in Python POL stub wrappers rather than eScript instrumentation — simpler and doesn't require shard changes.
+- **`spell_dice_roll` in shard**: The raw dice roll before cap/efficiency is only available inside CalcSpellDamage in eScript, so `__RecordSimulatorMetric` is the right choice here. Combined with existing `spell_base_damage` (post-cap), analysts can see when the damage cap was reached.
+
+### Test Scenarios
+
+- Plot functions: spell_comparison returns figure, custom title, single spell, empty cells, fizzle/resist annotations, show_fizzle=False; fizzle_rate_vs_parameter returns figure, no data, show_resist=False
+- Table stats: all 6 spell stat columns render correctly, comparison table with spell columns + delta, rate formatting as percentages
+- Metrics: spell_dice_roll > 0 and present, aoe_target_count matches defender count, spell_final_applied_damage matches final_damage, ApplyRawDamage records in debug mode only
+- DEBUG_MODE: fixture has `const DEBUG_MODE := 0`, spell execution still produces spell_dice_roll/spell_base_damage metrics, hit execution still produces damage_applied/damage_before_ar metrics
+- Zero-damage spells excluded from damage assertions (HOLY_BOLT, WRATH_OF_GOD)
+
+### Stats
+
+- Tests: 2018 (was 1979, +39 new, 0 skipped)
+- Fixture files: 267 (unchanged)
+
+---
+
+## M29 — Test Coverage Review & POL Stub Audit
+
+Comprehensive test coverage audit and POL stub conformance review for the spell-casting pipeline. 178 new tests across 20 test classes covering all M29 requirements: every damage spell has 2+ tests, AoE with 1/3/5 targets, resistance at 0%/50%/100%, class modifiers, PvP scaling, fizzle tests, edge cases. Fixed ApplyRawDamage float→int conversion bug (was rounding, should truncate per POL's C++ `static_cast<int>`).
+
+### Bug Fixes
+
+- **ApplyRawDamage float→int conversion**: Was using `int(round(float(amount)))` (Python banker's rounding: 23.5→24) but POL's `getParam(1, damage)` only accepts BLong (integer) and C++ `static_cast<int>` truncates toward zero (23.7→23). Fixed to `int(float(amount))` in `structural_stubs.py`. In practice, eScript always `CInt()`s damage before calling `ApplyRawDamage`, so the fix is for strict POL conformance.
+
+### New Files
+
+- **`tests/test_m29_coverage_audit.py`** — 178 tests across 20 test classes organized in 7 sections
+
+### Changes
+
+- **`src/omega/runtime/structural_stubs.py`** — Fixed `ApplyRawDamage` to truncate floats instead of rounding
+- **`tests/test_runtime/test_structural_stubs.py`** — Updated existing float damage test to expect truncation (77 not 76)
+
+### Test Coverage (20 Test Classes)
+
+**Section 1 — POL Stub Audit (9 classes)**:
+- `TestApplyRawDamageAudit` — Truncation conformance, zero/negative/UNINIT damage, dead target, large damage, hundredths precision, damage tracking, context missing
+- `TestRandomAudit` — Range [1, max_val], boundary values, large range, single value
+- `TestRandomIntAudit` — Range [0, max_val-1], boundary values, large range
+- `TestRandomDiceRollAudit` — XdY+Z parsing, known seeds, negative bonus, single die, large rolls, zero faces, dice count bounds
+- `TestCheckSkillAudit` — Chance formula validation, boundary skills, UNINIT difficulty, metrics recording, None character
+- `TestConsumeManaAudit` — Display unit deduction, insufficient mana, exact mana, zero cost, metrics recording
+- `TestGetEffectiveSkillAudit` — Skill retrieval, zero/max skill, missing skill, UNINIT attribute
+- `TestGetSetObjPropertyAudit` — Set/get round-trip, overwrite, erase, missing property, UNINIT key, nested values
+- `TestReadConfigFileAudit` — Config loading, element access, missing element, key access, missing file
+
+**Section 2 — Resistance at Multiple Skill Levels**:
+- `TestResistanceMultipleLevels` — Zero resist (no reduction), mid resist (~50%), max resist (~100%), resist monotonically decreasing damage, parametrized across 5 standard spells
+
+**Section 3 — Resisted() Formula Validation**:
+- `TestResistedFormulaValidation` — Chance = max(resist/6, resist - magery/4 - circle*6), resist rate proportional to chance, EvalInt scaling (integer division by 200), high EvalInt advantage, zero EvalInt = no scaling bonus
+
+**Section 4 — Class Modifier Effects**:
+- `TestClassModifierEffects` — Mage caster bonus > classless, Warrior caster penalty < classless, Mage target takes less damage, class level scaling, NPC→NPC vs player→NPC mode
+
+**Section 5 — PvP Scaling All Combos**:
+- `TestPvPScalingCombos` — NPC→NPC baseline, NPC→player (/3 CalcSpellDamage), player→NPC (/3), player→player (×0.6 ApplyTheDamage), PvP < PvE for all modes
+
+**Section 6 — AoE Spells With Varying Target Counts**:
+- `TestAoETargetCounts` — 1/3/5 targets for all 4 AoE spells (Explosion, Chain Lightning, Meteor Swarm, Earthquake), damage dealt to majority of targets
+
+**Section 7 — Edge Cases (4 classes + 3 coverage classes)**:
+- `TestOverProtectionHealing` — 100% elemental protection results in 0 or negative damage (healing)
+- `TestMaxCircleDamage` — Circle 7 > Circle 1, high-circle spells produce substantial damage
+- `TestZeroDamageFloor` — Minimum skill/stats still produces valid results (no negative damage)
+- `TestUNINITEdgeCases` — UNINIT resist skill, UNINIT eval int, UNINIT magery, UNINIT element protection, UNINIT class level — all handled gracefully without crashes
+- `TestSpellPerSpellCoverage` — Every damage spell in DAMAGE_SPELL_IDS executes successfully and deals positive damage
+- `TestFizzleAtVariousMageryLevels` — Fizzle rate at Magery 0 (near 100%), Magery 50 (moderate), Magery 100 (near 0%), NPC bypass, fizzle = 0 damage
+- `TestManaCostPerCircle` — Mana cost matches circles.cfg, mana deducted correctly, increasing cost with circle
+
+### Stats
+
+- Tests: 2196 (was 2018, +178 new, 0 skipped)
+- Fixture files: 267 (unchanged)

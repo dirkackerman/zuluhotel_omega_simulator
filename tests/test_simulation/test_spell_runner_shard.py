@@ -164,10 +164,12 @@ class TestPerSpellExecution:
         assert cell.success_count == 50, f"{spell.name} had errors"
         assert cell.error_count == 0
 
-    @pytest.mark.parametrize("spell", _SINGLE_TARGET_DAMAGE, ids=lambda s: s.name)
+    @pytest.mark.parametrize(
+        "spell",
+        [s for s in _SINGLE_TARGET_DAMAGE if s not in _ZERO_DAMAGE_SPELLS],
+        ids=lambda s: s.name,
+    )
     def test_single_target_spells_deal_damage(self, fixture_shard, spell):
-        if spell in _ZERO_DAMAGE_SPELLS:
-            pytest.skip(f"{spell.name} is not a direct damage spell")
         cell = _run(fixture_shard, spell, iterations=50)
         assert cell.damage_stats.mean > 0, f"{spell.name} dealt no damage"
 

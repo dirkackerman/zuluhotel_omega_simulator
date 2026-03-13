@@ -18,6 +18,9 @@ from omega.reporting.plots import (
     # V2 DPS plots
     dps_vs_parameter,
     dps_comparison,
+    # V3 spell plots
+    spell_comparison,
+    fizzle_rate_vs_parameter,
 )
 ```
 
@@ -77,6 +80,17 @@ def summary_table(
 | `"dps_on_hit"` | `timing.dps_on_hit` | DPS on connected swings only (V2) |
 | `"effective_dps"` | `timing.effective_dps` | Effective DPS accounting for hit rate (V2) |
 | `"errors"` | `error_count` | Number of failed iterations |
+| `"fizzle_rate"` | `ratios.fizzle_rate` | Fraction of casts that fizzled (V3) |
+| `"resist_rate"` | `ratios.resist_rate` | Fraction of casts where target resisted (V3) |
+| `"resist_rate_on_cast"` | `ratios.resist_rate_on_cast` | Resist rate among successful casts (V3) |
+| `"cast_rate"` | `ratios.hit_rate` | Fraction of successful casts (alias for hit_rate) (V3) |
+| `"mean_on_cast"` | `damage_stats_on_cast.mean` | Mean damage on successful cast (V3) |
+| `"median_on_cast"` | `damage_stats_on_cast.median` | Median damage on successful cast (V3) |
+| `"min_on_cast"` | `damage_stats_on_cast.min` | Min damage on successful cast (V3) |
+| `"max_on_cast"` | `damage_stats_on_cast.max` | Max damage on successful cast (V3) |
+| `"std_dev_on_cast"` | `damage_stats_on_cast.std_dev` | Std dev on successful cast (V3) |
+| `"p5_on_cast"` | `damage_stats_on_cast.p5` | 5th percentile on cast (V3) |
+| `"p95_on_cast"` | `damage_stats_on_cast.p95` | 95th percentile on cast (V3) |
 
 **Example:**
 ```python
@@ -409,6 +423,57 @@ results = {
     "Fast Bow (Speed 98)": bow_result,
 }
 dps_comparison(results, title="DPS by Weapon Speed")
+```
+
+### spell_comparison() (V3)
+
+Grouped bar chart comparing spells by mean on-cast damage, color-coded by dominant element.
+
+```python
+def spell_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (10, 6),
+    show_fizzle: bool = True,
+    show_resist: bool = True,
+) -> Figure
+```
+
+Each bar shows `damage_stats_on_cast.mean`, colored by the spell's dominant element. Optional annotations show fizzle rate and resist rate below each bar.
+
+```python
+from omega.config.spells import Spell
+from omega.simulation import SpellScenario, run_spell_scenario
+
+cells = {
+    "Fireball": run_spell_scenario(fireball_scenario, shard=shard),
+    "Lightning": run_spell_scenario(lightning_scenario, shard=shard),
+}
+spell_comparison(cells, title="Spell Damage Comparison")
+```
+
+### fizzle_rate_vs_parameter() (V3)
+
+Dual-line plot of fizzle rate and resist rate across a swept parameter.
+
+```python
+def fizzle_rate_vs_parameter(
+    result: SimulationResult,
+    variable_name: str,
+    *,
+    show_resist: bool = True,
+    title: str | None = None,
+    figsize: tuple[float, float] = (8, 5),
+) -> Figure
+```
+
+Shows `ratios.fizzle_rate` (solid line) and optionally `ratios.resist_rate_on_cast` (dashed line) across a parameter sweep. Y-axis is 0--100%.
+
+```python
+result = run_spell_sweep(magery_sweep, shard=shard)
+fizzle_rate_vs_parameter(result, f"caster.skills.{SKILLID_MAGERY}",
+                         title="Fizzle & Resist vs Magery")
 ```
 
 ## Combining tables and plots

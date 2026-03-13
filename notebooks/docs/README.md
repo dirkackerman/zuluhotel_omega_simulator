@@ -23,6 +23,9 @@ This documentation is for **notebook authors and game designers** who want to de
 - Compute DPS metrics with POL-conformant swing timing (V2)
 - Simulate astral damage (Spirit Speak, meditation resistance, mana/stamina drain) (V2)
 - Analyze spell resistance with class modifiers (Mage, Warrior, Paladin) (V2)
+- Cast damage spells directly using `SpellScenario` and `run_spell_scenario()` (V3)
+- Compare spell damage across circles, schools, and caster classes (V3)
+- Analyze fizzle rates, resist rates, and elemental protection with spell-specific charts (V3)
 - Capture debug messages from the eScript execution for troubleshooting
 
 ## Quick start
@@ -95,5 +98,8 @@ The `notebooks/` directory ships with working examples:
 - `03_class_comparison.ipynb` — Compare damage output across character classes
 - `04_weapon_comparison.ipynb` — Side-by-side weapon comparison
 - `05_enchantments.ipynb` — Enchantments & elemental damage deep dive (V1.5)
+- `06_spell_damage.ipynb` — Single spell casting, fizzle/resist analysis, protection sweeps (V3)
+- `07_spell_comparison.ipynb` — Circle scaling, school comparison, AoE vs single-target (V3)
+- `08_spell_resistance.ipynb` — Resistance sweeps, class modifiers, protection stacking (V3)
 
-All notebooks include V2 sections for DPS analysis, astral damage, and spell resistance.
+All notebooks include V2 sections for DPS analysis and V3 sections for spell casting.
