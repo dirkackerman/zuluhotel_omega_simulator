@@ -563,8 +563,8 @@ class TestResistedHandCalculated:
         """Defender is Paladin L4, no caster class. resist=80, magery=100, circle=9.
 
         Base chance = max(CInt(80/6), CInt(80-(100/4+9*6))) = max(13, 1) = 13.
-        Paladin: ClasseHalfBonusByLevel(4) = 1 + 0.125 * 4 = 1.5.
-        chance = CInt(13 * 1.5) = CInt(19.5) = 19.
+        Paladin: CInt((chance * ClasseBonus(4)) * 0.5)
+               = CInt((13 * (1 + 0.25*4)) * 0.5) = CInt((13 * 2.0) * 0.5) = 13.
         """
         attacker = _make_attacker(class_id=None)
         attacker.set_skill(SKILLID_MAGERY, 1000)
@@ -583,8 +583,8 @@ class TestResistedHandCalculated:
         direct = self._get_direct_resisted(resisted)
         assert len(direct) == 1
 
-        assert direct[0]["chance"] == 19, \
-            f"Expected chance=19 (Paladin L4 boost), got {direct[0]['chance']}"
+        assert direct[0]["chance"] == 13, \
+            f"Expected chance=13 (Paladin L4 boost), got {direct[0]['chance']}"
 
     def test_mage_caster_reduces_resist_chance(self, shard, combat_trees):
         """Caster is Mage L5, no defender class. resist=80, magery=100, circle=9.

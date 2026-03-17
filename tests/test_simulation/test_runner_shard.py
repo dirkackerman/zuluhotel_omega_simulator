@@ -7,7 +7,7 @@ import time
 
 import pytest
 
-from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_TACTICS
+from omega.model.constants import SKILLID_ANATOMY, SKILLID_SWORDSMANSHIP, SKILLID_TACTICS
 from omega.simulation import (
     ArmorSpec,
     CombatantSpec,
@@ -95,11 +95,11 @@ class TestRunScenarioShard:
 
 
 class TestRunSweepShard:
-    def test_tactics_sweep_monotonic_damage(self, shard, parse_results):
-        """Higher Tactics should yield higher mean damage for a Warrior.
+    def test_anatomy_sweep_monotonic_damage(self, shard, parse_results):
+        """Higher Anatomy should yield higher mean damage for a Warrior.
 
-        The warrior damage formula multiplies by Anatomy + Tactics,
-        NOT by the weapon skill (Swordsmanship).
+        The warrior damage formula multiplies by Anatomy * 0.005 (shard
+        update simplified from avg(Anatomy, Tactics) * 0.005).
         """
         sweep = ParameterSweep(
             scenario=Scenario(
@@ -111,7 +111,7 @@ class TestRunSweepShard:
             variables=(
                 Variable.from_range(
                     "attacker",
-                    f"skills.{SKILLID_TACTICS}",
+                    f"skills.{SKILLID_ANATOMY}",
                     start=50,
                     stop=130,
                     step=40,
@@ -130,11 +130,11 @@ class TestRunSweepShard:
         if len(valid_cells) < 2:
             pytest.skip("Too few valid cells for monotonicity check")
 
-        # Property: higher Tactics should strictly increase damage
+        # Property: higher Anatomy should strictly increase damage
         means = [c.damage_stats.mean for c in valid_cells]
         assert all(m > 0 for m in means), f"Zero/negative mean damage: {means}"
         assert means[-1] > means[0], (
-            f"Expected strictly increasing damage with higher Tactics: {means}"
+            f"Expected strictly increasing damage with higher Anatomy: {means}"
         )
 
     def test_sweep_performance(self, shard, parse_results):

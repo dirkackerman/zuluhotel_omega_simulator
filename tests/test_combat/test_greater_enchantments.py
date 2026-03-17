@@ -261,7 +261,11 @@ class TestDualPlanar:
         assert result_w.metrics.get("dualplanar_class_nerf") == 1.0
 
     def test_dualplanar_class_nerf_paladin(self, shard, combat_trees):
-        """Paladin attacker also gets 0.7 multiplier on dualplanar spell damage."""
+        """Paladin attacker no longer gets the 0.7 nerf on dualplanar spell damage.
+
+        Shard update removed Paladin from the nerf list (only Mage and
+        Mystic Archer remain).
+        """
         attacker = _make_attacker(class_id=CLASSEID_PALADIN)
         defender = _make_defender()
         weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
@@ -270,7 +274,7 @@ class TestDualPlanar:
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
         _skip_on_failure(result)
 
-        assert result.metrics.get("dualplanar_class_nerf") == 0.7
+        assert result.metrics.get("dualplanar_class_nerf") == 1.0
 
 
 # ---------------------------------------------------------------------------

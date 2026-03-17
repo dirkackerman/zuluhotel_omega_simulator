@@ -7,7 +7,12 @@ import pytest
 
 from omega.config.enchantments import Enchantment, EnchantmentRegistry
 from omega.config.spells import Spell
-from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_TACTICS
+from omega.model.constants import (
+    SKILLID_ARCHERY,
+    SKILLID_MACEFIGHTING,
+    SKILLID_SWORDSMANSHIP,
+    SKILLID_TACTICS,
+)
 from omega.simulation.scenario import (
     ArmorSpec,
     CombatantSpec,
@@ -102,6 +107,41 @@ class TestWeaponSpecFromConfig:
         assert weapon.damage.bonus == 35
         assert weapon.speed == 87
 
+    def test_boss_weapon_waterdragon(self, itemdesc):
+        """Water Dragon weapon resolves by name from itemdesc."""
+        spec = WeaponSpec.from_config("waterdragonWeapon", itemdesc)
+        assert spec.name == "waterdragonWeapon"
+        assert spec.damage == "15d10"
+        assert spec.speed == 60
+        assert spec.attribute == SKILLID_MACEFIGHTING
+        assert spec.two_handed is True
+        assert spec.hitscript == ":combat:banishscript"
+        # Round-trip
+        weapon = build_weapon(spec)
+        assert weapon.damage.count == 15
+        assert weapon.damage.sides == 10
+
+    def test_boss_weapon_dragonking(self, itemdesc):
+        """Dragon King weapon resolves by name from itemdesc."""
+        spec = WeaponSpec.from_config("dragonkingWeapon", itemdesc)
+        assert spec.name == "dragonkingWeapon"
+        assert spec.damage == "15d10"
+        assert spec.hitscript == ":combat:banishscript"
+
+    def test_boss_weapon_legendaryhunter(self, itemdesc):
+        """Legendary Hunter weapon resolves by name from itemdesc."""
+        spec = WeaponSpec.from_config("legendaryhunterweapon", itemdesc)
+        assert spec.name == "legendaryhunterweapon"
+        assert spec.damage == "6d6+5"
+        assert spec.attribute == SKILLID_ARCHERY
+        assert spec.two_handed is True
+        assert spec.hitscript == ":combat:poisonhit"
+        # Round-trip
+        weapon = build_weapon(spec)
+        assert weapon.damage.count == 6
+        assert weapon.damage.sides == 6
+        assert weapon.damage.bonus == 5
+
 
 class TestArmorSpecFromConfig:
     """Tests for ArmorSpec.from_config() config file lookup."""
@@ -134,6 +174,28 @@ class TestArmorSpecFromConfig:
         """Looking up a weapon name via ArmorSpec should fail."""
         with pytest.raises(KeyError):
             ArmorSpec.from_config("KatanaOfKieri", itemdesc)
+
+    def test_boss_armor_30(self, itemdesc):
+        """Armor30 used by waterdragon and dragonking resolves correctly."""
+        spec = ArmorSpec.from_config("Armor30", itemdesc)
+        assert spec.name == "Armor30"
+        assert spec.ar == 30
+        assert "Body" in spec.coverage
+        # Round-trip
+        armor = build_armor(spec)
+        assert armor.ar == 30
+
+    def test_boss_armor_5(self, itemdesc):
+        """Armor5 used by legendaryhunter resolves correctly."""
+        spec = ArmorSpec.from_config("Armor5", itemdesc)
+        assert spec.name == "Armor5"
+        assert spec.ar == 5
+
+    def test_boss_armor_10(self, itemdesc):
+        """Armor10 used by kraken resolves correctly."""
+        spec = ArmorSpec.from_config("Armor10", itemdesc)
+        assert spec.name == "Armor10"
+        assert spec.ar == 10
 
 
 class TestCombatantSpecFromConfig:
@@ -203,6 +265,177 @@ class TestCombatantSpecFromConfig:
         atk_mob, atk_wpn, atk_arm = build_combatant(attacker)
         def_mob, def_wpn, def_arm = build_combatant(defender)
         assert atk_mob.strength > def_mob.strength
+
+
+class TestBossFromConfig:
+    """Verify boss-tier NPCs load correctly with full equipment chains."""
+
+    @pytest.fixture(scope="class")
+    def configs(self):
+        from omega.config.cfg_parser import parse_config_file
+
+        npcdesc = parse_config_file(FIXTURE_SHARD_ROOT / "config" / "npcdesc.cfg")
+        equip = parse_config_file(FIXTURE_SHARD_ROOT / "config" / "equip.cfg")
+        itemdesc = parse_config_file(
+            FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "itemdesc.cfg"
+        )
+        return npcdesc, equip, itemdesc
+
+    # -- Boss: Water Dragon (Boss flag, 900k HP, 1000 STR) --
+
+    def test_boss_waterdragon_stats(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("waterdragon", npcdesc, equip, itemdesc)
+        assert spec.name == "a Water Dragon"
+        assert spec.is_npc is True
+        assert spec.str_ == 1000
+        assert spec.int_ == 200
+        assert spec.dex_ == 200
+        assert spec.hp == 900000  # CustomHitsLevel overrides STR-based HP
+
+    def test_boss_waterdragon_skills(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("waterdragon", npcdesc, equip, itemdesc)
+        assert spec.skills[SKILLID_TACTICS] == 200
+        assert spec.skills[SKILLID_MACEFIGHTING] == 190
+
+    def test_boss_waterdragon_weapon(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("waterdragon", npcdesc, equip, itemdesc)
+        assert spec.weapon is not None
+        assert spec.weapon.name == "waterdragonWeapon"
+        assert spec.weapon.damage == "15d10"
+        assert spec.weapon.speed == 60
+        assert spec.weapon.two_handed is True
+        assert spec.weapon.hitscript == ":combat:banishscript"
+
+    def test_boss_waterdragon_armor(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("waterdragon", npcdesc, equip, itemdesc)
+        assert spec.armor is not None
+        assert spec.armor.ar == 30
+
+    def test_boss_waterdragon_properties(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("waterdragon", npcdesc, equip, itemdesc)
+        assert spec.properties.get("Boss") == 1
+        assert spec.properties.get("WaterProtection") == 120
+        assert spec.properties.get("PermMagicImmunity") == 7
+        assert spec.properties.get("Type") == "Dragonkin"
+
+    def test_boss_waterdragon_round_trip(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("waterdragon", npcdesc, equip, itemdesc)
+        mob, weapon, armor = build_combatant(spec)
+        assert mob.strength == 1000
+        assert mob.max_hp == 900000
+        assert weapon.name == "waterdragonWeapon"
+        assert weapon.damage.count == 15
+        assert weapon.damage.sides == 10
+        assert armor.ar == 30
+
+    # -- Super Boss: Dragon King (SuperBoss flag, 1.5M HP, all skills 200) --
+
+    def test_superboss_dragonking_stats(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("dragonking", npcdesc, equip, itemdesc)
+        assert spec.name == "The Dragon King"
+        assert spec.str_ == 1000
+        assert spec.hp == 1500000
+
+    def test_superboss_dragonking_skills(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("dragonking", npcdesc, equip, itemdesc)
+        assert spec.skills[SKILLID_TACTICS] == 200
+        assert spec.skills[SKILLID_MACEFIGHTING] == 200
+
+    def test_superboss_dragonking_weapon(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("dragonking", npcdesc, equip, itemdesc)
+        assert spec.weapon is not None
+        assert spec.weapon.name == "dragonkingWeapon"
+        assert spec.weapon.damage == "15d10"
+        assert spec.weapon.hitscript == ":combat:banishscript"
+
+    def test_superboss_dragonking_protections(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("dragonking", npcdesc, equip, itemdesc)
+        assert spec.properties.get("SuperBoss") == 1
+        assert spec.properties.get("FireProtection") == 120
+        assert spec.properties.get("NecroProtection") == 50
+        assert spec.properties.get("HolyProtection") == 100
+
+    def test_superboss_dragonking_round_trip(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("dragonking", npcdesc, equip, itemdesc)
+        mob, weapon, armor = build_combatant(spec)
+        assert mob.strength == 1000
+        assert mob.max_hp == 1500000
+        assert mob.get_property("SuperBoss") == 1
+        assert weapon.damage.count == 15
+        assert armor.ar == 30
+
+    # -- Champion Spawn Boss: Legendary Hunter (SuperBoss + Ranger class) --
+
+    def test_champion_legendaryhunter_stats(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("legendaryhunter", npcdesc, equip, itemdesc)
+        assert spec.name == "Gin the Legendary Hunter"
+        assert spec.str_ == 1000
+        assert spec.dex_ == 400
+        assert spec.hp == 1500000
+
+    def test_champion_legendaryhunter_skills(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("legendaryhunter", npcdesc, equip, itemdesc)
+        assert spec.skills[SKILLID_ARCHERY] == 150
+        assert spec.skills[SKILLID_TACTICS] == 100
+
+    def test_champion_legendaryhunter_class(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("legendaryhunter", npcdesc, equip, itemdesc)
+        # Ranger class level 3
+        assert spec.class_levels.get("IsRanger") == 3
+
+    def test_champion_legendaryhunter_weapon(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("legendaryhunter", npcdesc, equip, itemdesc)
+        assert spec.weapon is not None
+        assert spec.weapon.name == "legendaryhunterweapon"
+        assert spec.weapon.damage == "6d6+5"
+        assert spec.weapon.hitscript == ":combat:poisonhit"
+
+    def test_champion_legendaryhunter_protections(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("legendaryhunter", npcdesc, equip, itemdesc)
+        assert spec.properties.get("SuperBoss") == 1
+        assert spec.properties.get("PhysicalProtection") == 5
+        assert spec.properties.get("NecroProtection") == 150
+        assert spec.properties.get("HolyProtection") == -100  # weakness
+
+    def test_champion_legendaryhunter_round_trip(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("legendaryhunter", npcdesc, equip, itemdesc)
+        mob, weapon, armor = build_combatant(spec)
+        assert mob.strength == 1000
+        assert mob.dexterity == 400
+        assert mob.max_hp == 1500000
+        assert mob.get_property("IsRanger") == 3
+        assert weapon.name == "legendaryhunterweapon"
+        assert armor.ar == 5
+
+    # -- Cross-tier scenario: champion vs boss --
+
+    def test_champion_vs_boss_scenario(self, configs):
+        """Champion spawn boss as attacker, regular boss as defender."""
+        npcdesc, equip, itemdesc = configs
+        attacker = CombatantSpec.from_config("legendaryhunter", npcdesc, equip, itemdesc)
+        defender = CombatantSpec.from_config("waterdragon", npcdesc, equip, itemdesc)
+        scenario = Scenario(attacker=attacker, defender=defender, iterations=10)
+        atk_mob, atk_wpn, _ = build_combatant(attacker)
+        def_mob, _, def_arm = build_combatant(defender)
+        assert atk_mob.dexterity > def_mob.dexterity  # hunter is faster
+        assert def_arm.ar > 5  # dragon has heavier armor
 
 
 class TestArmorSpec:

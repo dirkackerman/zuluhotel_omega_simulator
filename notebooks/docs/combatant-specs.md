@@ -399,75 +399,63 @@ itemdesc = parse_config_file(
 
 ### Looking up items by Name
 
-Items in `itemdesc.cfg` are indexed by their hex objtype (e.g., `Weapon 0x27A8`), but each has a `Name` property. Use `find_weapon_by_name` and `find_armor_by_name` to look up items directly:
+Items in `itemdesc.cfg` are indexed by their hex objtype (e.g., `Weapon 0x27A8`), but each has a `Name` property. The simplest way to load them is with `WeaponSpec.from_config()` and `ArmorSpec.from_config()`:
 
 ```python
-from omega.model import find_weapon_by_name
+from omega.simulation import WeaponSpec, ArmorSpec
+
+katana = WeaponSpec.from_config("KatanaOfKieri", itemdesc)
+# WeaponSpec(name='KatanaOfKieri', damage='2d8+35', speed=87, attribute=40)
+
+plate = ArmorSpec.from_config("Armor30", itemdesc)
+# ArmorSpec(name='Armor30', ar=30, coverage=('Body', 'Legs/feet', 'Arms', 'Neck', 'Hands', 'Head'))
+```
+
+You can also look up by hex objtype:
+
+```python
+katana = WeaponSpec.from_config("0x757d", itemdesc)
+```
+
+The result is a frozen `WeaponSpec`/`ArmorSpec` ready to use with `CombatantSpec` and `run_scenario()`. Enchantments can be chained:
+
+```python
+fire_katana = WeaponSpec.from_config("KatanaOfKieri", itemdesc).enchant_with(Enchantment.OF_DAEMONS_BREATH)
+```
+
+Both raise `KeyError` if the item is not found or the wrong type (e.g., looking up an armor name via `WeaponSpec.from_config()`).
+
+For lower-level access, `find_weapon_by_name` and `find_armor_by_name` return `Weapon`/`Armor` game objects directly:
+
+```python
+from omega.model import find_weapon_by_name, find_armor_by_name
 
 heartwood = find_weapon_by_name("TheHeartwood", itemdesc)
 # Result: Weapon(name="TheHeartwood", damage=1d18+35, speed=88,
 #                attribute=Swords, two_handed=True, max_hp=200)
-```
 
-The shard's `TheHeartwood` is a two-handed bokuto dealing `1d18+35` damage (range 36–53), governed by the Swordsmanship skill. All properties — speed, hitscript, two-handed flag — are read directly from the config.
-
-For lower-level access, `ConfigFile.find_by_name(name)` returns the raw `ConfigElement` (or `None`):
-
-```python
-elem = itemdesc.find_by_name("TheHeartwood")
-# elem is a ConfigElement — pass to create_weapon_from_config() if needed
+coif = find_armor_by_name("ChainmailCoif", itemdesc)
+# Result: Armor(name="ChainmailCoif", ar=16, coverage=["Head", "Neck"], max_hp=70)
 ```
 
 ### Player character with a config weapon
 
 ```python
-from omega.model import create_mobile_inline, find_weapon_by_name
+from omega.simulation import CombatantSpec, WeaponSpec
 from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_TACTICS, SKILLID_ANATOMY
 
-heartwood = find_weapon_by_name("TheHeartwood", itemdesc)
-
-player = create_mobile_inline(
+warrior = CombatantSpec(
     name="Heartwood Warrior",
     str_=100, dex_=100, int_=25,
     skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100, SKILLID_ANATOMY: 100},
     class_levels={"IsWarrior": 5},
-    weapon=heartwood,
+    weapon=WeaponSpec.from_config("TheHeartwood", itemdesc),
 )
-```
-
-### NPC weapon from config
-
-NPC weapons work the same way. For example, Modain's Staff:
-
-```python
-from omega.model import find_weapon_by_name
-
-modain_staff = find_weapon_by_name("ModainsStaffWeapon", itemdesc)
-# Result: Weapon(name="ModainsStaffWeapon", damage=10d6, speed=50,
-#                attribute=Mace, two_handed=True, max_hp=250)
-```
-
-`ModainsStaffWeapon` deals `10d6` damage (range 10–60, mean 35) — a very powerful NPC weapon. It also has a `Hitscript` (banish) and `Controlscript` (apply hit script) that would be exercised in V1.5.
-
-### Armor from config
-
-```python
-from omega.model import find_armor_by_name
-
-coif = find_armor_by_name("ChainmailCoif", itemdesc)
-# Result: Armor(name="ChainmailCoif", ar=16, coverage=["Head", "Neck"], max_hp=70)
-# CProps like DefaultDex and MagicPenalty are carried over to the property bag
 ```
 
 ## NPC templates from npcdesc.cfg
 
 For the most realistic simulations, you can create NPCs directly from the shard's `npcdesc.cfg` templates. This resolves the full chain: NPC template → equipment template (equip.cfg) → item definitions (itemdesc.cfg).
-
-**Import path:**
-```python
-from omega.model import create_mobile_from_template
-from omega.config.cfg_parser import parse_config_file
-```
 
 ### Loading the config files
 
@@ -484,7 +472,24 @@ equip    = parse_config_file(shard_root / "config" / "equip.cfg")
 itemdesc = parse_config_file(shard_root / "pkg" / "systems" / "combat" / "config" / "itemdesc.cfg")
 ```
 
-### Creating an NPC from template
+### Creating an NPC from template (CombatantSpec)
+
+The simplest way to use an NPC template in a scenario is `CombatantSpec.from_config()`:
+
+```python
+from omega.simulation import CombatantSpec, Scenario, run_scenario
+
+dragon_king = CombatantSpec.from_config("dragonking", npcdesc, equip, itemdesc)
+skeleton = CombatantSpec.from_config("skeleton", npcdesc, equip, itemdesc)
+
+scenario = Scenario(attacker=dragon_king, defender=skeleton, iterations=1000)
+```
+
+This resolves stats, skills, equipment, class levels, and properties into a frozen `CombatantSpec` — ready for `run_scenario()` with no further setup.
+
+### Creating an NPC from template (lower-level)
+
+For direct access to the mutable `Mobile` object, use `create_mobile_from_template()`:
 
 ```python
 from omega.model import create_mobile_from_template
@@ -710,7 +715,7 @@ target = CombatantSpec(
 )
 ```
 
-### Tough NPC boss
+### Tough NPC boss (inline)
 
 ```python
 boss = CombatantSpec(
@@ -721,4 +726,12 @@ boss = CombatantSpec(
     skills={SKILLID_TACTICS: 120, SKILLID_WRESTLING: 120},
     armor=ArmorSpec(name="Dragon Scales", ar=60),
 )
+```
+
+### NPC boss from config
+
+```python
+dragon_king = CombatantSpec.from_config("dragonking", npcdesc, equip, itemdesc)
+# All stats, skills, equipment, and properties loaded from shard configs
+# STR=1000, HP=1500000, weapon=dragonkingWeapon (15d10), AR=30, SuperBoss=1
 ```

@@ -355,18 +355,26 @@ def equip_from_template(
         logger.warning("Equipment template not found", template=equip_name)
         return
 
-    # Process Weapon entries
+    # Process Weapon entries (may have trailing color: "0x9azz 0x0493")
     for weapon_ref in equip_elem.get_all("Weapon"):
-        weapon_item = _resolve_item_ref(weapon_ref, itemdesc)
+        parts = weapon_ref.split()
+        ref_str = parts[0]
+        color = int(parts[1], 0) if len(parts) > 1 else 0
+        weapon_item = _resolve_item_ref(ref_str, itemdesc)
         if weapon_item and weapon_item.block_type == "Weapon":
             weapon = create_weapon_from_config(weapon_item)
+            weapon.color = color
             mobile.equip(LAYER_HAND1, weapon)
 
-    # Process Armor entries
+    # Process Armor entries (may have trailing color: "0xf701 1556")
     for armor_ref in equip_elem.get_all("Armor"):
-        armor_item = _resolve_item_ref(armor_ref, itemdesc)
+        parts = armor_ref.split()
+        ref_str = parts[0]
+        color = int(parts[1], 0) if len(parts) > 1 else 0
+        armor_item = _resolve_item_ref(ref_str, itemdesc)
         if armor_item and armor_item.block_type == "Armor":
             armor = create_armor_from_config(armor_item)
+            armor.color = color
             layer = _guess_armor_layer(armor)
             mobile.equip(layer, armor)
 

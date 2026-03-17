@@ -1011,7 +1011,7 @@ function Resisted( caster , cast_on , circle , dmg )
 
 	var points 	:= circle * 40;
 	var magery 	:= GetEffectiveSkill( caster  , SKILLID_MAGERY );
-	var evalint := GetEffectiveSkill( caster  , SKILLID_EVALINT );
+	var evalint 	:= GetEffectiveSkill( caster  , SKILLID_EVALINT );
 	var resist 	:= GetEffectiveSkill( cast_on , SKILLID_MAGICRESISTANCE );
 	var chance 	:= Cint( resist / 6);
 	var chance2 	:= Cint( resist - ((magery / 4) + (circle * 6)) );
@@ -1024,8 +1024,7 @@ function Resisted( caster , cast_on , circle , dmg )
 		chance := Cint( chance * ClasseBonus( cast_on , CLASSEID_MAGE ) );
 	elseif( GetObjProperty( cast_on , CLASSEID_PALADIN ) )
 		//Print("Base Chance Pala 1: " + chance);
-		var level := GetObjProperty( cast_on , CLASSEID_PALADIN );
-		chance := Cint(chance * ClasseHalfBonusByLevel(level));
+		chance := Cint( (chance * ClasseBonus( cast_on , CLASSEID_PALADIN ) ) * 0.5 );
 		//Print("Base Chance Pala 2: " + chance);
 	elseif( GetObjProperty( cast_on , CLASSEID_WARRIOR ) )
 		var bonus := ClasseBonus( cast_on , CLASSEID_WARRIOR );
@@ -1607,6 +1606,8 @@ function SmartAoE( caster, victims)
 		elseif ((victims[i].isa(POLCLASS_NPC)) && victims[i].master && caster.party && (victims[i].master.party == caster.party))
 			to_remove.append(i);
 		elseif ((!victims[i].isa(POLCLASS_NPC)) && caster.party && (victims[i].party == caster.party))
+			to_remove.append(i);
+		elseif (( !victims[i].isa(POLCLASS_NPC)) && victims[i].master == caster )
 			to_remove.append(i);
 		elseif (!caster.isa(POLCLASS_NPC) && !caster.cmdlevel && !victims[i].isa(POLCLASS_NPC))
 			if((caster_noPK) || (victim_noPK) || (!same_faction) || (same_CWcolor))

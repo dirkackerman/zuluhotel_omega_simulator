@@ -59,7 +59,7 @@ program dualplanarscript(attacker, defender, weapon, armor, basedamage, rawdamag
 
         // 30% dmg nerf for mages, Paladins and Mystic Archers
         var class_nerf := 1.0;
-        if(GetObjProperty( attacker , CLASSEID_MAGE) || GetObjProperty( attacker , CLASSEID_PALADIN) || GetObjProperty( attacker , CLASSEID_MYSTIC_ARCHER))
+        if(GetObjProperty( attacker , CLASSEID_MAGE) || GetObjProperty( attacker , CLASSEID_MYSTIC_ARCHER))
            spelldmg *= 0.7;
            class_nerf := 0.7;
         endif

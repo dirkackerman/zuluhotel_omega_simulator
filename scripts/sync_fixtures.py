@@ -30,8 +30,11 @@ NPC_TEMPLATES_NEEDED = {
     "earthelementalsummons",
     "airelemental",
     "earthelemental",
-    "nazgul",       # referenced in equip test
-    "skeleton",     # representative undead for slayer tests
+    "nazgul",           # referenced in equip test
+    "skeleton",         # representative undead for slayer tests
+    "waterdragon",      # boss-tier NPC (Boss flag, 900k HP)
+    "dragonking",       # super boss (SuperBoss flag, 1.5M HP)
+    "legendaryhunter",  # champion spawn boss (SuperBoss + Ranger class)
 }
 
 # Equipment template names referenced in tests
@@ -43,6 +46,9 @@ EQUIP_TEMPLATES_NEEDED = {
     "airelemental",     # airelemental NPC's Equip template
     "earthelemental",   # earthelemental NPC's Equip template
     "dracoliche",       # dracoliche NPC's Equip template
+    "waterdragon",      # waterdragon boss's Equip template
+    "dragonking",       # dragonking super boss's Equip template
+    "legendaryhunter",  # legendaryhunter champion's Equip template
 }
 
 
