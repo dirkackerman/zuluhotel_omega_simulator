@@ -6,7 +6,7 @@ __pycache__/
 dist/
 build/
 .ipynb_checkpoints/
-gen/
-*.interp
-*.tokens
+# ANTLR4 generated support files (the .py files ARE tracked)
+src/omega/parser/gen/*.interp
+src/omega/parser/gen/*.tokens
 .uv/
