@@ -46,6 +46,165 @@ class TestWeaponSpec:
         assert w.get_property("SlayType") == "Undead"
 
 
+class TestWeaponSpecFromConfig:
+    """Tests for WeaponSpec.from_config() config file lookup."""
+
+    @pytest.fixture(scope="class")
+    def itemdesc(self):
+        from omega.config.cfg_parser import parse_config_file
+
+        return parse_config_file(
+            FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "itemdesc.cfg"
+        )
+
+    def test_lookup_by_name(self, itemdesc):
+        spec = WeaponSpec.from_config("KatanaOfKieri", itemdesc)
+        assert spec.name == "KatanaOfKieri"
+        assert spec.damage == "2d8+35"
+        assert spec.speed == 87
+        assert spec.attribute == SKILLID_SWORDSMANSHIP
+
+    def test_lookup_by_objtype(self, itemdesc):
+        spec = WeaponSpec.from_config("0x757d", itemdesc)
+        assert spec.name == "KatanaOfKieri"
+        assert spec.damage == "2d8+35"
+
+    def test_not_found_raises(self, itemdesc):
+        with pytest.raises(KeyError, match="NoSuchWeapon"):
+            WeaponSpec.from_config("NoSuchWeapon", itemdesc)
+
+    def test_armor_name_raises(self, itemdesc):
+        """Looking up an armor name via WeaponSpec should fail."""
+        # Find any armor name in the config
+        for elem in itemdesc:
+            if elem.block_type == "Armor":
+                armor_name = elem.get("Name")
+                if armor_name:
+                    with pytest.raises(KeyError):
+                        WeaponSpec.from_config(armor_name, itemdesc)
+                    return
+        pytest.skip("No armor found in fixture itemdesc")
+
+    def test_enchant_after_from_config(self, itemdesc):
+        """from_config result can be chained with enchant_with."""
+        spec = WeaponSpec.from_config("KatanaOfKieri", itemdesc)
+        enchanted = spec.enchant_with(Enchantment.OF_DAEMONS_BREATH)
+        assert enchanted.hitscript is not None
+        assert enchanted.damage == spec.damage  # damage preserved
+
+    def test_round_trip_build(self, itemdesc):
+        """from_config spec can be materialized via build_weapon."""
+        spec = WeaponSpec.from_config("KatanaOfKieri", itemdesc)
+        weapon = build_weapon(spec)
+        assert weapon.name == "KatanaOfKieri"
+        assert weapon.damage.count == 2
+        assert weapon.damage.sides == 8
+        assert weapon.damage.bonus == 35
+        assert weapon.speed == 87
+
+
+class TestArmorSpecFromConfig:
+    """Tests for ArmorSpec.from_config() config file lookup."""
+
+    @pytest.fixture(scope="class")
+    def itemdesc(self):
+        from omega.config.cfg_parser import parse_config_file
+
+        return parse_config_file(
+            FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "itemdesc.cfg"
+        )
+
+    def test_lookup_by_name(self, itemdesc):
+        # Find the first armor in the config
+        for elem in itemdesc:
+            if elem.block_type == "Armor":
+                name = elem.get("Name")
+                if name:
+                    spec = ArmorSpec.from_config(name, itemdesc)
+                    assert spec.name == name
+                    assert spec.ar >= 0
+                    return
+        pytest.skip("No armor found in fixture itemdesc")
+
+    def test_not_found_raises(self, itemdesc):
+        with pytest.raises(KeyError, match="NoSuchArmor"):
+            ArmorSpec.from_config("NoSuchArmor", itemdesc)
+
+    def test_weapon_name_raises(self, itemdesc):
+        """Looking up a weapon name via ArmorSpec should fail."""
+        with pytest.raises(KeyError):
+            ArmorSpec.from_config("KatanaOfKieri", itemdesc)
+
+
+class TestCombatantSpecFromConfig:
+    """Tests for CombatantSpec.from_config() NPC template lookup."""
+
+    @pytest.fixture(scope="class")
+    def configs(self):
+        from omega.config.cfg_parser import parse_config_file
+
+        npcdesc = parse_config_file(FIXTURE_SHARD_ROOT / "config" / "npcdesc.cfg")
+        equip = parse_config_file(FIXTURE_SHARD_ROOT / "config" / "equip.cfg")
+        itemdesc = parse_config_file(
+            FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "itemdesc.cfg"
+        )
+        return npcdesc, equip, itemdesc
+
+    def test_basic_npc_load(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("skeleton", npcdesc, equip, itemdesc)
+        assert spec.name == "a Skeleton"
+        assert spec.is_npc is True
+        assert spec.npc_template == "skeleton"
+        assert spec.str_ == 45
+        assert spec.hp == 45
+
+    def test_skills_populated(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("skeleton", npcdesc, equip, itemdesc)
+        assert len(spec.skills) > 0
+        # Skeleton has Tactics 60
+        assert spec.skills[SKILLID_TACTICS] == 60
+
+    def test_npc_with_equipment(self, configs):
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("dracoliche", npcdesc, equip, itemdesc)
+        assert spec.weapon is not None
+        assert spec.weapon.name == "Dracolicheweapon"
+        assert spec.weapon.damage == "7d7+5"
+        assert spec.armor is not None
+        assert spec.armor.ar > 0
+
+    def test_not_found_raises(self, configs):
+        npcdesc, equip, itemdesc = configs
+        with pytest.raises(ValueError, match="not found"):
+            CombatantSpec.from_config("nonexistent_npc", npcdesc, equip, itemdesc)
+
+    def test_round_trip_build_combatant(self, configs):
+        """from_config spec can be materialized via build_combatant."""
+        npcdesc, equip, itemdesc = configs
+        spec = CombatantSpec.from_config("dracoliche", npcdesc, equip, itemdesc)
+        mob, weapon, armor = build_combatant(spec)
+        assert mob.name == "a Dracoliche"
+        assert mob.is_npc is True
+        assert mob.strength == spec.str_
+        assert weapon.name == "Dracolicheweapon"
+        assert armor.ar > 0
+
+    def test_as_attacker_and_defender(self, configs):
+        """NPC specs can be used as either attacker or defender in a Scenario."""
+        npcdesc, equip, itemdesc = configs
+        attacker = CombatantSpec.from_config("dracoliche", npcdesc, equip, itemdesc)
+        defender = CombatantSpec.from_config("skeleton", npcdesc, equip, itemdesc)
+        scenario = Scenario(attacker=attacker, defender=defender, iterations=10)
+        assert scenario.attacker.npc_template == "dracoliche"
+        assert scenario.defender.npc_template == "skeleton"
+        # Both should materialize without error
+        atk_mob, atk_wpn, atk_arm = build_combatant(attacker)
+        def_mob, def_wpn, def_arm = build_combatant(defender)
+        assert atk_mob.strength > def_mob.strength
+
+
 class TestArmorSpec:
     def test_defaults(self):
         spec = ArmorSpec()
