@@ -234,6 +234,13 @@ Hand-calculate 3-5 specific combat scenarios from the eScript source as integrat
 - POL stub audit for spell-path stubs
 - See [Spell Catalog](./notebooks/docs/spells.md) for the full spell reference with reclassification notes
 
+### V3.1 — Casting Armour (Armor OnHitScripts)
+- 47 armor enchantments from `onhitscriptdesc.cfg` (18 spell, 17 race-resistant, 7 effect, 5 greater)
+- Armor-side mirror of V1.5 weapon enchantments — `ArmorEnchantment` enum, `ArmorEnchantmentRegistry`, `ArmorSpec.enchant_with()`
+- Execute ~13 distinct onhit scripts (spellonhit, raceresistonhit, effect/greater scripts)
+- Cursed armor variant (inverts spell target)
+- 1 new notebook (casting armour analysis)
+
 ### V4 — Extended Combat
 - HP tracking and kill-time distributions
 - Buff/debuff state over time (accumulating state across hits)
@@ -296,6 +303,8 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **V3 status**: Complete (M23–M29). 29 castable spells (26 damage + 3 non-damage), 3 notebooks, full spell damage pipeline. 2201 tests.
 - **[Path to V3](./planning/path_to_v3.md)** — Damage Spell Casting roadmap (M23–M29): spell config, execution engine, single-target + AoE spells, runner/stats, reporting/notebooks, stub audit
 - **[Changelog to V3](./changelog/changelog_to_v3.md)** — Per-milestone change summaries for V3
+- **V3.1 status**: Planned (M30–M34). Casting armour (armor OnHitScripts), 47 enchantments, 1 notebook.
+- **[Path to V3.1](./planning/path_to_v3.1.md)** — Casting Armour roadmap (M30–M34): config/registry, spell/slayer/effect/greater onhit scripts, stats/reporting/notebook
 
 ## Commands
 - `uv run pytest -n auto` - run tests in parallel (preferred, ~36s)
