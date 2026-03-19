@@ -22,7 +22,9 @@ class Weapon(GameObject):
     speed:
         Attack speed in tenths of a second.
     attribute:
-        Skill ID used for this weapon (SKILLID_SWORDSMANSHIP, etc.).
+        Attribute ID string matching POL's ``weapon.attribute`` member
+        (e.g., ``"Swordsmanship"``).  Use ``ATTRIBUTE_TO_SKILLID`` to
+        convert to a skill ID for ``GetEffectiveSkill()``.
     two_handed:
         Whether the weapon requires both hand slots.
     quality:
@@ -43,7 +45,7 @@ class Weapon(GameObject):
         damage: DiceSpec | None = None,
         speed: int = 50,
         delay: int = 0,
-        attribute: int = 0,
+        attribute: int | str = 0,
         two_handed: bool = False,
         quality: float = 1.0,
         hitscript: str | None = None,
@@ -60,7 +62,14 @@ class Weapon(GameObject):
         instead of the speed-based path.  Matches POL's ``WeaponDesc::delay``
         (``weapon.cpp:87``).
         """
-        self.attribute: int = attribute
+        # Accept both int (skill ID) and str (attribute name) for backwards
+        # compatibility.  Normalise to the attribute name string since that's
+        # what POL's weapon.attribute member returns.
+        if isinstance(attribute, int) and attribute != 0:
+            from omega.model.constants import SKILLID_TO_ATTRIBUTE
+            self.attribute: str = SKILLID_TO_ATTRIBUTE.get(attribute, "")
+        else:
+            self.attribute: str = str(attribute) if attribute else ""
         self.two_handed: bool = two_handed
         self.quality: float = quality
         self.hitscript: str | None = hitscript

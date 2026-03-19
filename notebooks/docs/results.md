@@ -226,6 +226,21 @@ These show the conditional probability given that the swing hit. Misses are excl
 
 When hit rate is 100%, the overall and on-hit rates are identical.
 
+### Armor onhit rates (V3.1)
+
+| Field | Description |
+|-------|-------------|
+| `onhit_trigger_rate` | Fraction of all swings where an armor onhit script fired |
+| `onhit_trigger_rate_on_hit` | Fraction of *hits* where an armor onhit script fired (conditional on the swing connecting) |
+
+The `onhit_type` metric key is available per-hit in `HitResult.metrics`. It uses a unified value across all 14 onhit scripts: `"spell"`, `"slayer"`, `"piercing"`, `"drain"`, `"poison"`, `"blind"`, `"banish"`, `"vampiric"`, `"leech"`, `"bloody"`, `"planar"`, `"void"`, `"elemental"`, `"reactive"`.
+
+```python
+r = result.ratios
+print(f"Armor onhit (overall): {r.onhit_trigger_rate:.1%}")
+print(f"Armor onhit (on hit):  {r.onhit_trigger_rate_on_hit:.1%}")
+```
+
 ### Spell-specific rates (V3)
 
 | Field | Description |

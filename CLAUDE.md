@@ -303,8 +303,9 @@ When the shard submodule (`submodules/zuluhotel_omega_2.5`) is updated for balan
 - **V3 status**: Complete (M23–M29). 29 castable spells (26 damage + 3 non-damage), 3 notebooks, full spell damage pipeline. 2201 tests.
 - **[Path to V3](./planning/path_to_v3.md)** — Damage Spell Casting roadmap (M23–M29): spell config, execution engine, single-target + AoE spells, runner/stats, reporting/notebooks, stub audit
 - **[Changelog to V3](./changelog/changelog_to_v3.md)** — Per-milestone change summaries for V3
-- **V3.1 status**: Planned (M30–M34). Casting armour (armor OnHitScripts), 47 enchantments, 1 notebook.
+- **V3.1 status**: Complete (M30–M34). Casting armour (armor OnHitScripts), 47 enchantments, CombatScript/CreatureType enums, armor zone selection, OmegaAttack prerequisites. 2699 tests.
 - **[Path to V3.1](./planning/path_to_v3.1.md)** — Casting Armour roadmap (M30–M34): config/registry, spell/slayer/effect/greater onhit scripts, stats/reporting/notebook
+- **[Changelog to V3.1](./changelog/changelog_to_v3.1.md)** — Per-milestone change summaries for V3.1
 
 ## Commands
 - `uv run pytest -n auto` - run tests in parallel (preferred, ~36s)

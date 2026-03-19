@@ -2,10 +2,19 @@
 
 import omega.runtime  # noqa: F401
 
+import pytest
+
 from omega.combat.hit import check_hit, execute_hit, _weapon_skill
 from omega.combat.result import HitResult
 from omega.interpreter.types import EArray
-from omega.model.constants import SKILLID_SWORDSMANSHIP, SKILLID_WRESTLING
+from omega.model.constants import (
+    LAYER_HAND1,
+    SKILLID_ARCHERY,
+    SKILLID_MACEFIGHTING,
+    SKILLID_SWORDSMANSHIP,
+    SKILLID_TACTICS,
+    SKILLID_WRESTLING,
+)
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
 from omega.parser.parser import parse_text, ParseResult
@@ -479,3 +488,159 @@ class TestCoreHitCheck:
                 misses += 1
         # With 50% hit chance and 50 trials, should have some misses
         assert misses > 5
+
+
+# ---------------------------------------------------------------------------
+# Detailed check_hit formula verification (POL's Character::attack())
+# ---------------------------------------------------------------------------
+
+
+class TestCheckHitFormulaExact:
+    """Verify check_hit matches POL's exact formula from charactr.cpp:3357.
+
+    POL formula::
+
+        hit_chance = (weapon_attribute().effective() + 50.0)
+                   / (2.0 * (opponent->weapon_attribute().effective() + 50.0))
+
+    Note: The Zuluhotel Omega shard overrides this with a custom
+    ``CheckHitChance()`` in ``omegaattack.inc`` that uses a completely
+    different formula (attacker-only skill, class level, hunger).
+    The ``core_hit_check=True`` mode in execute_hit() implements POL's
+    core formula, NOT the shard's custom formula.
+    """
+
+    def _calc_pol_hit_chance(self, atk_skill: int, def_skill: int) -> float:
+        """Calculate POL's exact hit chance from C++ source."""
+        return (atk_skill + 50.0) / (2.0 * (def_skill + 50.0))
+
+    def test_equal_skills_exact_50_pct(self):
+        """Equal skills → hit_chance = exactly 0.5."""
+        assert self._calc_pol_hit_chance(100, 100) == 0.5
+
+    def test_zero_vs_zero_exact_50_pct(self):
+        """Both 0 skill → (0+50)/(2*(0+50)) = 50/100 = 0.5."""
+        assert self._calc_pol_hit_chance(0, 0) == 0.5
+
+    def test_max_vs_zero(self):
+        """130 vs 0 → (180)/(100) = 1.8 → always hits."""
+        chance = self._calc_pol_hit_chance(130, 0)
+        assert chance == 1.8
+        # Any roll in [0,1) will be < 1.8
+
+    def test_zero_vs_max(self):
+        """0 vs 130 → (50)/(360) ≈ 0.139."""
+        chance = self._calc_pol_hit_chance(0, 130)
+        assert abs(chance - 50.0 / 360.0) < 1e-10
+
+    def test_skill_50_vs_100(self):
+        """50 vs 100 → (100)/(300) = 0.333."""
+        chance = self._calc_pol_hit_chance(50, 100)
+        assert abs(chance - 100.0 / 300.0) < 1e-10
+
+    def test_skill_100_vs_50(self):
+        """100 vs 50 → (150)/(200) = 0.75."""
+        chance = self._calc_pol_hit_chance(100, 50)
+        assert abs(chance - 150.0 / 200.0) < 1e-10
+
+    def test_check_hit_uses_weapon_attribute(self):
+        """check_hit reads the weapon's attribute for attacker skill."""
+        atk = Mobile(name="A")
+        atk.set_skill(SKILLID_SWORDSMANSHIP, 1000)  # 100 display
+        atk.set_skill(SKILLID_MACEFIGHTING, 500)  # 50 display
+        defn = Mobile(name="D")
+        # Defender has no weapon → uses WRESTLING (0 skill)
+
+        # Sword weapon → uses swordsmanship (100)
+        sword = Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP)
+        # hit_chance = (100+50)/(2*(0+50)) = 150/100 = 1.5 → always hit
+        hits_sword = sum(check_hit(atk, defn, sword, SimulationRNG(i)) for i in range(100))
+        assert hits_sword == 100
+
+        # Mace weapon → uses macefighting (50)
+        mace = Weapon(name="Mace", attribute=SKILLID_MACEFIGHTING)
+        # hit_chance = (50+50)/(2*(0+50)) = 100/100 = 1.0 → always hit (>= 1.0)
+        # Actually roll < 1.0, so some might miss at exactly 1.0... no:
+        # random_float returns [0, 1), so roll < 1.0 is always True
+        hits_mace = sum(check_hit(atk, defn, mace, SimulationRNG(i)) for i in range(100))
+        assert hits_mace == 100
+
+    def test_defender_weapon_skill_used_from_equipped(self):
+        """Defender's skill comes from their equipped weapon's attribute."""
+        atk = Mobile(name="A")
+        atk.set_skill(SKILLID_SWORDSMANSHIP, 500)  # 50 display
+        defn = Mobile(name="D")
+        defn.set_skill(SKILLID_SWORDSMANSHIP, 1000)  # 100 display
+        defn.set_skill(SKILLID_WRESTLING, 200)  # 20 display
+        # Equip defender with a sword → their defense skill is 100
+        defn.equip(LAYER_HAND1, Weapon(name="Def Sword", attribute=SKILLID_SWORDSMANSHIP))
+
+        weapon = Weapon(name="Atk Sword", attribute=SKILLID_SWORDSMANSHIP)
+        # hit_chance = (50+50)/(2*(100+50)) = 100/300 = 0.333
+        hits = sum(check_hit(atk, defn, weapon, SimulationRNG(i)) for i in range(3000))
+        expected = 3000 * (100.0 / 300.0)
+        assert abs(hits - expected) < 150  # ~33% ± 5%
+
+    def test_defender_no_weapon_uses_wrestling(self):
+        """Unarmed defender uses Wrestling skill for defense."""
+        atk = Mobile(name="A")
+        atk.set_skill(SKILLID_SWORDSMANSHIP, 1000)  # 100
+        defn = Mobile(name="D")
+        defn.set_skill(SKILLID_WRESTLING, 1000)  # 100
+        # No weapon equipped → defender uses wrestling
+
+        weapon = Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP)
+        # hit_chance = (100+50)/(2*(100+50)) = 150/300 = 0.5
+        hits = sum(check_hit(atk, defn, weapon, SimulationRNG(i)) for i in range(2000))
+        assert abs(hits - 1000) < 150  # ~50% ± 7.5%
+
+    def test_deterministic_with_same_seed(self):
+        """Same seed → same hit/miss result."""
+        atk = Mobile(name="A")
+        atk.set_skill(SKILLID_SWORDSMANSHIP, 500)
+        defn = Mobile(name="D")
+        defn.set_skill(SKILLID_SWORDSMANSHIP, 500)
+        defn.equip(LAYER_HAND1, Weapon(name="S", attribute=SKILLID_SWORDSMANSHIP))
+        weapon = Weapon(name="S", attribute=SKILLID_SWORDSMANSHIP)
+
+        for seed in range(50):
+            r1 = check_hit(atk, defn, weapon, SimulationRNG(seed))
+            r2 = check_hit(atk, defn, weapon, SimulationRNG(seed))
+            assert r1 == r2, f"Non-deterministic at seed {seed}"
+
+
+class TestWeaponSkillEdgeCases:
+    """Edge cases in _weapon_skill resolution."""
+
+    def test_weapon_attribute_zero_falls_back_to_wrestling(self):
+        """Weapon with attribute=0 should fall back to Wrestling."""
+        mob = Mobile(name="Test")
+        mob.set_skill(SKILLID_WRESTLING, 800)  # 80 display
+        weapon = Weapon(name="Fist", attribute=0)
+        assert _weapon_skill(mob, weapon) == 80
+
+    def test_weapon_none_uses_equipped(self):
+        """weapon=None → use equipped weapon's attribute."""
+        mob = Mobile(name="Test")
+        mob.set_skill(SKILLID_SWORDSMANSHIP, 600)  # 60 display
+        mob.equip(LAYER_HAND1, Weapon(name="Sword", attribute=SKILLID_SWORDSMANSHIP))
+        assert _weapon_skill(mob, None) == 60
+
+    def test_weapon_none_no_equipped_uses_wrestling(self):
+        """weapon=None, nothing equipped → Wrestling."""
+        mob = Mobile(name="Test")
+        mob.set_skill(SKILLID_WRESTLING, 400)  # 40 display
+        assert _weapon_skill(mob, None) == 40
+
+    def test_weapon_skill_unset_returns_zero(self):
+        """Skill not set on mobile → 0."""
+        mob = Mobile(name="Test")
+        weapon = Weapon(name="Bow", attribute=SKILLID_ARCHERY)
+        assert _weapon_skill(mob, weapon) == 0
+
+    def test_weapon_none_armor_equipped_uses_wrestling(self):
+        """Armor on LAYER_HAND1 (shield) → falls back to Wrestling."""
+        mob = Mobile(name="Test")
+        mob.set_skill(SKILLID_WRESTLING, 300)  # 30 display
+        mob.equip(LAYER_HAND1, Armor(name="Shield", ar=10))
+        assert _weapon_skill(mob, None) == 30

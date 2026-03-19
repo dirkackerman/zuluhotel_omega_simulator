@@ -337,6 +337,96 @@ ArmorSpec(name="Plate Armor", ar=35)
 ArmorSpec(name="Invincible Armor", ar=100)
 ```
 
+## Armor Enchantments (V3.1)
+
+Armor pieces can be enchanted with onhit scripts, analogous to weapon enchantments. The `ArmorEnchantment` enum and `ArmorSpec.enchant_with()` method provide a type-safe API.
+
+### Enchanting armor with `enchant_with()`
+
+```python
+from omega.config.enchantments import ArmorEnchantment
+
+# Spell enchantment — casts Fireball on the attacker when wearer is hit
+fire_armor = ArmorSpec(name="Fire Plate", ar=35).enchant_with(
+    ArmorEnchantment.OF_DAEMONS_BREATH
+)
+
+# Effect enchantment — stuns the attacker
+bungling_armor = ArmorSpec(name="Cursed Plate", ar=35).enchant_with(
+    ArmorEnchantment.OF_BUNGLING
+)
+
+# Greater enchantment — dual-element retaliation
+planar_armor = ArmorSpec(ar=35).enchant_with(
+    ArmorEnchantment.OF_PLANAR_FURY
+)
+```
+
+`enchant_with()` returns a new frozen `ArmorSpec` with `onhitscript` and `properties` set. Existing properties take precedence — you can customize per-armor fields like `ChanceOfEffect`:
+
+```python
+# Override default ChanceOfEffect
+ArmorSpec(
+    ar=35,
+    properties={"ChanceOfEffect": 15},
+).enchant_with(ArmorEnchantment.OF_PLANAR_FURY)
+```
+
+### ArmorEnchantment enum
+
+**`ArmorEnchantment`** (`omega.config.enchantments.ArmorEnchantment`) — 47 members:
+- Spell (1–18): `OF_BUNGLING`, `OF_DAEMONS_BREATH`, `OF_THUNDER`, `OF_HELLFIRE`, etc.
+- Race-Resistant (19–35): `SLIME_SLAYER`, `SILVER` (Undead), `HOLY` (Daemon), `DRAGON_SLAYER`, etc.
+- Effect (36–42): `OF_PIERCING`, `BANISHING`, `POISONED`, `BLOODY`, `VAMPIRIC`, `LEECH`, `BLINDING`
+- Greater (43–47): `OF_PLANAR_FURY`, `OF_THE_VOID`, `OF_ELEMENTAL_FURY`, etc.
+
+### CombatScript enum
+
+**`CombatScript`** (`omega.config.enchantments.CombatScript`) provides the onhit script paths:
+
+```python
+from omega.config.enchantments import CombatScript
+
+# Direct property setting (advanced use)
+ArmorSpec(
+    name="Custom Armor", ar=35,
+    onhitscript=CombatScript.SPELLONHIT,
+    properties={"HitWithSpell": 18, "ChanceOfEffect": 7},
+)
+```
+
+### CreatureType enum
+
+**`CreatureType`** (`omega.config.enchantments.CreatureType`) for race-resistant armor matching:
+
+```python
+from omega.config.enchantments import CreatureType
+
+# Armor resists undead attacks
+ArmorSpec(ar=35, properties={"ResistType": CreatureType.UNDEAD})
+```
+
+### Multi-piece enchanted armor
+
+Use `CombatantSpec.armor_pieces` to equip multiple enchanted armor pieces across body zones:
+
+```python
+defender = CombatantSpec(
+    name="Full Enchanted Plate",
+    armor_pieces=[
+        ArmorSpec(name="Fire Helm", ar=20, layer=LAYER_HELM).enchant_with(
+            ArmorEnchantment.OF_DAEMONS_BREATH
+        ),
+        ArmorSpec(name="Piercing Chest", ar=35, layer=LAYER_CHEST).enchant_with(
+            ArmorEnchantment.OF_PIERCING
+        ),
+        ArmorSpec(name="Plain Legs", ar=22, layer=LAYER_LEGS),
+    ],
+)
+```
+
+Each piece is checked independently when its zone is hit (see [Casting Armour](concepts.md#casting-armour-v31) for zone probabilities).
+
 ## Full equipment kits (multi-layer)
 
 The `CombatantSpec` takes a single `weapon` and a single `armor`, which is sufficient for basic scenarios. For testing with a full equipment loadout across multiple body slots, use the lower-level factory API directly.

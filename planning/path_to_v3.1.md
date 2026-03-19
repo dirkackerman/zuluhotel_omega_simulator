@@ -113,7 +113,9 @@ Note: Most of these are eScript user-defined functions in the include chain, not
 
 ## Milestones
 
-### M30 — Armor Enchantment Config, Registry & Fixture Sync
+### M30 — Armor Enchantment Config, Registry & Fixture Sync ✅
+
+**Status**: Complete. Tests: 2517 (was 2403, +114 new). Fixture files: 282 (was 266, +16).
 
 **Goal**: Parse `onhitscriptdesc.cfg`, create `ArmorEnchantment` enum and `ArmorEnchantmentRegistry`, sync all onhit `.src` scripts to test fixtures. Mirror the weapon enchantment pattern from `enchantments.py`.
 
@@ -153,13 +155,46 @@ Note: Most of these are eScript user-defined functions in the include chain, not
 
 ---
 
-### M31 — Spell-Type Armor OnHitScripts
+### M31 — CreatureType Enum & Spell-Type Armor OnHitScripts ✅
 
-**Goal**: Execute `spellonhit.src` through the interpreter for all 18 spell-type armor enchantments. When a defender wears spell-enchanted armor and is hit, the enchantment's spell fires at the attacker (or at the defender if cursed).
+**Status**: Complete. Tests: 2559 (was 2517, +42 new).
 
-**Context**: `spellonhit.src` reads `ChanceOfEffect`, `HitWithSpell`, `EffectCircle`, and `Cursed` from the armor, rolls a chance check, then launches the referenced spell script via `Start_Script(GetScript(spellid), ...)`. The spell scripts themselves are already executable from V3.
+**Goal**: (1) Introduce a `CreatureType` string enum to eliminate magic strings for slayer/race types across all layers, then (2) execute `spellonhit.src` through the interpreter for all 18 spell-type armor enchantments.
+
+**Context**: Slayer types like `"Undead"`, `"Daemon"`, `"Slime"` appear as magic strings in `_ENCHANTMENT_META` (weapon), `_ARMOR_ENCHANTMENT_META` (armor), `EnchantmentEntry.slayer_type`, `ArmorEnchantmentEntry.race_type`, and test assertions. A `CreatureType` string enum centralises these, preventing typos and enabling IDE completion. `spellonhit.src` reads `ChanceOfEffect`, `HitWithSpell`, `EffectCircle`, and `Cursed` from the armor, rolls a chance check, then launches the referenced spell script via `Start_Script(GetScript(spellid), ...)`. The spell scripts themselves are already executable from V3.
 
 **Deliverables**:
+
+**Part A — CreatureType enum**:
+
+- **`src/omega/config/creature_types.py`** — new module:
+  - `CreatureType(str, Enum)` — string enum with all 17 creature types: `SLIME = "Slime"`, `RATKIN = "Ratkin"`, `PLANT = "Plant"`, `ANIMAL = "Animal"`, `BEHOLDER = "Beholder"`, `ORC = "Orc"`, `TERATHAN = "Terathan"`, `OPHIDIAN = "Ophidian"`, `ANIMATED = "Animated"`, `GARGOYLE = "Gargoyle"`, `TROLL = "Troll"`, `GIANTKIN = "Giantkin"`, `ELEMENTAL = "Elemental"`, `UNDEAD = "Undead"`, `DAEMON = "Daemon"`, `DRAGONKIN = "Dragonkin"`, `HUMAN = "Human"`
+  - String enum (`str, Enum`) so that `CreatureType.UNDEAD == "Undead"` — values pass straight through to `set_property()` / `GetObjProperty()` without conversion.
+
+- **Update `src/omega/config/enchantments.py`**:
+  - Import `CreatureType`
+  - Replace all magic strings in `_ENCHANTMENT_META` slayer entries: `{"SlayType": "Undead"}` → `{"SlayType": CreatureType.UNDEAD}`
+  - Update `EnchantmentEntry.slayer_type` type annotation to `str` (remains str for cfg compatibility, but `weapon_properties` returns enum value)
+
+- **Update `src/omega/config/armor_enchantments.py`**:
+  - Import `CreatureType`
+  - Replace all magic strings in `_ARMOR_ENCHANTMENT_META` race-resistant entries: `{"ProtectedType": "Undead"}` → `{"ProtectedType": CreatureType.UNDEAD}`
+  - Update `ArmorEnchantmentEntry.race_type` type annotation to `str` (same rationale)
+
+- **Update `ArmorEnchantmentRegistry` and `EnchantmentRegistry`**:
+  - `find()` should accept `CreatureType` values for lookup (already works since `CreatureType` is `str`)
+
+- **Tests**:
+  - `CreatureType` has exactly 17 members
+  - All `CreatureType` values are title-case strings matching the cfg
+  - `_ENCHANTMENT_META` slayer entries use `CreatureType` (not bare strings)
+  - `_ARMOR_ENCHANTMENT_META` race entries use `CreatureType` (not bare strings)
+  - Registry `find(CreatureType.UNDEAD)` works for both weapon and armor registries
+  - `weapon_properties["SlayType"]` is a `CreatureType` instance
+  - `armor_properties["ProtectedType"]` is a `CreatureType` instance
+  - Cross-validate: every `CreatureType` member appears in both weapon and armor enchantment meta
+
+**Part B — Spell-type armor onhit execution**:
 
 - **Stub discovery** — execute `spellonhit.src` and identify any missing POL built-ins. Likely candidates:
   - `GetScript(spellid)` — eScript function in `spelldata.inc` mapping ID to script path. Verify it's in the include chain; if not, ensure `spelldata.inc` is parsed.
@@ -183,6 +218,7 @@ Note: Most of these are eScript user-defined functions in the include chain, not
   - At least 3 spell enchantments validated end-to-end: Clumsy (circle 1), Fireball (circle 3), Flame Strike (circle 7)
 
 **Acceptance**:
+- `CreatureType` enum has 17 members, all magic strings eliminated from `_ENCHANTMENT_META` and `_ARMOR_ENCHANTMENT_META`
 - `execute_hit()` with spell-enchanted armor produces `HitResult` with onhit metrics
 - 18/18 spell-type enchantments execute with `success=True`
 - Cursed armor correctly inverts spell target
@@ -193,7 +229,15 @@ Note: Most of these are eScript user-defined functions in the include chain, not
 
 ---
 
-### M32 — Slayer & Effect Armor OnHitScripts
+### M32 — Slayer & Effect Armor OnHitScripts ✅
+
+**Status**: Complete. Tests: 2637 (was 2559, +78 new). Fixture files: 283.
+
+Additionally delivered beyond original plan:
+- POL-conformant armor zone selection (`ArmorZoneConfig`, `choose_armor()`)
+- `CombatantSpec.armor_pieces` for multi-piece armor support
+- `CustomHitsLevel` CProp verification with warning log
+- `check_hit()` formula verification + shard discrepancy documented (15 tests)
 
 **Goal**: Execute slayer (race-resistant) and effect onhit scripts. 17 slayer enchantments via `raceresistonhit.src`, 7 effect enchantments via their individual scripts.
 
@@ -246,7 +290,9 @@ Note: Most of these are eScript user-defined functions in the include chain, not
 
 ---
 
-### M33 — Greater Armor OnHitScripts
+### M33 — Greater Armor OnHitScripts ✅
+
+**Status**: Complete. Tests: 2672 (was 2637, +35 new). Notable: dualplanaronhit.src is all-or-nothing (ApplyTheDamage inside chance block — intentional shard behaviour).
 
 **Goal**: Execute the 5 greater armor onhit scripts. These are the most complex — they involve spell damage calculations, paralyze effects, astral storms, and multi-element attacks.
 
@@ -299,7 +345,9 @@ Note: Most of these are eScript user-defined functions in the include chain, not
 
 ---
 
-### M34 — Stats, Reporting, Notebook & Documentation
+### M34 — Stats, Reporting, Notebook & Documentation ✅
+
+**Status**: Complete. Tests: 2699+ (was 2687). Unified `onhit_type` metric across all 14 scripts. New `armor_enchantment_comparison()` plot. `09_casting_armour.ipynb` notebook. 5 doc pages updated.
 
 **Goal**: Aggregate armor enchantment metrics into stats, add reporting support, create a new notebook comparing armor enchantments, and update documentation.
 
@@ -351,7 +399,7 @@ M30 (Config, Registry, API, Fixtures)
   │
   ├──────────────────┐
   ▼                  ▼
-M31 (Spell OnHit)  M32 (Slayer + Effect OnHit)
+M31 (CreatureType + Spell OnHit)  M32 (Slayer + Effect OnHit)
   │                  │
   ├──────────────────┤
   ▼                  │
@@ -370,11 +418,11 @@ M31 and M32 can be worked in parallel after M30. M33 depends on M31 (spell execu
 | ID | Description | Key deliverable | Est. tests |
 |---|---|---|---|
 | M30 | Config, Registry, API, Fixtures | `ArmorEnchantment` enum, `ArmorEnchantmentRegistry`, `ArmorSpec.enchant_with()` | ~30 |
-| M31 | Spell-Type OnHitScripts | 18 spell enchantments via `spellonhit.src` | ~40 |
+| M31 | CreatureType Enum & Spell-Type OnHitScripts | `CreatureType` enum (17 members), eliminate slayer/race magic strings from both meta dicts; 18 spell enchantments via `spellonhit.src` | ~55 |
 | M32 | Slayer & Effect OnHitScripts | 17 slayer + 7 effect enchantments | ~50 |
 | M33 | Greater OnHitScripts | 5 greater enchantments (complex scripts) | ~30 |
 | M34 | Stats, Reporting, Notebook, Docs | `09_casting_armour.ipynb`, updated docs | ~20 |
-| **Total** | | **47 armor enchantments, 1 notebook** | **~170** |
+| **Total** | | **47 armor enchantments, `CreatureType` enum, 1 notebook** | **~185** |
 
 ## Key Risks
 

@@ -16,6 +16,7 @@ import pytest
 
 from omega.combat.hit import execute_hit
 from omega.combat.result import HitResult
+from omega.config.combat_scripts import CombatScript
 from omega.config.dice import DiceSpec
 from omega.model.constants import (
     CLASSEID_WARRIOR,
@@ -118,7 +119,7 @@ class TestPiercing:
     def test_piercing_executes(self, shard, combat_trees):
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:piercingscript")
+        weapon = _make_effect_weapon(CombatScript.PIERCINGSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -153,7 +154,7 @@ class TestPiercing:
 
         # Piercing weapon
         defender_pierce = _make_defender()
-        weapon_pierce = _make_effect_weapon(":combat:piercingscript")
+        weapon_pierce = _make_effect_weapon(CombatScript.PIERCINGSCRIPT)
         pierce_result = _run_hit(
             shard, combat_trees, attacker, defender_pierce, weapon_pierce, armor,
             rng_seed=42,
@@ -169,7 +170,7 @@ class TestPiercing:
         attacker.hp = 500
         attacker.max_hp = 500
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:piercingscript", cursed=True)
+        weapon = _make_effect_weapon(CombatScript.PIERCINGSCRIPT, cursed=True)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -190,7 +191,7 @@ class TestPoison:
     def test_poison_executes(self, shard, combat_trees):
         attacker = _make_attacker(is_npc=False)
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:poisonhit", poison_level=3)
+        weapon = _make_effect_weapon(CombatScript.POISONHIT, poison_level=3)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -205,7 +206,7 @@ class TestPoison:
         attacker = _make_attacker(is_npc=False)
         defender = _make_defender()
         weapon = _make_effect_weapon(
-            ":combat:poisonhit", poison_level=5, cursed=True,
+            CombatScript.POISONHIT, poison_level=5, cursed=True,
         )
         armor = Armor(name="Plate", ar=30)
 
@@ -226,7 +227,7 @@ class TestLifeDrain:
     def test_lifedrain_executes(self, shard, combat_trees):
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:lifedrainscript")
+        weapon = _make_effect_weapon(CombatScript.LIFEDRAINSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -242,7 +243,7 @@ class TestLifeDrain:
         attacker.hp = 100
         attacker.max_hp = 200
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:lifedrainscript")
+        weapon = _make_effect_weapon(CombatScript.LIFEDRAINSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         # Try multiple seeds to find one where the 50% proc fires
@@ -280,7 +281,7 @@ class TestManaDrain:
     def test_manadrain_executes(self, shard, combat_trees):
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:manadrainscript")
+        weapon = _make_effect_weapon(CombatScript.MANADRAINSCRIPT)
         weapon.set_property("dmg_mod", 0)
         armor = Armor(name="Plate", ar=30)
 
@@ -298,7 +299,7 @@ class TestManaDrain:
         defender = _make_defender()
         defender.mana = 100
         defender.max_mana = 100
-        weapon = _make_effect_weapon(":combat:manadrainscript")
+        weapon = _make_effect_weapon(CombatScript.MANADRAINSCRIPT)
         weapon.set_property("dmg_mod", 0)
         armor = Armor(name="Plate", ar=30)
 
@@ -327,7 +328,7 @@ class TestStaminaDrain:
     def test_staminadrain_executes(self, shard, combat_trees):
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:staminadrainscript")
+        weapon = _make_effect_weapon(CombatScript.STAMINADRAINSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -344,7 +345,7 @@ class TestStaminaDrain:
         defender = _make_defender()
         defender.stamina = 100
         defender.max_stamina = 100
-        weapon = _make_effect_weapon(":combat:staminadrainscript")
+        weapon = _make_effect_weapon(CombatScript.STAMINADRAINSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         drained = False
@@ -383,7 +384,7 @@ class TestBlinding:
         """100% chance should always trigger the blinding effect."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:blindingscript", chance=100)
+        weapon = _make_effect_weapon(CombatScript.BLINDINGSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -397,7 +398,7 @@ class TestBlinding:
         """0% chance should never trigger."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:blindingscript", chance=0)
+        weapon = _make_effect_weapon(CombatScript.BLINDINGSCRIPT, chance=0)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -421,7 +422,7 @@ class TestBanish:
         """Normal target: regular RecalcDmg + DealDamage path."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_effect_weapon(":combat:banishscript")
+        weapon = _make_effect_weapon(CombatScript.BANISHSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -436,7 +437,7 @@ class TestBanish:
         attacker = _make_attacker()
         defender = _make_defender()
         defender.set_property("summoned", 1)
-        weapon = _make_effect_weapon(":combat:banishscript")
+        weapon = _make_effect_weapon(CombatScript.BANISHSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -454,7 +455,7 @@ class TestBanish:
         attacker.max_hp = 500
         defender = _make_defender()
         defender.set_property("summoned", 1)
-        weapon = _make_effect_weapon(":combat:banishscript", cursed=True)
+        weapon = _make_effect_weapon(CombatScript.BANISHSCRIPT, cursed=True)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -475,11 +476,11 @@ class TestEffectHitscriptDispatch:
     """Verify effect hitscripts replace mainhit (no double damage)."""
 
     @pytest.mark.parametrize("hitscript", [
-        ":combat:piercingscript",
-        ":combat:manadrainscript",
-        ":combat:staminadrainscript",
-        ":combat:blindingscript",
-        ":combat:banishscript",
+        CombatScript.PIERCINGSCRIPT,
+        CombatScript.MANADRAINSCRIPT,
+        CombatScript.STAMINADRAINSCRIPT,
+        CombatScript.BLINDINGSCRIPT,
+        CombatScript.BANISHSCRIPT,
     ])
     def test_effect_no_double_damage(self, shard, combat_trees, hitscript):
         """Each effect weapon should have exactly 1 damage_applied entry."""

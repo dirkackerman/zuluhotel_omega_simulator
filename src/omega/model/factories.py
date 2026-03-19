@@ -119,7 +119,10 @@ def create_weapon_from_config(elem: ConfigElement) -> Weapon:
 
     speed = elem.get_int("Speed", 50)
     attr_name = elem.get("Attribute", "Wrestling")
-    attribute = _WEAPON_ATTRIBUTE_NAMES.get(attr_name.lower(), 43)
+    # Pass the attribute name string directly — matches POL's weapon.attribute
+    # member which returns the attribute name. Weapon.__init__ stores as-is
+    # for string inputs.
+    attribute: int | str = attr_name
 
     two_handed = elem.get("TwoHanded", "0") == "1"
     max_hp = elem.get_int("MaxHP", 50)
@@ -234,7 +237,8 @@ def create_mobile_from_template(
     mobile.stamina = stam
     mobile.max_stamina = stam
 
-    # CustomHitsLevel override
+    # CustomHitsLevel override — shard uses this CProp to set NPC max HP
+    # independently of STR (see regen.src GetLifeMaximumValueExported).
     custom_hp = npc_elem.get_cprop("CustomHitsLevel")
     if custom_hp is not None:
         try:
@@ -242,7 +246,11 @@ def create_mobile_from_template(
             mobile.hp = hp_val
             mobile.max_hp = hp_val
         except (ValueError, TypeError):
-            pass
+            logger.warning(
+                "CustomHitsLevel CProp ignored — cannot parse as integer",
+                npc_template=mobile.npctemplate,
+                raw_value=repr(custom_hp),
+            )
 
     # Skills — scan all properties, match known skill names
     for key, values in npc_elem.properties.items():

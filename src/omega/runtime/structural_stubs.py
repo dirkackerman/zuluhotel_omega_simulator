@@ -313,7 +313,7 @@ def start_script(path: Any = None, *args: Any) -> Any:
     if ctx.executor is None:
         logger.warning(
             "start_script skipped (no executor on context)",
-            script=str(path),
+            script=path.value if hasattr(path, "value") else path,
             arg_count=len(args),
         )
         return None
@@ -322,9 +322,13 @@ def start_script(path: Any = None, *args: Any) -> Any:
     # POL passes the array as the first positional argument.
     args_list = list(args)
 
+    # Use the raw string value — str(enum) returns the name, not the value.
+    # CombatScript is str,Enum so path_str IS the package path string.
+    path_str = path.value if hasattr(path, "value") else path
+
     logger.info(
         "start_script dispatching",
-        script=str(path),
+        script=path_str,
         arg_count=len(args_list),
     )
 
@@ -332,11 +336,11 @@ def start_script(path: Any = None, *args: Any) -> Any:
     # synchronously where possible, but failures in the spawned script
     # must not crash the calling hitscript.
     try:
-        return ctx.executor.run_sub_program(str(path), args_list)
+        return ctx.executor.run_sub_program(path_str, args_list)
     except Exception as exc:
         logger.warning(
             "start_script sub-program failed (non-fatal)",
-            script=str(path),
+            script=path_str,
             error=str(exc),
         )
         return None

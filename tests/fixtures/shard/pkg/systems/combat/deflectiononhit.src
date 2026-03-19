@@ -1,0 +1,37 @@
+use uo;
+
+include "include/damages";
+include "include/random";
+
+program deflectiononhit( parms )
+
+	var attacker 	 := parms[1];
+	var defender 	 := parms[2];
+	var weapon 	     := parms[3];
+	var armor 	     := parms[4];
+	var basedamage   := parms[5];
+	var rawdamage	 := parms[6];
+
+    var chance := GetObjProperty( armor , "ChanceOfEffect" );
+    var roll := RandomDiceStr("1d100");
+
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric(struct{ "onhit_type" := "deflection", "onhit_effect_chance" := chance });
+	endif
+
+	if(roll <= chance)
+        if( basedamage != rawdamage )
+			rawdamage := CInt(rawdamage * 0.60);
+			if( rawdamage < 1 )
+				rawdamage := 1;
+			endif
+		endif
+	endif
+
+    if( GetObjProperty( armor , "Cursed" ) )
+		rawdamage := rawdamage * 2;
+	endif
+
+	ApplyTheDamage( defender , attacker , rawdamage );
+
+endprogram

@@ -20,10 +20,11 @@ from typing import Any
 from omega.combat.damage import roll_base_damage
 from omega.combat.result import HitResult
 from omega.combat.timing import calculate_swing_delay
+from omega.config.armor_zones import ArmorZoneConfig
 from omega.interpreter.executor import Executor
 from omega.interpreter.types import EStruct
 from omega.logging import get_logger
-from omega.model.constants import LAYER_HAND1, SKILLID_WRESTLING
+from omega.model.constants import ATTRIBUTE_TO_SKILLID, LAYER_HAND1, SKILLID_WRESTLING
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
 from omega.parser.parser import ParseResult
@@ -31,6 +32,13 @@ from omega.runtime.context import SimulationContext, set_context
 from omega.runtime.rng import SimulationRNG, set_rng_seed
 
 logger = get_logger("omega.combat")
+
+
+def _attribute_to_skill_id(attribute: str | int) -> int:
+    """Convert a weapon attribute (string or int) to a skill ID."""
+    if isinstance(attribute, int):
+        return attribute
+    return ATTRIBUTE_TO_SKILLID.get(attribute.lower(), SKILLID_WRESTLING)
 
 
 def _weapon_skill(mobile: Mobile, weapon: Weapon | None = None) -> int:
@@ -42,10 +50,12 @@ def _weapon_skill(mobile: Mobile, weapon: Weapon | None = None) -> int:
     if weapon is None:
         equipped = mobile.get_equipped(LAYER_HAND1)
         if isinstance(equipped, Weapon) and equipped.attribute:
-            return mobile.get_effective_skill(equipped.attribute)
+            skill_id = _attribute_to_skill_id(equipped.attribute)
+            return mobile.get_effective_skill(skill_id)
         return mobile.get_effective_skill(SKILLID_WRESTLING)
     if weapon.attribute:
-        return mobile.get_effective_skill(weapon.attribute)
+        skill_id = _attribute_to_skill_id(weapon.attribute)
+        return mobile.get_effective_skill(skill_id)
     return mobile.get_effective_skill(SKILLID_WRESTLING)
 
 
@@ -55,13 +65,29 @@ def check_hit(
     weapon: Weapon,
     rng: SimulationRNG,
 ) -> bool:
-    """POL-style hit check: does this swing connect?
+    """POL core hit check: does this swing connect?
 
-    Formula (from ``Character::attack()`` in polserver)::
+    Formula (from ``Character::attack()`` in ``charactr.cpp:3357``)::
 
         hit_chance = (attacker_skill + 50) / (2 * (defender_skill + 50))
 
     Returns True if the attack hits, False if it misses.
+
+    .. note::
+
+       The Zuluhotel Omega shard **overrides** this formula via its attack
+       hook (``omegaattack.inc:CheckHitChance``).  The shard's formula is::
+
+           hit_chance = (atk_skill / 214.29) * (1 + class_level * 0.0238)
+                      * (1 - hunger * 0.05)
+           min 10%
+
+       Key differences: shard formula uses attacker skill only (no defender
+       skill), includes class level and hunger, and caps at a 10% floor.
+       Thieves/Mages/Bards use their lowest class skill instead of weapon
+       skill.  This function implements **POL's core formula** for reference;
+       the shard's formula is exercised through the eScript interpreter when
+       running the full ``OmegaAttack`` flow.
     """
     atk_skill = _weapon_skill(attacker, weapon)
     def_skill = _weapon_skill(defender)
@@ -90,6 +116,7 @@ def execute_hit(
     shard_root: Path | None = None,
     package_map: Any = None,
     core_hit_check: bool = True,
+    armor_zone_config: ArmorZoneConfig | None = None,
 ) -> HitResult:
     """Execute a single combat hit through the eScript interpreter.
 
@@ -131,6 +158,13 @@ def execute_hit(
         the hitscript.  The formula is:
         ``hit_chance = (atk_skill + 50) / (2 * (def_skill + 50))``.
         Misses return immediately with ``final_damage=0``.
+    armor_zone_config:
+        If provided, selects which armor piece is hit using POL's zone
+        probability algorithm (``choose_armor()`` in ``charactr.cpp:3198``).
+        The selected piece is passed as the ``armor`` parameter to the
+        eScript hitscript.  If the defender has no armor in the selected
+        zone, a bare ``Armor(ar=0)`` is used.  If not provided, the
+        ``armor`` parameter is passed through unchanged.
 
     Returns
     -------
@@ -158,6 +192,17 @@ def execute_hit(
         result.final_damage = 0.0
         result.defender_hp_after = defender.hp
         return result
+
+    # POL armor zone selection — choose which armor piece is hit.
+    # POL calls choose_armor() in get_hitscript_params() BEFORE the hitscript
+    # runs.  The selected piece is passed as the ``armor`` parameter.
+    if armor_zone_config is not None:
+        selected = armor_zone_config.choose_armor(defender, rng)
+        if selected is not None:
+            armor = selected
+        else:
+            # Zone selected has no armor — pass a bare piece
+            armor = Armor(name="None", ar=0)
 
     # Roll or use provided base damage
     if base_damage is not None:

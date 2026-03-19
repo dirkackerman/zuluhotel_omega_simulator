@@ -14,6 +14,13 @@ from typing import Any
 
 from omega.config.cfg_parser import ConfigFile
 from omega.config.dice import DiceSpec, parse_dice
+from omega.config.combat_scripts import CombatScript  # noqa: F401 — used in docstrings
+from omega.config.armor_enchantments import (
+    ArmorEnchantment,
+    ArmorEnchantmentRegistry,
+    armor_enchantment_onhitscript,
+    armor_enchantment_properties,
+)
 from omega.config.enchantments import (
     Enchantment,
     EnchantmentRegistry,
@@ -41,7 +48,7 @@ class WeaponSpec:
     Or set ``hitscript`` and ``properties`` directly for full control::
 
         WeaponSpec(
-            hitscript=":combat:spellstrikescript",
+            hitscript=CombatScript.SPELLSTRIKESCRIPT,
             properties={"HitWithSpell": Spell.ANGELIC_AURA, "EffectCircle": 9},
         )
     """
@@ -50,7 +57,7 @@ class WeaponSpec:
     damage: str = "3d6+2"
     speed: int = 50
     delay: int = 0
-    attribute: int = SKILLID_SWORDSMANSHIP
+    attribute: int | str = SKILLID_SWORDSMANSHIP
     two_handed: bool = False
     quality: float = 1.0
     hp: int = 50
@@ -122,7 +129,20 @@ class WeaponSpec:
 
 @dataclass(frozen=True)
 class ArmorSpec:
-    """Declarative armor description."""
+    """Declarative armor description.
+
+    Use :meth:`enchant_with` to apply an onhitscriptdesc.cfg enchantment::
+
+        ArmorSpec(ar=30).enchant_with(ArmorEnchantment.OF_BUNGLING)
+
+    Or set ``onhitscript`` and ``properties`` directly for full control::
+
+        ArmorSpec(
+            ar=30,
+            onhitscript=CombatScript.SPELLONHIT,
+            properties={"HitWithSpell": 18, "EffectCircle": 5, "ChanceOfEffect": 30},
+        )
+    """
 
     name: str = "Armor"
     ar: int = 0
@@ -130,6 +150,7 @@ class ArmorSpec:
     hp: int = 70
     max_hp: int = 70
     layer: int = 0
+    onhitscript: str | None = None
     properties: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -167,6 +188,20 @@ class ArmorSpec:
             properties={k: v for k, v in a._properties.items()},
         )
 
+    def enchant_with(self, enchantment: ArmorEnchantment) -> ArmorSpec:
+        """Return a new ArmorSpec with the given armor enchantment applied.
+
+        Sets ``onhitscript`` and merges the enchantment's armor properties
+        into ``properties``.  Existing properties take precedence (so you
+        can override defaults like ``EffectCircle`` or ``ChanceOfEffect``
+        before or after calling this method).
+        """
+        hs = armor_enchantment_onhitscript(enchantment)
+        props = armor_enchantment_properties(enchantment)
+        # Enchantment defaults first, then existing properties override
+        merged = {**props, **self.properties}
+        return dataclasses.replace(self, onhitscript=hs, properties=merged)
+
 
 @dataclass(frozen=True)
 class CombatantSpec:
@@ -194,6 +229,7 @@ class CombatantSpec:
     class_levels: dict[str, int] = field(default_factory=dict)
     weapon: WeaponSpec | None = None
     armor: ArmorSpec | None = None
+    armor_pieces: dict[int, ArmorSpec] = field(default_factory=dict)
     npc_template: str | None = None
     properties: dict[str, Any] = field(default_factory=dict)
 
@@ -270,9 +306,10 @@ class CombatantSpec:
                 properties={k: v for k, v in hand1._properties.items()},
             )
 
-        # Extract armor — aggregate all pieces into total AR (matches
-        # how the damage pipeline uses defender.ar as a flat sum).
+        # Extract armor — preserve individual pieces for zone-based selection,
+        # and also create an aggregated ArmorSpec for backwards compatibility.
         armor_spec: ArmorSpec | None = None
+        armor_pieces: dict[int, ArmorSpec] = {}
         total_ar = 0
         all_coverage: list[str] = []
         armor_props: dict[str, Any] = {}
@@ -283,6 +320,15 @@ class CombatantSpec:
                 all_coverage.extend(item.coverage)
                 armor_props.update(item._properties)
                 armor_count += 1
+                armor_pieces[layer] = ArmorSpec(
+                    name=item.name,
+                    ar=item.ar,
+                    coverage=tuple(item.coverage),
+                    hp=item.hp,
+                    max_hp=item.max_hp,
+                    layer=layer,
+                    properties={k: v for k, v in item._properties.items()},
+                )
         if armor_count > 0:
             armor_spec = ArmorSpec(
                 name=f"{mob.name}_armor",
@@ -310,6 +356,7 @@ class CombatantSpec:
             class_levels=class_levels,
             weapon=weapon_spec,
             armor=armor_spec,
+            armor_pieces=armor_pieces,
             npc_template=template_name,
             properties=mob_props,
         )
@@ -451,8 +498,18 @@ def build_weapon(
     return w
 
 
-def build_armor(spec: ArmorSpec) -> Armor:
-    """Create an :class:`Armor` from an :class:`ArmorSpec`."""
+def build_armor(
+    spec: ArmorSpec,
+    *,
+    armor_enchantment_registry: ArmorEnchantmentRegistry | None = None,
+) -> Armor:
+    """Create an :class:`Armor` from an :class:`ArmorSpec`.
+
+    If ``spec.onhitscript`` is set, the armor is configured with the
+    enchantment.  If it looks like a package path (starts with ``:``) it
+    is used directly.  Otherwise it is treated as an enchantment name and
+    resolved via *armor_enchantment_registry*.
+    """
     a = Armor(
         name=spec.name,
         ar=spec.ar,
@@ -463,6 +520,26 @@ def build_armor(spec: ArmorSpec) -> Armor:
     )
     for k, v in spec.properties.items():
         a.set_property(k, v)
+
+    # Armor enchantment configuration
+    if spec.onhitscript is not None:
+        if spec.onhitscript.startswith(":"):
+            # Raw package path — set directly as OnHitScript property
+            a.set_property("OnHitScript", spec.onhitscript)
+        else:
+            # Enchantment name — resolve via registry
+            registry = armor_enchantment_registry or ArmorEnchantmentRegistry()
+            entry = registry.find(spec.onhitscript)
+            if entry is not None:
+                a.set_property("OnHitScript", entry.onhitscript)
+                for pk, pv in entry.armor_properties.items():
+                    a.set_property(pk, pv)
+            else:
+                raise ValueError(
+                    f"Unknown armor enchantment name: {spec.onhitscript!r}. "
+                    f"Use a package path (e.g. ':combat:spellonhit') "
+                    f"or load an ArmorEnchantmentRegistry from onhitscriptdesc.cfg."
+                )
     return a
 
 
@@ -470,6 +547,7 @@ def build_combatant(
     spec: CombatantSpec,
     *,
     enchantment_registry: EnchantmentRegistry | None = None,
+    armor_enchantment_registry: ArmorEnchantmentRegistry | None = None,
 ) -> tuple[Mobile, Weapon, Armor]:
     """Build a Mobile, Weapon, and Armor from a :class:`CombatantSpec`.
 
@@ -513,11 +591,21 @@ def build_combatant(
     else:
         weapon = Weapon(name="Fist")
 
-    # Armor — only equip if specified.  Same reasoning: a bare combatant
-    # has no armor item; GetMagicEfficiencyPenalty iterates equipped items
-    # and finds nothing.
-    if spec.armor is not None:
-        armor = build_armor(spec.armor)
+    # Armor — equip individual pieces if available (for zone-based selection),
+    # otherwise fall back to the single aggregated ArmorSpec.
+    if spec.armor_pieces:
+        # Multi-piece: equip each piece to its layer.  The ``armor`` return
+        # value is a placeholder — actual selection happens per-hit via
+        # ArmorZoneConfig.choose_armor() in execute_hit().
+        first_armor: Armor | None = None
+        for layer, aspec in spec.armor_pieces.items():
+            piece = build_armor(aspec, armor_enchantment_registry=armor_enchantment_registry)
+            mob.equip(layer, piece)
+            if first_armor is None:
+                first_armor = piece
+        armor = first_armor or Armor(name="None", ar=0)
+    elif spec.armor is not None:
+        armor = build_armor(spec.armor, armor_enchantment_registry=armor_enchantment_registry)
         armor_layer = spec.armor.layer if spec.armor.layer else LAYER_CHEST
         mob.equip(armor_layer, armor)
     else:

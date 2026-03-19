@@ -380,6 +380,38 @@ results = {
 enchantment_comparison(results, title="Enchantment Effectiveness")
 ```
 
+### armor_enchantment_comparison() (V3.1)
+
+Grouped bar chart comparing armor enchantments by physical damage received plus onhit additional damage, with trigger rate overlay.
+
+```python
+def armor_enchantment_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (10, 6),
+) -> Figure
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `cells` | -- | `dict` mapping label to `CellResult` |
+| `title` | `"Armor Enchantment Comparison"` | Figure title |
+| `figsize` | `(10, 6)` | Figure size |
+
+Each bar group shows two stacked components: **Physical damage** (blue) and **OnHit Additional damage** (orange). A secondary y-axis displays the onhit trigger rate as an overlay line (red dashed). This follows the same pattern as `enchantment_comparison()` for weapon enchantments.
+
+```python
+from omega.reporting.plots import armor_enchantment_comparison
+
+results = {
+    "Plain": run_scenario(plain_armor_scenario, shard=shard),
+    "Fire Plate": run_scenario(fire_armor_scenario, shard=shard),
+    "Piercing Plate": run_scenario(piercing_armor_scenario, shard=shard),
+}
+armor_enchantment_comparison(results, title="Armor Enchantment Effectiveness")
+```
+
 ### dps_vs_parameter() (V2)
 
 Dual-axis line plot of DPS and swing delay vs. a swept parameter.

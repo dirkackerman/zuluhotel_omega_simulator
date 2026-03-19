@@ -1,0 +1,53 @@
+use uo;
+use os;
+use util;
+
+include "include/spelldata";
+include "include/damages";
+include "include/dotempmods";
+
+program banishonhit( parms )
+
+	var attacker 	:= parms[1];
+	var defender 	:= parms[2];
+	//var weapon 	:= parms[3];
+	var armor 	:= parms[4];
+	//var basedamage := parms[5];
+	var rawdamage	:= parms[6];
+
+	var summoned := GetObjProperty( attacker , "summoned" );
+	var animated := GetObjProperty( attacker , "animated" );
+	var cursed   := GetObjProperty( armor , "Cursed" );
+
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric(struct{ "onhit_type" := "banish", "onhit_banish_summoned" := summoned, "onhit_banish_animated" := animated });
+	endif
+
+	if (summoned)
+		if( !cursed )
+    			PlayObjectCenteredEffect( attacker , FX_SPELL_MANA_VAMPIRE, 7,7);
+			PlaySoundEffect( defender , SFX_SPELL_MANA_VAMPIRE );
+			PlayStationaryEffect( attacker.x, attacker.y, attacker.z, FX_SPELL_SUMMON_CREATURE, 0xA, 0xA );
+			MoveObjectToLocation(attacker,5288 , 1176 , 0, attacker.realm, MOVEOBJECT_FORCELOCATION);
+			ApplyTheDamage( attacker , defender , GetMaxHP(Attacker) + 3 , DMGID_MAGIC );
+		else
+			PlayObjectCenteredEffect( defender , FX_SPELL_MANA_VAMPIRE, 7,7);
+			PlaySoundEffect( attacker , SFX_SPELL_MANA_VAMPIRE );
+			ApplyTheDamage( defender , defender , GetMaxHP(Attacker) + 3 , DMGID_MAGIC );
+		endif
+
+	elseif(animated)
+		if( !cursed )
+    			PlayObjectCenteredEffect( attacker, FX_SPELL_MANA_VAMPIRE, 7,7);
+			PlaySoundEffect( defender , SFX_SPELL_MANA_VAMPIRE );
+			ApplyTheDamage( attacker , defender , GetMaxHP(Attacker) + 3 , DMGID_MAGIC );
+		else
+			PlayObjectCenteredEffect( defender , FX_SPELL_MANA_VAMPIRE, 7,7);
+			PlaySoundEffect( attacker , SFX_SPELL_MANA_VAMPIRE );
+			ApplyTheDamage( defender , defender , GetMaxHP(Attacker) + 3 , DMGID_MAGIC );
+		endif
+	else
+		ApplyTheDamage( defender , attacker , rawdamage );
+	endif
+
+endprogram

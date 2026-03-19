@@ -351,6 +351,7 @@ class TestFmtFormatting:
             "hit_rate", "poison_rate", "equipment_break_rate",
             "reactive_rate", "spell_strike_rate", "effect_rate",
             "reactive_rate_on_hit", "spell_strike_rate_on_hit", "effect_rate_on_hit",
+            "onhit_trigger_rate", "onhit_trigger_rate_on_hit",
             "fizzle_rate", "resist_rate", "resist_rate_on_cast", "cast_rate",
         }
         assert _RATE_STATS == expected

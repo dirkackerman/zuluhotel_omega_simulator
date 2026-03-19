@@ -20,6 +20,7 @@ from typing import Any
 
 from omega.combat.hit import execute_hit
 from omega.combat.result import HitResult
+from omega.config.armor_zones import ArmorZoneConfig
 from omega.config.enchantments import EnchantmentRegistry
 from omega.interpreter.executor import Executor
 from omega.logging import get_logger
@@ -89,6 +90,13 @@ def run_scenario(
         if hitscript_cfg.exists():
             enchantment_registry = EnchantmentRegistry.from_cfg(hitscript_cfg)
 
+    # Auto-load armor zone config from shard if available
+    armor_zone_config: ArmorZoneConfig | None = None
+    if shard is not None:
+        armrzone_cfg = shard.root / "config" / "armrzone.cfg"
+        if armrzone_cfg.exists():
+            armor_zone_config = ArmorZoneConfig.from_cfg(armrzone_cfg)
+
     # Build combatants from specs
     attacker, weapon, _atk_armor = build_combatant(
         scenario.attacker, enchantment_registry=enchantment_registry,
@@ -128,6 +136,7 @@ def run_scenario(
             executor=cached_executor,
             shard_root=shard_root,
             package_map=package_map,
+            armor_zone_config=armor_zone_config,
         )
         results.append(result)
 

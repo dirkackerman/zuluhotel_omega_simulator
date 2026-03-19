@@ -26,6 +26,7 @@ from omega.model.constants import (
     SKILLID_SWORDSMANSHIP,
     SKILLID_TACTICS,
 )
+from omega.config.combat_scripts import CombatScript
 from omega.model.items import Armor, Weapon
 from omega.model.mobile import Mobile
 
@@ -98,7 +99,7 @@ def _make_spell_weapon(*, chance=100, spell_id=18, circle=3):
         name="Spell Sword",
         damage=DiceSpec(3, 6, 2),
         attribute=SKILLID_SWORDSMANSHIP,
-        hitscript=":combat:spellstrikescript",
+        hitscript=CombatScript.SPELLSTRIKESCRIPT,
     )
     w.set_property("ChanceOfEffect", chance)
     w.set_property("HitWithSpell", spell_id)
@@ -222,7 +223,7 @@ class TestReactivePlusEffects:
         defender = _make_defender()
         defender.set_property("ReactiveArmor", 50)
 
-        weapon = _make_effect_weapon(":combat:lifedrainscript")
+        weapon = _make_effect_weapon(CombatScript.LIFEDRAINSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         # Life drain has 50% proc rate — use seed that triggers it
@@ -240,7 +241,7 @@ class TestReactivePlusEffects:
         defender = _make_defender()
         defender.set_property("ReactiveArmor", 50)
 
-        weapon = _make_effect_weapon(":combat:manadrainscript")
+        weapon = _make_effect_weapon(CombatScript.MANADRAINSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -255,7 +256,7 @@ class TestReactivePlusEffects:
         defender = _make_defender()
         defender.set_property("ReactiveArmor", 50)
 
-        weapon = _make_effect_weapon(":combat:piercingscript")
+        weapon = _make_effect_weapon(CombatScript.PIERCINGSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -280,7 +281,7 @@ class TestReactivePlusGreater:
         defender = _make_defender()
         defender.set_property("ReactiveArmor", 50)
 
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -298,7 +299,7 @@ class TestReactivePlusGreater:
         defender = _make_defender()
         defender.set_property("ReactiveArmor", 50)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -456,7 +457,7 @@ class TestResistedHandCalculated:
         attacker.set_skill(SKILLID_EVALINT, 1000)    # 100 display
         defender = _make_defender(magic_resist=600)   # 60 display
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -486,7 +487,7 @@ class TestResistedHandCalculated:
         attacker.set_skill(SKILLID_EVALINT, 500)     # 50 display
         defender = _make_defender(magic_resist=13000)  # 1300 display (cap)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=1)
@@ -515,7 +516,7 @@ class TestResistedHandCalculated:
         defender = _make_defender(magic_resist=800)  # 80 display
         defender.set_property(CLASSEID_MAGE, 5)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -543,7 +544,7 @@ class TestResistedHandCalculated:
         defender = _make_defender(magic_resist=800)
         defender.set_property(CLASSEID_WARRIOR, 4)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -573,7 +574,7 @@ class TestResistedHandCalculated:
         defender = _make_defender(magic_resist=800)
         defender.set_property(CLASSEID_PALADIN, 4)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -600,7 +601,7 @@ class TestResistedHandCalculated:
 
         defender = _make_defender(magic_resist=800)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -628,7 +629,7 @@ class TestResistedHandCalculated:
 
         defender = _make_defender(magic_resist=800)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -659,7 +660,7 @@ class TestResistedHandCalculated:
         defender = _make_defender(magic_resist=800)
         defender.set_property(CLASSEID_MAGE, 5)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -683,7 +684,7 @@ class TestResistedHandCalculated:
 
         defender = _make_defender(magic_resist=600)   # 60 display
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -713,7 +714,7 @@ class TestResistedHandCalculated:
 
         defender = _make_defender(magic_resist=1000)   # 100 display
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=1)
@@ -736,7 +737,7 @@ class TestResistedHandCalculated:
         defender = _make_defender(magic_resist=13000)  # 1300 display
         defender.set_property(CLASSEID_MAGE, 5)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=1)
@@ -762,7 +763,7 @@ class TestResistedHandCalculated:
         attacker1.set_skill(SKILLID_MAGERY, 1000)
         attacker1.set_skill(SKILLID_EVALINT, 1000)
         defender1 = _make_defender(magic_resist=600)
-        weapon1 = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon1 = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         result1 = _run_hit(shard, combat_trees, attacker1, defender1, weapon1, armor, rng_seed=99)
         _skip_on_failure(result1)
 
@@ -772,7 +773,7 @@ class TestResistedHandCalculated:
         attacker2.set_skill(SKILLID_EVALINT, 1000)
         defender2 = _make_defender(magic_resist=600)
         defender2.set_property(CLASSEID_WARRIOR, 4)
-        weapon2 = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon2 = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         result2 = _run_hit(shard, combat_trees, attacker2, defender2, weapon2, armor, rng_seed=99)
         _skip_on_failure(result2)
 
@@ -797,7 +798,7 @@ class TestResistedHandCalculated:
         attacker1.set_skill(SKILLID_MAGERY, 1000)
         attacker1.set_skill(SKILLID_EVALINT, 1000)
         defender1 = _make_defender(magic_resist=600)
-        weapon1 = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon1 = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         result1 = _run_hit(shard, combat_trees, attacker1, defender1, weapon1, armor, rng_seed=99)
         _skip_on_failure(result1)
 
@@ -807,7 +808,7 @@ class TestResistedHandCalculated:
         attacker2.set_skill(SKILLID_EVALINT, 1000)
         defender2 = _make_defender(magic_resist=600)
         defender2.set_property(CLASSEID_MAGE, 5)
-        weapon2 = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon2 = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         result2 = _run_hit(shard, combat_trees, attacker2, defender2, weapon2, armor, rng_seed=99)
         _skip_on_failure(result2)
 
@@ -839,7 +840,7 @@ class TestResistedViaTrielemental:
 
         defender = _make_defender(magic_resist=800)
 
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -868,7 +869,7 @@ class TestResistedViaTrielemental:
         defender = _make_defender(magic_resist=800)
         defender.set_property(CLASSEID_MAGE, 3)
 
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor, rng_seed=42)
@@ -901,7 +902,7 @@ class TestOverProtectionPlusReactive:
         defender.set_property("ReactiveArmor", 50)
         defender.set_property("FireProtection", 120)  # Over-protection → heals
 
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -926,7 +927,7 @@ class TestOverProtectionPlusReactive:
         defender = _make_defender()
         defender.set_property("FireProtection", 120)
 
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         hp_before = defender.hp
@@ -955,7 +956,7 @@ class TestResistedMetricsStructure:
         attacker.set_skill(SKILLID_EVALINT, 1000)
         defender = _make_defender(magic_resist=600)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -982,7 +983,7 @@ class TestResistedMetricsStructure:
         attacker.set_skill(SKILLID_EVALINT, 800)   # 80 display
         defender = _make_defender(magic_resist=600)  # 60 display
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -1002,7 +1003,7 @@ class TestResistedMetricsStructure:
         attacker.set_skill(SKILLID_EVALINT, 1000)
         defender = _make_defender(magic_resist=600)
 
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)

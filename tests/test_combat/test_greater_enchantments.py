@@ -11,6 +11,7 @@ Each greater script is a hitscript that REPLACES mainhit (not in addition to it)
 import pytest
 
 from omega.combat.hit import execute_hit
+from omega.config.combat_scripts import CombatScript
 from omega.config.dice import DiceSpec
 from omega.model.constants import (
     CLASSEID_MAGE,
@@ -123,7 +124,7 @@ class TestDualPlanar:
         """100% chance triggers dualplanar effect with metrics."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -137,7 +138,7 @@ class TestDualPlanar:
         """0% chance does not trigger the effect."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=0)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=0)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -167,7 +168,7 @@ class TestDualPlanar:
 
         # Dualplanar hit
         defender_dp = _make_defender()
-        weapon_dp = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon_dp = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         dp_result = _run_hit(
             shard, combat_trees, attacker, defender_dp, weapon_dp, armor,
             rng_seed=42,
@@ -180,7 +181,7 @@ class TestDualPlanar:
         """Planar damage records list:planar_applied with HOLY and NECRO entries."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -200,7 +201,7 @@ class TestDualPlanar:
         """Resisted() records list:resisted entries for planar damage."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -224,7 +225,7 @@ class TestDualPlanar:
         """
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100, cursed=True)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100, cursed=True)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -240,7 +241,7 @@ class TestDualPlanar:
         # Warrior attacker (no nerf)
         attacker_w = _make_attacker(class_id=CLASSEID_WARRIOR)
         defender_w = _make_defender()
-        weapon_w = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon_w = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         result_w = _run_hit(
             shard, combat_trees, attacker_w, defender_w, weapon_w, armor,
             rng_seed=42,
@@ -250,7 +251,7 @@ class TestDualPlanar:
         # Mage attacker (0.7 nerf)
         attacker_m = _make_attacker(class_id=CLASSEID_MAGE)
         defender_m = _make_defender()
-        weapon_m = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon_m = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         result_m = _run_hit(
             shard, combat_trees, attacker_m, defender_m, weapon_m, armor,
             rng_seed=42,
@@ -268,7 +269,7 @@ class TestDualPlanar:
         """
         attacker = _make_attacker(class_id=CLASSEID_PALADIN)
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:dualplanarscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.DUALPLANARSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -289,7 +290,7 @@ class TestVoid:
         """Void script executes and records effect_type."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:voidscript")
+        weapon = _make_greater_weapon(CombatScript.VOIDSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -302,7 +303,7 @@ class TestVoid:
         """Void weapon adds base_bonus to basedamage."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:voidscript")
+        weapon = _make_greater_weapon(CombatScript.VOIDSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -330,7 +331,7 @@ class TestVoid:
 
         # Void hit
         defender_void = _make_defender()
-        weapon_void = _make_greater_weapon(":combat:voidscript")
+        weapon_void = _make_greater_weapon(CombatScript.VOIDSCRIPT)
         void_result = _run_hit(
             shard, combat_trees, attacker, defender_void, weapon_void, armor,
             rng_seed=42,
@@ -342,7 +343,7 @@ class TestVoid:
     def test_void_drain_types(self, shard, combat_trees):
         """Void randomly picks hp, mana, or stamina drain across seeds."""
         attacker = _make_attacker()
-        weapon = _make_greater_weapon(":combat:voidscript")
+        weapon = _make_greater_weapon(CombatScript.VOIDSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         drain_types_seen = set()
@@ -370,7 +371,7 @@ class TestVoid:
     def test_void_drain_amount_matches_half_rawdmg(self, shard, combat_trees):
         """Drain amount should be rawdamage/2."""
         attacker = _make_attacker()
-        weapon = _make_greater_weapon(":combat:voidscript")
+        weapon = _make_greater_weapon(CombatScript.VOIDSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         for seed in range(1, 50):
@@ -398,7 +399,7 @@ class TestVoid:
         attacker.hp = 500
         attacker.max_hp = 500
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:voidscript", cursed=True)
+        weapon = _make_greater_weapon(CombatScript.VOIDSCRIPT, cursed=True)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -418,7 +419,7 @@ class TestVoid:
         attacker = _make_attacker()
         attacker.hp = 500
         attacker.max_hp = 500
-        weapon = _make_greater_weapon(":combat:voidscript", cursed=True)
+        weapon = _make_greater_weapon(CombatScript.VOIDSCRIPT, cursed=True)
         armor = Armor(name="Plate", ar=30)
 
         for seed in range(1, 50):
@@ -451,7 +452,7 @@ class TestVoid:
         """Void hitscript replaces mainhit — only 1 damage_applied entry."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:voidscript")
+        weapon = _make_greater_weapon(CombatScript.VOIDSCRIPT)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -473,7 +474,7 @@ class TestTriElemental:
         """100% chance triggers trielemental effect."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -487,7 +488,7 @@ class TestTriElemental:
         """0% chance does not trigger the effect."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=0)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=0)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -516,7 +517,7 @@ class TestTriElemental:
 
         # Trielemental hit
         defender_tri = _make_defender()
-        weapon_tri = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon_tri = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         tri_result = _run_hit(
             shard, combat_trees, attacker, defender_tri, weapon_tri, armor,
             rng_seed=42,
@@ -529,7 +530,7 @@ class TestTriElemental:
         """Elemental damage records list:elemental_applied with FIRE, AIR, WATER."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -550,7 +551,7 @@ class TestTriElemental:
         """Resisted() records list:resisted entries for elemental damage."""
         attacker = _make_attacker()
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -570,7 +571,7 @@ class TestTriElemental:
         attacker.hp = 500
         attacker.max_hp = 500
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100, cursed=True)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100, cursed=True)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -587,7 +588,7 @@ class TestTriElemental:
         # Warrior attacker (no nerf)
         attacker_w = _make_attacker(class_id=CLASSEID_WARRIOR)
         defender_w = _make_defender()
-        weapon_w = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon_w = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         result_w = _run_hit(
             shard, combat_trees, attacker_w, defender_w, weapon_w, armor,
             rng_seed=42,
@@ -597,7 +598,7 @@ class TestTriElemental:
         # Mage attacker (0.7 nerf)
         attacker_m = _make_attacker(class_id=CLASSEID_MAGE)
         defender_m = _make_defender()
-        weapon_m = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon_m = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         result_m = _run_hit(
             shard, combat_trees, attacker_m, defender_m, weapon_m, armor,
             rng_seed=42,
@@ -611,7 +612,7 @@ class TestTriElemental:
         """Paladin does NOT get nerfed in trielemental (unlike dualplanar)."""
         attacker = _make_attacker(class_id=CLASSEID_PALADIN)
         defender = _make_defender()
-        weapon = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         armor = Armor(name="Plate", ar=30)
 
         result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
@@ -626,7 +627,7 @@ class TestTriElemental:
 
         # No protection
         defender_no_prot = _make_defender()
-        weapon_no_prot = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon_no_prot = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         result_no_prot = _run_hit(
             shard, combat_trees, attacker, defender_no_prot, weapon_no_prot, armor,
             rng_seed=42,
@@ -636,7 +637,7 @@ class TestTriElemental:
         # With fire protection
         defender_prot = _make_defender()
         defender_prot.set_property("FireProtection", 50)
-        weapon_prot = _make_greater_weapon(":combat:trielementalscript", chance=100)
+        weapon_prot = _make_greater_weapon(CombatScript.TRIELEMENTALSCRIPT, chance=100)
         result_prot = _run_hit(
             shard, combat_trees, attacker, defender_prot, weapon_prot, armor,
             rng_seed=42,

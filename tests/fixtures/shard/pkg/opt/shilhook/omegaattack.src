@@ -1,0 +1,17 @@
+use uo;
+use os;
+use cfgfile;
+
+include "omegaattack";
+
+var cfg := ReadConfigFile(":combat:itemdesc");
+
+program omegattack() 
+   Print( "Using Zuluhotel Omega Combat..." );  // this is printed on startup 
+   return 1; 
+endprogram 
+
+exported function ZHOmegaAttack( attacker, defender )
+	OmegaAttack(attacker, defender);
+   return 1;
+endfunction 

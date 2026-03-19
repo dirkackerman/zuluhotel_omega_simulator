@@ -66,6 +66,12 @@ class RatioStats:
     spell_strike_rate_on_hit: float = 0.0
     effect_rate_on_hit: float = 0.0
 
+    # Armor onhit rates
+    onhit_trigger_rate: float = 0.0
+    """Fraction of all iterations where an armor onhit script fired."""
+    onhit_trigger_rate_on_hit: float = 0.0
+    """Fraction of hits where an armor onhit script fired."""
+
     # Spell-specific rates
     fizzle_rate: float = 0.0
     """Fraction of all iterations where CheckSkill failed (spell fizzled)."""
@@ -355,6 +361,10 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
         1 for r in successes
         if r.metrics.get("effect_triggered")
     )
+    onhit_triggers = sum(
+        1 for r in successes
+        if r.metrics.get("onhit_type")
+    )
 
     cell.ratios = RatioStats(
         hit_rate=n_hits / n,
@@ -367,6 +377,9 @@ def aggregate_cell(results: list[HitResult]) -> CellResult:
         reactive_rate_on_hit=reactives / n_hits if n_hits else 0.0,
         spell_strike_rate_on_hit=spell_strikes / n_hits if n_hits else 0.0,
         effect_rate_on_hit=effects / n_hits if n_hits else 0.0,
+        # Armor onhit rates
+        onhit_trigger_rate=onhit_triggers / n,
+        onhit_trigger_rate_on_hit=onhit_triggers / n_hits if n_hits else 0.0,
     )
 
     # Elemental breakdown — aggregate from per-hit metrics

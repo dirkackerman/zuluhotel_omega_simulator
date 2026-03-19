@@ -47,7 +47,7 @@ class TestFindWeaponByName:
         assert isinstance(w, Weapon)
         assert w.name == "TheHeartwood"
         assert w.two_handed is True
-        assert w.attribute == SKILLID_SWORDSMANSHIP
+        assert w.attribute == "Swords"
 
     def test_not_found_raises(self, itemdesc):
         with pytest.raises(KeyError, match="Weapon.*not found"):

@@ -117,6 +117,33 @@ def _find_package_dir(shard_root: Path, pkg_name: str) -> Path | None:
     return None
 
 
+def discover_armor_enchantment_scripts(shard_root: Path) -> set[Path]:
+    """Discover armor enchantment sub-scripts from onhitscriptdesc.cfg.
+
+    Parses onhitscriptdesc.cfg to find all ``OnHitscript`` values (e.g.,
+    ``:combat:spellonhit``) and resolves them to ``.src`` files.
+    """
+    scripts: set[Path] = set()
+    cfg_path = shard_root / "pkg" / "systems" / "combat" / "config" / "onhitscriptdesc.cfg"
+    if not cfg_path.exists():
+        return scripts
+
+    text = cfg_path.read_text(encoding="utf-8", errors="replace")
+    for match in re.finditer(r'^\s*OnHitscript\s+(\S+)', text, re.MULTILINE):
+        onhitscript = match.group(1).strip()
+        if onhitscript.startswith(":"):
+            parts = onhitscript.lstrip(":").split(":", 1)
+            if len(parts) == 2:
+                pkg_name, file_name = parts
+                pkg_dir = _find_package_dir(shard_root, pkg_name)
+                if pkg_dir:
+                    src = pkg_dir / f"{file_name}.src"
+                    if src.exists():
+                        scripts.add(src.resolve())
+
+    return scripts
+
+
 def discover_spell_scripts(shard_root: Path) -> set[Path]:
     """Discover spell .src files referenced by hitscriptdesc.cfg Script fields.
 
@@ -329,6 +356,9 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
         "pkg/opt/summoning/processpoisonmod.src",   # SetPoison → start_script
         "pkg/opt/astralfights/astralincapacity.src",  # SetAstralIncapacity → start_script
         "pkg/opt/holybook/astralstorm_damage.src",  # Astral Storm → start_script (damage sub-script)
+        "pkg/opt/shilhook/omegaattack.src",         # OmegaAttack entry point (attack hook)
+        "pkg/opt/shilhook/omegaattack.inc",         # OmegaAttack + CheckHitChance + GetHitArmor
+        "pkg/items/armor/include/armorZones.inc",   # CS_GetRandomArmorZone + CS_GetEquipmentInArmorZone
     ]
     print("\nCopying extra runtime scripts...")
     for rel_path in extra_scripts:
@@ -349,6 +379,19 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
         dest = FIXTURE_DIR / rel
         copy_file(src_path, dest)
 
+    # 2d. Discover and copy armor enchantment (onhit) sub-scripts
+    print("\nDiscovering armor enchantment sub-scripts from onhitscriptdesc.cfg...")
+    armor_enchantment_scripts = discover_armor_enchantment_scripts(shard_root)
+    print(f"  Found {len(armor_enchantment_scripts)} armor enchantment scripts")
+
+    print("\nCopying armor enchantment scripts...")
+    for src_path in sorted(armor_enchantment_scripts):
+        if src_path in included_files or src_path in enchantment_scripts:
+            continue  # Already copied
+        rel = src_path.relative_to(shard_root.resolve())
+        dest = FIXTURE_DIR / rel
+        copy_file(src_path, dest)
+
     # 3. Copy all pkg.cfg files (needed by PackageResolver and ShardData)
     print("\nCopying pkg.cfg files...")
     pkg_cfgs = discover_package_cfgs(shard_root)
@@ -365,6 +408,11 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
     combat_cfg = shard_root / "config" / "combat.cfg"
     if combat_cfg.exists():
         copy_file(combat_cfg, FIXTURE_DIR / "config" / "combat.cfg")
+
+    # armrzone.cfg — armor zone hit probabilities
+    armrzone_cfg = shard_root / "config" / "armrzone.cfg"
+    if armrzone_cfg.exists():
+        copy_file(armrzone_cfg, FIXTURE_DIR / "config" / "armrzone.cfg")
 
     # npcdesc.cfg — trimmed to needed templates
     npcdesc_path = shard_root / "config" / "npcdesc.cfg"
@@ -396,6 +444,7 @@ def sync_fixtures(shard_root: Path, dry_run: bool = False) -> None:
         "pkg/systems/combat/config/itemdesc.cfg",
         "pkg/systems/combat/config/settings.cfg",
         "pkg/systems/combat/config/hitscriptdesc.cfg",
+        "pkg/systems/combat/config/onhitscriptdesc.cfg",
         "pkg/std/spells/spells.cfg",
         "pkg/opt/necro/spells.cfg",
         "pkg/opt/earth/spells.cfg",

@@ -1,0 +1,65 @@
+use uo;
+use os;
+
+include "include/spelldata";
+include "include/damages";
+include "include/random";
+
+program spellonhit(parms)
+
+	var attacker 	:= parms[1];
+	var defender 	:= parms[2];
+	var weapon 	    := parms[3];
+	var armor 	    := parms[4];
+	var basedamage  := parms[5];
+	var rawdamage	:= parms[6];
+
+	//this is a workaround, need to find everything that is calling the hitscript besides omegaattack
+	if(IsThief(attacker) || IsBard(attacker) || IsMage(attacker))
+		if(!(weapon.graphic in ClassWeapons(GetClass(attacker))))
+			if(DEBUG_MODE)
+				PrintTextAbovePrivate( attacker, "Out of class weapon exiting hitscript.", attacker );
+			endif
+			return 0;
+		endif
+	endif
+
+	var chance := Cint(GetObjProperty(armor , "ChanceOfEffect"));
+	if(RandomDiceStr("1d100") <= chance)
+		var spellid := GetObjProperty( armor , "HitWithSpell" );
+		var circle := Cint(GetObjProperty(armor , "EffectCircle"));
+		var targ;
+		var caster;
+
+		if (GetObjProperty( armor , "Cursed"))
+			targ := defender;
+			caster := attacker;
+		else
+			targ := attacker;
+			caster := defender;
+		endif
+
+		if(DEBUG_MODE)
+			__RecordSimulatorMetric(struct{ "onhit_type" := "spell", "onhit_spell_triggered" := 1, "onhit_spell_id" := spellid, "onhit_spell_circle" := circle, "onhit_spell_chance" := chance });
+		endif
+
+		var spellparms := { };
+		spellparms[1] := "#MOB";
+		spellparms[2] := caster;
+		spellparms[3] := targ;
+		spellparms[4] := circle;
+		spellparms[5] := 1;
+		Start_Script( GetScript( spellid ) , spellparms );
+
+	endif
+
+	//Print("Basedamage: " + basedamage + " Rawdamage: " + rawdamage);
+	if( basedamage != rawdamage )
+		if( rawdamage < 1 )
+			rawdamage := 1;
+		endif
+	endif
+
+	ApplyTheDamage( defender , attacker , rawdamage );
+
+endprogram

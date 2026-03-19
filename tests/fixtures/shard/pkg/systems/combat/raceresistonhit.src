@@ -1,0 +1,41 @@
+use uo;
+use os;
+
+include ":combat:hitscriptinc";
+include "include/damages";
+
+program raceresistonhit(parms)
+
+	var attacker 	:= parms[1];
+	var defender 	:= parms[2];
+	var weapon 	:= parms[3];
+	var armor 	:= parms[4];
+	var basedamage := parms[5];
+	var rawdamage	:= parms[6];
+	var slaytype := GetObjProperty( armor , "ProtectedType" );
+	var type := GetObjProperty( attacker , "Type" );
+	var cursed := GetObjProperty( armor , "Cursed");
+
+	var slayer_match := (slaytype == type or ((slaytype == "Human") and !attacker.npctemplate ));
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric(struct{ "onhit_type" := "slayer", "onhit_slayer_match" := slayer_match, "onhit_slayer_type" := slaytype, "onhit_slayer_attacker_type" := type });
+	endif
+
+	if( slayer_match )
+		if( cursed )
+			ApplyTheDamage( defender , attacker , rawdamage * 2 );
+		else
+			if( basedamage == rawdamage )
+				rawdamage := RecalcDmg( attacker , defender , weapon , armor , basedamage );
+				ApplyTheDamage( defender , attacker , rawdamage );
+			else
+				rawdamage := Cint( rawdamage / 2 );
+				ApplyTheDamage( defender , attacker , rawdamage );
+			endif
+		endif	
+	else
+		ApplyTheDamage( defender , attacker , rawdamage );
+	endif
+
+endprogram
+

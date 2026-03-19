@@ -827,3 +827,87 @@ def fizzle_rate_vs_parameter(
     fig.tight_layout()
     plt.close(fig)
     return fig
+
+
+def armor_enchantment_comparison(
+    cells: dict[str, CellResult],
+    *,
+    title: str | None = None,
+    figsize: tuple[float, float] = (10, 5),
+) -> Any:
+    """Side-by-side comparison of armor enchantment effects.
+
+    Shows grouped bars for each scenario: physical damage and total damage,
+    with an overlay line for the onhit trigger rate.
+
+    Parameters
+    ----------
+    cells:
+        Mapping of enchantment label → :class:`CellResult`.
+        E.g. ``{"Plain": plain_cell, "Fireball Armor": fb_cell, "Undead Hunter": uh_cell}``
+    title:
+        Optional figure title.
+    figsize:
+        Figure size in inches.
+
+    Returns
+    -------
+    matplotlib.figure.Figure
+    """
+    plt = _require_matplotlib()
+    import numpy as np
+
+    labels = list(cells.keys())
+    finals = [cells[l].damage_stats.mean for l in labels]
+    trigger_rates = [cells[l].ratios.onhit_trigger_rate for l in labels]
+    elementals = [cells[l].elemental_breakdown.total_net for l in labels]
+    physicals = [f - e for f, e in zip(finals, elementals)]
+
+    x = np.arange(len(labels))
+    width = 0.3
+
+    fig, ax1 = plt.subplots(figsize=figsize)
+
+    b1 = ax1.bar(x - width / 2, physicals, width, label="Physical",
+                  color="#78909C", edgecolor="black", linewidth=0.5)
+    b2 = ax1.bar(x + width / 2, elementals, width, label="OnHit Additional",
+                  color="#FF7043", edgecolor="black", linewidth=0.5)
+
+    # Value labels
+    for bars in (b1, b2):
+        for bar in bars:
+            h = bar.get_height()
+            if h > 0:
+                ax1.text(bar.get_x() + bar.get_width() / 2, h + 0.3,
+                         f"{h:.1f}", ha="center", va="bottom", fontsize=8)
+
+    # Total damage line
+    ax1.plot(x, finals, "ko-", markersize=6, linewidth=1.5, label="Total Damage")
+    for xi, total in zip(x, finals):
+        ax1.text(xi, total + 0.8, f"{total:.1f}", ha="center", va="bottom",
+                 fontsize=9, fontweight="bold")
+
+    ax1.set_xticks(x)
+    ax1.set_xticklabels(labels, rotation=15, ha="right")
+    ax1.set_ylabel("Mean Damage")
+
+    # Trigger rate on secondary axis
+    ax2 = ax1.twinx()
+    ax2.plot(x, trigger_rates, "s--", color="#1565C0", markersize=8,
+             linewidth=1.5, label="OnHit Trigger Rate")
+    for xi, rate in zip(x, trigger_rates):
+        ax2.text(xi, rate + 0.02, f"{rate:.0%}", ha="center", va="bottom",
+                 fontsize=8, color="#1565C0")
+    ax2.set_ylabel("OnHit Trigger Rate", color="#1565C0")
+    ax2.set_ylim(0, 1.1)
+    ax2.tick_params(axis="y", labelcolor="#1565C0")
+
+    # Combined legend
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="upper left")
+
+    ax1.set_title(title or "Armor Enchantment Comparison")
+    fig.tight_layout()
+    plt.close(fig)
+    return fig

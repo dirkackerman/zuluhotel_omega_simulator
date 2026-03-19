@@ -1,0 +1,59 @@
+//////////////////////////////////////////////////////////////////////////////////////////
+//											//
+//	avengingonhit									//
+//											//
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+use uo;
+
+include "include/damages";
+include "include/classes";
+
+program avengingonhit( parms )
+
+	var attacker 	 := parms[1];
+	var defender 	 := parms[2];
+	var weapon 	 := parms[3];
+	var armor 	 := parms[4];
+	var basedamage := parms[5];
+	var rawdamage	 := parms[6];
+	var revenge;
+	
+	ApplyTheDamage( defender , attacker , rawdamage );
+	
+	var absorbed := basedamage - rawdamage;
+	//Print("Absorbed: " + absorbed + " Base: " + basedamage + " Raw: " + rawdamage);
+
+	if(DEBUG_MODE)
+		__RecordSimulatorMetric(struct{ "onhit_type" := "avenging", "onhit_avenging_absorbed" := absorbed });
+	endif
+
+	if( !absorbed )
+		return;
+	endif
+
+	if( IsPaladin(defender) || IsMysticArcher(defender) || IsMage(defender) )
+		return;
+	endif
+	
+	var power 	:= GetObjProperty( armor , "Powerlevel" );
+
+	if( !attacker.isA(POLCLASS_NPC) && !defender.isA(POLCLASS_NPC) )
+		revenge := Cint( absorbed * power / 100 );
+	else
+		revenge := Cint( absorbed * power / 30 );
+	endif
+	
+	
+	var targ;
+	if( GetObjProperty( armor , "Cursed" ) )
+		targ := defender;
+	else
+		targ := attacker;
+	endif
+	
+	ApplyTheDamage( targ , defender , revenge );
+	//Print("Revenge: " + revenge);
+
+endprogram

@@ -24,6 +24,8 @@ from pathlib import Path
 from typing import Any
 
 from omega.config.cfg_parser import ConfigElement, parse_config_file
+from omega.config.combat_scripts import CombatScript
+from omega.config.creature_types import CreatureType
 from omega.config.spells import Spell
 from omega.logging import get_logger
 
@@ -109,54 +111,54 @@ class Enchantment(IntEnum):
 # - Effects/Greaters: CProp + value where defined in the cfg.
 _ENCHANTMENT_META: dict[int, tuple[str, dict[str, Any]]] = {
     # Spells — spellstrikescript + HitWithSpell only
-    1:  (":combat:spellstrikescript", {"HitWithSpell": Spell.CLUMSY}),
-    2:  (":combat:spellstrikescript", {"HitWithSpell": Spell.FEEBLEMIND}),
-    3:  (":combat:spellstrikescript", {"HitWithSpell": Spell.MAGIC_ARROW}),
-    4:  (":combat:spellstrikescript", {"HitWithSpell": Spell.WEAKEN}),
-    5:  (":combat:spellstrikescript", {"HitWithSpell": Spell.HARM}),
-    6:  (":combat:spellstrikescript", {"HitWithSpell": Spell.FIREBALL}),
-    7:  (":combat:spellstrikescript", {"HitWithSpell": Spell.CURSE}),
-    8:  (":combat:spellstrikescript", {"HitWithSpell": Spell.LIGHTNING}),
-    9:  (":combat:spellstrikescript", {"HitWithSpell": Spell.MANA_DRAIN}),
-    10: (":combat:spellstrikescript", {"HitWithSpell": Spell.MIND_BLAST}),
-    11: (":combat:spellstrikescript", {"HitWithSpell": Spell.PARALYZE}),
-    12: (":combat:spellstrikescript", {"HitWithSpell": Spell.ENERGY_BOLT}),
-    13: (":combat:spellstrikescript", {"HitWithSpell": Spell.EXPLOSION}),
-    14: (":combat:spellstrikescript", {"HitWithSpell": Spell.MASS_CURSE}),
-    15: (":combat:spellstrikescript", {"HitWithSpell": Spell.CHAIN_LIGHTNING}),
-    16: (":combat:spellstrikescript", {"HitWithSpell": Spell.FLAME_STRIKE}),
-    17: (":combat:spellstrikescript", {"HitWithSpell": Spell.METEOR_SWARM}),
-    18: (":combat:spellstrikescript", {"HitWithSpell": Spell.EARTHQUAKE}),
+    1:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.CLUMSY}),
+    2:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.FEEBLEMIND}),
+    3:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.MAGIC_ARROW}),
+    4:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.WEAKEN}),
+    5:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.HARM}),
+    6:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.FIREBALL}),
+    7:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.CURSE}),
+    8:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.LIGHTNING}),
+    9:  (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.MANA_DRAIN}),
+    10: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.MIND_BLAST}),
+    11: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.PARALYZE}),
+    12: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.ENERGY_BOLT}),
+    13: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.EXPLOSION}),
+    14: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.MASS_CURSE}),
+    15: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.CHAIN_LIGHTNING}),
+    16: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.FLAME_STRIKE}),
+    17: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.METEOR_SWARM}),
+    18: (CombatScript.SPELLSTRIKESCRIPT, {"HitWithSpell": Spell.EARTHQUAKE}),
     # Slayers — slayerscript + SlayType
-    19: (":combat:slayerscript", {"SlayType": "Slime"}),
-    20: (":combat:slayerscript", {"SlayType": "Ratkin"}),
-    21: (":combat:slayerscript", {"SlayType": "Plant"}),
-    22: (":combat:slayerscript", {"SlayType": "Animal"}),
-    23: (":combat:slayerscript", {"SlayType": "Beholder"}),
-    24: (":combat:slayerscript", {"SlayType": "Orc"}),
-    25: (":combat:slayerscript", {"SlayType": "Terathan"}),
-    26: (":combat:slayerscript", {"SlayType": "Ophidian"}),
-    27: (":combat:slayerscript", {"SlayType": "Animated"}),
-    28: (":combat:slayerscript", {"SlayType": "Gargoyle"}),
-    29: (":combat:slayerscript", {"SlayType": "Troll"}),
-    30: (":combat:slayerscript", {"SlayType": "Giantkin"}),
-    31: (":combat:slayerscript", {"SlayType": "Elemental"}),
-    32: (":combat:slayerscript", {"SlayType": "Undead"}),
-    33: (":combat:slayerscript", {"SlayType": "Daemon"}),
-    34: (":combat:slayerscript", {"SlayType": "Dragonkin"}),
-    35: (":combat:slayerscript", {"SlayType": "Human"}),
+    19: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.SLIME}),
+    20: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.RATKIN}),
+    21: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.PLANT}),
+    22: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.ANIMAL}),
+    23: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.BEHOLDER}),
+    24: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.ORC}),
+    25: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.TERATHAN}),
+    26: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.OPHIDIAN}),
+    27: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.ANIMATED}),
+    28: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.GARGOYLE}),
+    29: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.TROLL}),
+    30: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.GIANTKIN}),
+    31: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.ELEMENTAL}),
+    32: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.UNDEAD}),
+    33: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.DAEMON}),
+    34: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.DRAGONKIN}),
+    35: (CombatScript.SLAYERSCRIPT, {"SlayType": CreatureType.HUMAN}),
     # Effects
-    36: (":combat:piercingscript", {}),
-    37: (":combat:banishscript", {}),
-    38: (":combat:poisonhit", {"Poisonlvl": 0}),
-    39: (":combat:lifedrainscript", {}),
-    40: (":combat:manadrainscript", {}),
-    41: (":combat:staminadrainscript", {}),
-    42: (":combat:blindingscript", {"ChanceOfEffect": 10}),
+    36: (CombatScript.PIERCINGSCRIPT, {}),
+    37: (CombatScript.BANISHSCRIPT, {}),
+    38: (CombatScript.POISONHIT, {"Poisonlvl": 0}),
+    39: (CombatScript.LIFEDRAINSCRIPT, {}),
+    40: (CombatScript.MANADRAINSCRIPT, {}),
+    41: (CombatScript.STAMINADRAINSCRIPT, {}),
+    42: (CombatScript.BLINDINGSCRIPT, {"ChanceOfEffect": 10}),
     # Greaters
-    43: (":combat:dualplanarscript", {"ChanceOfEffect": 7}),
-    44: (":combat:voidscript", {}),
-    45: (":combat:trielementalscript", {"ChanceOfEffect": 7}),
+    43: (CombatScript.DUALPLANARSCRIPT, {"ChanceOfEffect": 7}),
+    44: (CombatScript.VOIDSCRIPT, {}),
+    45: (CombatScript.TRIELEMENTALSCRIPT, {"ChanceOfEffect": 7}),
 }
 
 
@@ -176,7 +178,7 @@ class EnchantmentEntry:
 
     id: int
     hitscript_type: str  # "Spell", "Slayer", "Effect", "Greater"
-    hitscript: str  # package path, e.g. ":combat:spellstrikescript"
+    hitscript: str  # package path, e.g. CombatScript.SPELLSTRIKESCRIPT
     name: str  # display name, e.g. "of Daemon's Breath"
     cursed_name: str = ""
     color: int = 0

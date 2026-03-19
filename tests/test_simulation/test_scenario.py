@@ -5,6 +5,11 @@ from pathlib import Path
 
 import pytest
 
+from omega.config.armor_enchantments import (
+    ArmorEnchantment,
+    ArmorEnchantmentRegistry,
+)
+from omega.config.combat_scripts import CombatScript
 from omega.config.enchantments import Enchantment, EnchantmentRegistry
 from omega.config.spells import Spell
 from omega.model.constants import (
@@ -67,7 +72,7 @@ class TestWeaponSpecFromConfig:
         assert spec.name == "KatanaOfKieri"
         assert spec.damage == "2d8+35"
         assert spec.speed == 87
-        assert spec.attribute == SKILLID_SWORDSMANSHIP
+        assert spec.attribute == "Swords"
 
     def test_lookup_by_objtype(self, itemdesc):
         spec = WeaponSpec.from_config("0x757d", itemdesc)
@@ -113,9 +118,9 @@ class TestWeaponSpecFromConfig:
         assert spec.name == "waterdragonWeapon"
         assert spec.damage == "15d10"
         assert spec.speed == 60
-        assert spec.attribute == SKILLID_MACEFIGHTING
+        assert spec.attribute == "Mace"
         assert spec.two_handed is True
-        assert spec.hitscript == ":combat:banishscript"
+        assert spec.hitscript == CombatScript.BANISHSCRIPT
         # Round-trip
         weapon = build_weapon(spec)
         assert weapon.damage.count == 15
@@ -126,16 +131,16 @@ class TestWeaponSpecFromConfig:
         spec = WeaponSpec.from_config("dragonkingWeapon", itemdesc)
         assert spec.name == "dragonkingWeapon"
         assert spec.damage == "15d10"
-        assert spec.hitscript == ":combat:banishscript"
+        assert spec.hitscript == CombatScript.BANISHSCRIPT
 
     def test_boss_weapon_legendaryhunter(self, itemdesc):
         """Legendary Hunter weapon resolves by name from itemdesc."""
         spec = WeaponSpec.from_config("legendaryhunterweapon", itemdesc)
         assert spec.name == "legendaryhunterweapon"
         assert spec.damage == "6d6+5"
-        assert spec.attribute == SKILLID_ARCHERY
+        assert spec.attribute == "Archery"
         assert spec.two_handed is True
-        assert spec.hitscript == ":combat:poisonhit"
+        assert spec.hitscript == CombatScript.POISONHIT
         # Round-trip
         weapon = build_weapon(spec)
         assert weapon.damage.count == 6
@@ -307,7 +312,7 @@ class TestBossFromConfig:
         assert spec.weapon.damage == "15d10"
         assert spec.weapon.speed == 60
         assert spec.weapon.two_handed is True
-        assert spec.weapon.hitscript == ":combat:banishscript"
+        assert spec.weapon.hitscript == CombatScript.BANISHSCRIPT
 
     def test_boss_waterdragon_armor(self, configs):
         npcdesc, equip, itemdesc = configs
@@ -355,7 +360,7 @@ class TestBossFromConfig:
         assert spec.weapon is not None
         assert spec.weapon.name == "dragonkingWeapon"
         assert spec.weapon.damage == "15d10"
-        assert spec.weapon.hitscript == ":combat:banishscript"
+        assert spec.weapon.hitscript == CombatScript.BANISHSCRIPT
 
     def test_superboss_dragonking_protections(self, configs):
         npcdesc, equip, itemdesc = configs
@@ -403,7 +408,7 @@ class TestBossFromConfig:
         assert spec.weapon is not None
         assert spec.weapon.name == "legendaryhunterweapon"
         assert spec.weapon.damage == "6d6+5"
-        assert spec.weapon.hitscript == ":combat:poisonhit"
+        assert spec.weapon.hitscript == CombatScript.POISONHIT
 
     def test_champion_legendaryhunter_protections(self, configs):
         npcdesc, equip, itemdesc = configs
@@ -454,6 +459,150 @@ class TestArmorSpec:
         spec = ArmorSpec(properties={"Cursed": 1})
         a = build_armor(spec)
         assert a.get_property("Cursed") == 1
+
+    def test_defaults_no_onhitscript(self):
+        spec = ArmorSpec()
+        assert spec.onhitscript is None
+
+    def test_onhitscript_field(self):
+        spec = ArmorSpec(onhitscript=CombatScript.SPELLONHIT)
+        assert spec.onhitscript == CombatScript.SPELLONHIT
+
+
+class TestArmorSpecEnchantWith:
+    def test_enchant_with_spell(self):
+        spec = ArmorSpec(ar=30).enchant_with(ArmorEnchantment.OF_DAEMONS_BREATH)
+        assert spec.onhitscript == CombatScript.SPELLONHIT
+        assert spec.properties["HitWithSpell"] == Spell.FIREBALL
+        assert spec.ar == 30  # preserved
+
+    def test_enchant_with_race(self):
+        spec = ArmorSpec(ar=20).enchant_with(ArmorEnchantment.UNDEAD_HUNTER)
+        assert spec.onhitscript == CombatScript.RACERESISTONHIT
+        assert spec.properties["ProtectedType"] == "Undead"
+
+    def test_enchant_with_effect(self):
+        spec = ArmorSpec().enchant_with(ArmorEnchantment.VENOMOUS)
+        assert spec.onhitscript == CombatScript.POISONONHIT
+        assert spec.properties["Poisonlvl"] == 0
+
+    def test_enchant_with_greater(self):
+        spec = ArmorSpec().enchant_with(ArmorEnchantment.OF_ELEMENTAL_FURY)
+        assert spec.onhitscript == CombatScript.TRIELEMENTALONHIT
+        assert spec.properties["ChanceOfEffect"] == 7
+
+    def test_existing_properties_override_defaults(self):
+        """User-set properties take precedence over enchantment defaults."""
+        spec = ArmorSpec(
+            properties={"ChanceOfEffect": 50},
+        ).enchant_with(ArmorEnchantment.OF_ELEMENTAL_FURY)
+        # Default is 7, but user set 50
+        assert spec.properties["ChanceOfEffect"] == 50
+
+    def test_enchant_preserves_other_properties(self):
+        spec = ArmorSpec(
+            properties={"Cursed": 1},
+        ).enchant_with(ArmorEnchantment.OF_BUNGLING)
+        assert spec.properties["Cursed"] == 1
+        assert spec.properties["HitWithSpell"] == Spell.CLUMSY
+
+    def test_enchant_frozen_returns_new(self):
+        original = ArmorSpec(ar=30)
+        enchanted = original.enchant_with(ArmorEnchantment.OF_BUNGLING)
+        assert original.onhitscript is None
+        assert enchanted.onhitscript == CombatScript.SPELLONHIT
+
+    def test_enchant_with_no_cprop_effect(self):
+        spec = ArmorSpec().enchant_with(ArmorEnchantment.REINFORCED)
+        assert spec.onhitscript == CombatScript.PIERCINGONHIT
+        assert spec.properties == {}
+
+
+class TestBuildArmorEnchantment:
+    def test_build_enchanted_armor_package_path(self):
+        """Armor with raw package path sets OnHitScript property."""
+        spec = ArmorSpec(
+            ar=30,
+            onhitscript=CombatScript.SPELLONHIT,
+            properties={"HitWithSpell": 18, "EffectCircle": 5, "ChanceOfEffect": 30},
+        )
+        a = build_armor(spec)
+        assert a.get_property("OnHitScript") == CombatScript.SPELLONHIT
+        assert a.get_property("HitWithSpell") == 18
+        assert a.get_property("EffectCircle") == 5
+        assert a.get_property("ChanceOfEffect") == 30
+
+    def test_build_enchanted_armor_via_enchant_with(self):
+        spec = ArmorSpec(ar=30).enchant_with(ArmorEnchantment.OF_DAEMONS_BREATH)
+        a = build_armor(spec)
+        assert a.get_property("OnHitScript") == CombatScript.SPELLONHIT
+        assert a.get_property("HitWithSpell") == int(Spell.FIREBALL)
+        assert a.ar == 30
+
+    def test_build_no_onhitscript(self):
+        """Armor without enchantment has no OnHitScript property."""
+        spec = ArmorSpec(ar=30)
+        a = build_armor(spec)
+        assert a.get_property("OnHitScript") is None
+
+    def test_build_with_name_resolution(self):
+        """Name-based resolution via registry lookup."""
+        onhit_cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "onhitscriptdesc.cfg"
+        registry = ArmorEnchantmentRegistry.from_cfg(onhit_cfg)
+        spec = ArmorSpec(ar=30, onhitscript="Fireball")
+        a = build_armor(spec, armor_enchantment_registry=registry)
+        assert a.get_property("OnHitScript") == CombatScript.SPELLONHIT
+        assert a.get_property("HitWithSpell") == 18
+
+    def test_build_with_name_resolution_race(self):
+        onhit_cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "onhitscriptdesc.cfg"
+        registry = ArmorEnchantmentRegistry.from_cfg(onhit_cfg)
+        spec = ArmorSpec(ar=30, onhitscript="Undead")
+        a = build_armor(spec, armor_enchantment_registry=registry)
+        assert a.get_property("OnHitScript") == CombatScript.RACERESISTONHIT
+        assert a.get_property("ProtectedType") == "Undead"
+
+    def test_build_with_unknown_name_raises(self):
+        spec = ArmorSpec(ar=30, onhitscript="NonexistentEnchantment")
+        with pytest.raises(ValueError, match="Unknown armor enchantment"):
+            build_armor(spec)
+
+    def test_build_with_unknown_name_no_registry_raises(self):
+        """Without a registry, name resolution should fail cleanly."""
+        spec = ArmorSpec(ar=30, onhitscript="Fireball")
+        with pytest.raises(ValueError, match="Unknown armor enchantment"):
+            build_armor(spec)
+
+    def test_build_combatant_passes_armor_enchantment(self):
+        """build_combatant should pass enchanted armor through correctly."""
+        spec = CombatantSpec(
+            name="Defender",
+            armor=ArmorSpec(ar=30).enchant_with(ArmorEnchantment.OF_BUNGLING),
+        )
+        mob, weapon, armor = build_combatant(spec)
+        assert armor.get_property("OnHitScript") == CombatScript.SPELLONHIT
+        assert armor.get_property("HitWithSpell") == int(Spell.CLUMSY)
+
+    def test_build_combatant_no_armor(self):
+        """build_combatant with no armor should have no OnHitScript."""
+        spec = CombatantSpec(name="Naked")
+        mob, weapon, armor = build_combatant(spec)
+        assert armor.get_property("OnHitScript") is None
+
+
+class TestApplyVariableArmor:
+    def test_apply_armor_onhitscript(self):
+        spec = CombatantSpec(armor=ArmorSpec(ar=30))
+        updated = apply_variable(spec, "armor.onhitscript", CombatScript.SPELLONHIT)
+        assert updated.armor.onhitscript == CombatScript.SPELLONHIT
+
+    def test_apply_armor_ar_preserves_onhitscript(self):
+        spec = CombatantSpec(
+            armor=ArmorSpec(ar=30).enchant_with(ArmorEnchantment.OF_BUNGLING),
+        )
+        updated = apply_variable(spec, "armor.ar", 50)
+        assert updated.armor.ar == 50
+        assert updated.armor.onhitscript == CombatScript.SPELLONHIT
 
 
 class TestCombatantSpec:
@@ -590,8 +739,8 @@ class TestApplyVariable:
 
     def test_apply_weapon_hitscript(self):
         spec = CombatantSpec(weapon=WeaponSpec())
-        new = apply_variable(spec, "weapon.hitscript", ":combat:spellstrikescript")
-        assert new.weapon.hitscript == ":combat:spellstrikescript"
+        new = apply_variable(spec, "weapon.hitscript", CombatScript.SPELLSTRIKESCRIPT)
+        assert new.weapon.hitscript == CombatScript.SPELLSTRIKESCRIPT
 
 
 class TestWeaponSpecHitscript:
@@ -607,16 +756,16 @@ class TestWeaponSpecHitscript:
         assert w.hitscript is None
 
     def test_build_weapon_raw_package_path(self):
-        spec = WeaponSpec(hitscript=":combat:spellstrikescript")
+        spec = WeaponSpec(hitscript=CombatScript.SPELLSTRIKESCRIPT)
         w = build_weapon(spec)
-        assert w.hitscript == ":combat:spellstrikescript"
+        assert w.hitscript == CombatScript.SPELLSTRIKESCRIPT
 
     def test_build_weapon_enchantment_name_fireball(self):
         cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
         reg = EnchantmentRegistry.from_cfg(cfg)
         spec = WeaponSpec(hitscript="Fireball")
         w = build_weapon(spec, enchantment_registry=reg)
-        assert w.hitscript == ":combat:spellstrikescript"
+        assert w.hitscript == CombatScript.SPELLSTRIKESCRIPT
         assert w.get_property("HitWithSpell") == 18
 
     def test_build_weapon_enchantment_name_piercing(self):
@@ -624,14 +773,14 @@ class TestWeaponSpecHitscript:
         reg = EnchantmentRegistry.from_cfg(cfg)
         spec = WeaponSpec(hitscript="Piercing")
         w = build_weapon(spec, enchantment_registry=reg)
-        assert w.hitscript == ":combat:piercingscript"
+        assert w.hitscript == CombatScript.PIERCINGSCRIPT
 
     def test_build_weapon_enchantment_name_planar_fury(self):
         cfg = FIXTURE_SHARD_ROOT / "pkg" / "systems" / "combat" / "config" / "hitscriptdesc.cfg"
         reg = EnchantmentRegistry.from_cfg(cfg)
         spec = WeaponSpec(hitscript="Planar Fury")
         w = build_weapon(spec, enchantment_registry=reg)
-        assert w.hitscript == ":combat:dualplanarscript"
+        assert w.hitscript == CombatScript.DUALPLANARSCRIPT
         assert w.get_property("ChanceOfEffect") == 7
 
     def test_build_weapon_unknown_name_raises(self):
@@ -647,7 +796,7 @@ class TestWeaponSpecHitscript:
             weapon=WeaponSpec(hitscript="Fireball"),
         )
         mob, weapon, armor = build_combatant(spec, enchantment_registry=reg)
-        assert weapon.hitscript == ":combat:spellstrikescript"
+        assert weapon.hitscript == CombatScript.SPELLSTRIKESCRIPT
         assert weapon.get_property("HitWithSpell") == 18
 
 
@@ -656,21 +805,21 @@ class TestEnchantWith:
 
     def test_spell_enchantment(self):
         spec = WeaponSpec(damage="3d6+2").enchant_with(Enchantment.OF_DAEMONS_BREATH)
-        assert spec.hitscript == ":combat:spellstrikescript"
+        assert spec.hitscript == CombatScript.SPELLSTRIKESCRIPT
         assert spec.properties["HitWithSpell"] == Spell.FIREBALL
 
     def test_slayer_enchantment(self):
         spec = WeaponSpec().enchant_with(Enchantment.SILVER)
-        assert spec.hitscript == ":combat:slayerscript"
+        assert spec.hitscript == CombatScript.SLAYERSCRIPT
         assert spec.properties["SlayType"] == "Undead"
 
     def test_effect_enchantment(self):
         spec = WeaponSpec().enchant_with(Enchantment.OF_PIERCING)
-        assert spec.hitscript == ":combat:piercingscript"
+        assert spec.hitscript == CombatScript.PIERCINGSCRIPT
 
     def test_greater_enchantment(self):
         spec = WeaponSpec().enchant_with(Enchantment.OF_PLANAR_FURY)
-        assert spec.hitscript == ":combat:dualplanarscript"
+        assert spec.hitscript == CombatScript.DUALPLANARSCRIPT
         assert spec.properties["ChanceOfEffect"] == 7
 
     def test_preserves_existing_fields(self):
@@ -693,5 +842,5 @@ class TestEnchantWith:
     def test_build_weapon_from_enchant_with(self):
         spec = WeaponSpec(damage="1d20+35").enchant_with(Enchantment.SILVER)
         w = build_weapon(spec)
-        assert w.hitscript == ":combat:slayerscript"
+        assert w.hitscript == CombatScript.SLAYERSCRIPT
         assert w.get_property("SlayType") == "Undead"

@@ -16,6 +16,8 @@ from __future__ import annotations
 from typing import Any
 
 from omega.model.constants import (
+    LAYER_HAND1,
+    LAYER_HAND2,
     POLCLASS_MOBILE,
     POLCLASS_NPC,
     SKILLID__HIGHEST,
@@ -23,6 +25,10 @@ from omega.model.constants import (
 )
 from omega.model.game_object import GameObject
 from omega.model.items import Armor, Weapon
+
+# POL's intrinsic weapon for unarmed characters (gamestate.wrestling_weapon).
+# Attribute "Wrestling", damage 1d4, speed 35.
+_WRESTLING_WEAPON = Weapon(name="Wrestling", attribute="Wrestling", speed=35)
 
 
 class Mobile(GameObject):
@@ -209,6 +215,23 @@ class Mobile(GameObject):
     def list_equipment(self) -> dict[int, Weapon | Armor]:
         """Return all equipped items by layer."""
         return dict(self._equipment)
+
+    @property
+    def weapon(self) -> Weapon:
+        """The weapon in LAYER_HAND1 or LAYER_HAND2, or wrestling if unarmed.
+
+        Matches POL's ``character.weapon`` member: checks both hand slots
+        (``charactr.cpp:1399-1402``).  LAYER_HAND1 is checked first.
+        Unarmed characters get the intrinsic wrestling weapon
+        (``intrinsic_weapon()`` → ``gamestate.wrestling_weapon`` in POL).
+        """
+        item = self._equipment.get(LAYER_HAND1)
+        if isinstance(item, Weapon):
+            return item
+        item = self._equipment.get(LAYER_HAND2)
+        if isinstance(item, Weapon):
+            return item
+        return _WRESTLING_WEAPON
 
     @property
     def ar(self) -> int:

@@ -197,6 +197,9 @@ def _get_stat(cell: CellResult, name: str) -> Any:
         "reactive_rate_on_hit": rs.reactive_rate_on_hit,
         "spell_strike_rate_on_hit": rs.spell_strike_rate_on_hit,
         "effect_rate_on_hit": rs.effect_rate_on_hit,
+        # Armor onhit rates
+        "onhit_trigger_rate": rs.onhit_trigger_rate,
+        "onhit_trigger_rate_on_hit": rs.onhit_trigger_rate_on_hit,
         # Elemental totals
         "elem_total_net": cell.elemental_breakdown.total_net,
         "elem_total_gross": cell.elemental_breakdown.total_gross,
@@ -251,6 +254,7 @@ _RATE_STATS = frozenset({
     "hit_rate", "poison_rate", "equipment_break_rate",
     "reactive_rate", "spell_strike_rate", "effect_rate",
     "reactive_rate_on_hit", "spell_strike_rate_on_hit", "effect_rate_on_hit",
+    "onhit_trigger_rate", "onhit_trigger_rate_on_hit",
     "fizzle_rate", "resist_rate", "resist_rate_on_cast", "cast_rate",
 })
 

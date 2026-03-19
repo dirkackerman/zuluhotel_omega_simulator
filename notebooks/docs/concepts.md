@@ -448,6 +448,44 @@ When a spell is resisted, damage is scaled by the EvalInt/MagicResistance ratio:
 
 Resistance events are captured in `list:resisted` metrics with fields: `dmg_before`, `dmg_after`, `chance`, `did_resist`, `circle`, `evalint`, `resist`.
 
+## Casting armour (V3.1)
+
+Armor pieces can have onhit scripts that fire when the wearer is struck, adding a defensive enchantment layer parallel to weapon enchantments.
+
+### OnHitScript dispatch
+
+When a hit connects, `DealDamage()` checks each armor piece for an `OnHitScript` property. If present, it calls `start_script()` with the armor's onhit script, passing `{attacker, defender, weapon, armor, basedamage, rawdamage}` as parameters. The onhit script is responsible for calling `ApplyTheDamage()` — the main pipeline does not apply damage when an onhit script runs.
+
+### Armor zone selection
+
+POL randomly selects which armor piece is hit based on zone probabilities defined in `armrzone.cfg`:
+
+| Zone | Probability |
+|------|:-:|
+| Body | 44% |
+| Arms | 14% |
+| Head | 14% |
+| Legs | 14% |
+| Neck | 7% |
+| Hands | 7% |
+
+Only the armor piece covering the selected zone is checked for an onhit script. If no armor covers that zone, or the armor has no onhit script, normal damage processing occurs.
+
+### Cursed armor
+
+Armor can be marked as cursed via the `Cursed` CProp. Cursed armor inverts the onhit target — spell and effect enchantments that normally target the attacker instead target the defender (the armor wearer). This turns defensive enchantments into self-inflicted penalties.
+
+### Armor enchantment types
+
+47 armor enchantments across 4 categories:
+
+| Category | Count | Example | Behavior |
+|----------|:-----:|---------|----------|
+| Spell | 18 | Of Daemon's Breath | Casts a spell on the attacker when hit |
+| Race-Resistant | 17 | Silver (Undead) | Bonus defense against matching creature type |
+| Effect | 7 | Of Piercing | Special effect on the attacker (stun, drain, blind) |
+| Greater | 5 | Of Planar Fury | Dual-element damage to the attacker |
+
 ## What the simulator covers
 
 ### V1 + V1.5 (current)
@@ -471,6 +509,12 @@ Resistance events are captured in `list:resisted` metrics with fields: `dmg_befo
 - Astral damage path — Spirit Speak scaling, meditation resistance, astral armor, 50% reduction
 - Spell resistance with class modifiers — Mage, Warrior, Paladin modify resist chance
 - Comprehensive stub audit against POL C++ source (60+ stubs verified)
+
+### V3.1 additions
+- Casting armour (armor onhit scripts) — spell, race-resistant, effect, and greater enchantments on armor
+- `ArmorEnchantment` enum (47 members) with `ArmorSpec.enchant_with()` convenience method
+- Armor zone selection based on `armrzone.cfg` probabilities
+- Cursed armor (inverts onhit target from attacker to defender)
 
 ### V3 additions
 - Direct spell casting via `SpellScenario` and `run_spell_scenario()`

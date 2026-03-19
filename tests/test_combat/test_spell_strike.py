@@ -14,6 +14,7 @@ import pytest
 
 from omega.combat.hit import execute_hit
 from omega.combat.result import HitResult
+from omega.config.combat_scripts import CombatScript
 from omega.config.dice import DiceSpec
 from omega.model.constants import (
     CLASSEID_POWERPLAYER,
@@ -73,7 +74,7 @@ def _make_spell_weapon(*, chance=100, spell_id=18, circle=3):
         name="Enchanted Sword",
         damage=DiceSpec(3, 6, 2),
         attribute=SKILLID_SWORDSMANSHIP,
-        hitscript=":combat:spellstrikescript",
+        hitscript=CombatScript.SPELLSTRIKESCRIPT,
     )
     w.set_property("ChanceOfEffect", chance)
     w.set_property("HitWithSpell", spell_id)

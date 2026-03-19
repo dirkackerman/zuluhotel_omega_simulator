@@ -830,6 +830,128 @@ display(HTML(format_table_html(comparison_table(results,
 
 ---
 
+## Recipe 17.1: Enchanted armor — define and run (V3.1)
+
+**Question**: "How does a fire-enchanted armor affect incoming damage?"
+
+```python
+from omega.config.enchantments import ArmorEnchantment
+
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=WeaponSpec(name="Sword", damage="3d6+2"),
+)
+
+# Defender with enchanted armor
+fire_defender = CombatantSpec(
+    name="Fire Plate Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+    armor=ArmorSpec(name="Fire Plate", ar=35).enchant_with(
+        ArmorEnchantment.OF_DAEMONS_BREATH
+    ),
+)
+
+result = run_scenario(
+    Scenario(attacker=attacker, defender=fire_defender, iterations=1000, base_seed=42),
+    shard=shard,
+)
+
+print(f"Mean damage: {result.damage_stats.mean:.1f}")
+print(f"Onhit trigger rate: {result.ratios.onhit_trigger_rate:.1%}")
+damage_histogram(result, title="vs Fire Plate Armor")
+```
+
+---
+
+## Recipe 17.2: Compare armor enchantments (V3.1)
+
+**Question**: "Which armor enchantment provides the best defensive value?"
+
+```python
+from omega.config.enchantments import ArmorEnchantment
+from omega.reporting.plots import armor_enchantment_comparison
+import dataclasses
+
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=WeaponSpec(name="Sword", damage="3d6+2"),
+)
+
+base_defender = CombatantSpec(
+    name="Target", is_npc=True,
+    str_=50, dex_=50, int_=50, hp=500,
+)
+
+enchantments = {
+    "Plain (AR 35)": ArmorSpec(ar=35),
+    "Fire Plate": ArmorSpec(ar=35).enchant_with(ArmorEnchantment.OF_DAEMONS_BREATH),
+    "Piercing Plate": ArmorSpec(ar=35).enchant_with(ArmorEnchantment.OF_PIERCING),
+    "Planar Plate": ArmorSpec(ar=35).enchant_with(ArmorEnchantment.OF_PLANAR_FURY),
+}
+
+results = {}
+for label, armor in enchantments.items():
+    defender = dataclasses.replace(base_defender, armor=armor)
+    results[label] = run_scenario(
+        Scenario(attacker=attacker, defender=defender, iterations=500, base_seed=42),
+        shard=shard,
+    )
+
+armor_enchantment_comparison(results, title="Armor Enchantment Comparison")
+display(HTML(format_table_html(comparison_table(results,
+    stats=["mean", "onhit_trigger_rate", "effect_rate"]))))
+```
+
+---
+
+## Recipe 17.3: Sweep ChanceOfEffect on armor (V3.1)
+
+**Question**: "How does the ChanceOfEffect property affect armor onhit trigger rate?"
+
+```python
+from omega.config.enchantments import ArmorEnchantment
+
+attacker = CombatantSpec(
+    name="Warrior",
+    skills={SKILLID_SWORDSMANSHIP: 100, SKILLID_TACTICS: 100},
+    str_=100, dex_=100, int_=25,
+    class_levels={CLASSEID_WARRIOR: 5},
+    weapon=WeaponSpec(name="Sword", damage="3d6+2"),
+)
+
+sweep = ParameterSweep(
+    scenario=Scenario(
+        attacker=attacker,
+        defender=CombatantSpec(
+            name="Target", is_npc=True,
+            str_=50, dex_=50, int_=50, hp=500,
+            armor=ArmorSpec(ar=35).enchant_with(ArmorEnchantment.OF_DAEMONS_BREATH),
+        ),
+        iterations=500,
+        base_seed=42,
+    ),
+    variables=(
+        Variable.from_range("defender", "armor.properties.ChanceOfEffect",
+                            start=1, stop=15, step=2),
+    ),
+)
+
+result = run_sweep(sweep, shard=shard)
+
+damage_vs_parameter(result, "defender.armor.properties.ChanceOfEffect",
+                    title="Damage vs Armor ChanceOfEffect")
+rows = summary_table(result, stats=["mean", "onhit_trigger_rate", "hit_rate"])
+display(HTML(format_table_html(rows)))
+```
+
+---
+
 ## Recipe 18: Basic spell damage (V3)
 
 **Question**: "How much damage does a Mage's Fireball deal?"

@@ -2,6 +2,7 @@
 
 from omega.config.dice import DiceSpec
 from omega.model.constants import (
+    ATTRIBUTEID_SWORDSMANSHIP,
     POLCLASS_ARMOR,
     POLCLASS_ITEM,
     POLCLASS_WEAPON,
@@ -16,7 +17,7 @@ class TestWeapon:
         w = Weapon()
         assert w.damage == DiceSpec(count=1, sides=4, bonus=0)
         assert w.speed == 50
-        assert w.attribute == 0
+        assert w.attribute == ""
         assert not w.two_handed
         assert w.quality == 1.0
         assert w.hitscript is None
@@ -36,7 +37,7 @@ class TestWeapon:
         assert w.name == "Broadsword"
         assert w.damage == damage
         assert w.speed == 35
-        assert w.attribute == SKILLID_SWORDSMANSHIP
+        assert w.attribute == ATTRIBUTEID_SWORDSMANSHIP
         assert w.hp == 100
         assert w.max_hp == 100
 
