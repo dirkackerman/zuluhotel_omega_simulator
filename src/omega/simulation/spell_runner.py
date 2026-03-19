@@ -105,7 +105,9 @@ def run_spell_scenario(
             spell_registry = shard.spell_registry
 
     # Build caster from spec (weapon/armor not used for spells but
-    # build_combatant returns them — they may carry MagicPenalty)
+    # build_combatant returns them — they may carry MagicPenalty).
+    # Enchantment registries not needed: spell execution doesn't trigger
+    # weapon hitscripts or armor OnHitScripts.
     caster, _, _ = build_combatant(scenario.caster)
 
     # Build target(s) from spec(s)

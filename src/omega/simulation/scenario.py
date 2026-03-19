@@ -215,6 +215,10 @@ class CombatantSpec:
 
     Both produce a fully self-contained, frozen spec that :func:`build_combatant`
     materialises into game objects without needing config files.
+
+    Armor priority: if ``armor_pieces`` is populated (from :meth:`from_config`),
+    individual pieces are equipped to their layers and ``armor`` is ignored.
+    If only ``armor`` is set (inline specs), it is used as a single piece.
     """
 
     name: str = "Combatant"

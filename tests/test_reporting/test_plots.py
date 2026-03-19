@@ -5,6 +5,7 @@ import pytest
 from omega.combat.result import HitResult
 from omega.combat.spell_result import SpellResult
 from omega.reporting.plots import (
+    armor_enchantment_comparison,
     comparison_overlay,
     damage_breakdown,
     damage_histogram,
@@ -386,3 +387,31 @@ class TestFizzleRateVsParameter:
         result = SimulationResult(cells=cells)
         fig = fizzle_rate_vs_parameter(result, "x", title="Custom")
         assert fig.axes[0].get_title() == "Custom"
+
+
+class TestArmorEnchantmentComparison:
+    def test_returns_figure(self):
+        cells = {
+            "Plain": _make_cell(mean=20),
+            "Enchanted": _make_cell(mean=30),
+        }
+        fig = armor_enchantment_comparison(cells)
+        assert fig is not None
+
+    def test_custom_title(self):
+        cells = {"A": _make_cell(mean=10)}
+        fig = armor_enchantment_comparison(cells, title="Custom Title")
+        assert fig.axes[0].get_title() == "Custom Title"
+
+    def test_empty_cells(self):
+        fig = armor_enchantment_comparison({})
+        assert fig is not None
+
+    def test_with_onhit_trigger_rates(self):
+        """Cells with onhit_trigger_rate should show on secondary axis."""
+        cell = _make_cell(mean=25)
+        cell.ratios.onhit_trigger_rate = 0.75
+        cells = {"Enchanted": cell, "Plain": _make_cell(mean=20)}
+        fig = armor_enchantment_comparison(cells)
+        # Should have two y-axes (primary + secondary)
+        assert len(fig.axes) >= 2

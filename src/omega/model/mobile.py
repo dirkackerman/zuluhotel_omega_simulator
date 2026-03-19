@@ -26,9 +26,12 @@ from omega.model.constants import (
 from omega.model.game_object import GameObject
 from omega.model.items import Armor, Weapon
 
-# POL's intrinsic weapon for unarmed characters (gamestate.wrestling_weapon).
-# Attribute "Wrestling", damage 1d4, speed 35.
-_WRESTLING_WEAPON = Weapon(name="Wrestling", attribute="Wrestling", speed=35)
+def _wrestling_weapon() -> Weapon:
+    """Create a fresh wrestling weapon (POL's intrinsic_weapon).
+
+    Returns a new instance each time to avoid shared mutable state.
+    """
+    return Weapon(name="Wrestling", attribute="Wrestling", speed=35)
 
 
 class Mobile(GameObject):
@@ -105,6 +108,10 @@ class Mobile(GameObject):
 
         # Equipment: layer → item
         self._equipment: dict[int, Weapon | Armor] = {}
+
+        # Per-instance wrestling weapon cache (avoids creating new objects
+        # on repeated .weapon access for unarmed mobiles)
+        self._cached_wrestling: Weapon | None = None
 
     # ------------------------------------------------------------------
     # Stats (effective = base + mod/10, matching POL)
@@ -203,10 +210,16 @@ class Mobile(GameObject):
     def equip(self, layer: int, item: Weapon | Armor) -> None:
         """Equip an item to a layer slot."""
         self._equipment[layer] = item
+        # Invalidate cached wrestling weapon if hand slot changed
+        if layer in (LAYER_HAND1, LAYER_HAND2):
+            self._cached_wrestling = None
 
     def unequip(self, layer: int) -> Weapon | Armor | None:
         """Remove and return the item at a layer, or None."""
-        return self._equipment.pop(layer, None)
+        item = self._equipment.pop(layer, None)
+        if layer in (LAYER_HAND1, LAYER_HAND2):
+            self._cached_wrestling = None
+        return item
 
     def get_equipped(self, layer: int) -> Weapon | Armor | None:
         """Get the item equipped at a layer, or None."""
@@ -231,7 +244,10 @@ class Mobile(GameObject):
         item = self._equipment.get(LAYER_HAND2)
         if isinstance(item, Weapon):
             return item
-        return _WRESTLING_WEAPON
+        # Cache per-instance to avoid creating new objects on repeated access
+        if self._cached_wrestling is None:
+            self._cached_wrestling = _wrestling_weapon()
+        return self._cached_wrestling
 
     @property
     def ar(self) -> int:

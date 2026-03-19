@@ -835,7 +835,7 @@ display(HTML(format_table_html(comparison_table(results,
 **Question**: "How does a fire-enchanted armor affect incoming damage?"
 
 ```python
-from omega.config.enchantments import ArmorEnchantment
+from omega.config.armor_enchantments import ArmorEnchantment
 
 attacker = CombatantSpec(
     name="Warrior",
@@ -871,7 +871,7 @@ damage_histogram(result, title="vs Fire Plate Armor")
 **Question**: "Which armor enchantment provides the best defensive value?"
 
 ```python
-from omega.config.enchantments import ArmorEnchantment
+from omega.config.armor_enchantments import ArmorEnchantment
 from omega.reporting.plots import armor_enchantment_comparison
 import dataclasses
 
@@ -915,7 +915,7 @@ display(HTML(format_table_html(comparison_table(results,
 **Question**: "How does the ChanceOfEffect property affect armor onhit trigger rate?"
 
 ```python
-from omega.config.enchantments import ArmorEnchantment
+from omega.config.armor_enchantments import ArmorEnchantment
 
 attacker = CombatantSpec(
     name="Warrior",

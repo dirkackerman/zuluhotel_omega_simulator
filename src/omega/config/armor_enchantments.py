@@ -216,7 +216,12 @@ class ArmorEnchantmentEntry:
         if self.onhitscript_type == "Spell":
             props["HitWithSpell"] = self.spell_id
         elif self.onhitscript_type == "RaceResistant":
-            props["ProtectedType"] = self.race_type
+            # Use CreatureType enum when the value matches, for consistency
+            # with _ARMOR_ENCHANTMENT_META. Falls back to raw string if not found.
+            try:
+                props["ProtectedType"] = CreatureType(self.race_type)
+            except ValueError:
+                props["ProtectedType"] = self.race_type
         elif self.onhitscript_type in ("Effect", "Greater"):
             if self.cprop:
                 props[self.cprop] = int(self.multiplier) if self.multiplier else 1

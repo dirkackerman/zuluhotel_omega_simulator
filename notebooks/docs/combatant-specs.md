@@ -312,6 +312,7 @@ class ArmorSpec:
 | `hp` | `int` | `70` | Current durability |
 | `max_hp` | `int` | `70` | Maximum durability |
 | `layer` | `int` | `0` | Equipment layer. Defaults to chest (`LAYER_CHEST`) when equipped. |
+| `onhitscript` | `str \| None` | `None` | Enchantment onhit script package path (e.g., `":combat:spellonhit"`). Set automatically by `enchant_with()`. |
 | `properties` | `dict` | `{}` | Custom properties for eScript access |
 
 ### Armor Rating values
@@ -344,7 +345,7 @@ Armor pieces can be enchanted with onhit scripts, analogous to weapon enchantmen
 ### Enchanting armor with `enchant_with()`
 
 ```python
-from omega.config.enchantments import ArmorEnchantment
+from omega.config.armor_enchantments import ArmorEnchantment
 
 # Spell enchantment — casts Fireball on the attacker when wearer is hit
 fire_armor = ArmorSpec(name="Fire Plate", ar=35).enchant_with(
@@ -374,7 +375,7 @@ ArmorSpec(
 
 ### ArmorEnchantment enum
 
-**`ArmorEnchantment`** (`omega.config.enchantments.ArmorEnchantment`) — 47 members:
+**`ArmorEnchantment`** (`omega.config.armor_enchantments.ArmorEnchantment`) — 47 members:
 - Spell (1–18): `OF_BUNGLING`, `OF_DAEMONS_BREATH`, `OF_THUNDER`, `OF_HELLFIRE`, etc.
 - Race-Resistant (19–35): `SLIME_SLAYER`, `SILVER` (Undead), `HOLY` (Daemon), `DRAGON_SLAYER`, etc.
 - Effect (36–42): `OF_PIERCING`, `BANISHING`, `POISONED`, `BLOODY`, `VAMPIRIC`, `LEECH`, `BLINDING`
@@ -382,10 +383,10 @@ ArmorSpec(
 
 ### CombatScript enum
 
-**`CombatScript`** (`omega.config.enchantments.CombatScript`) provides the onhit script paths:
+**`CombatScript`** (`omega.config.combat_scripts.CombatScript`) provides the onhit script paths:
 
 ```python
-from omega.config.enchantments import CombatScript
+from omega.config.combat_scripts import CombatScript
 
 # Direct property setting (advanced use)
 ArmorSpec(
@@ -397,10 +398,10 @@ ArmorSpec(
 
 ### CreatureType enum
 
-**`CreatureType`** (`omega.config.enchantments.CreatureType`) for race-resistant armor matching:
+**`CreatureType`** (`omega.config.creature_types.CreatureType`) for race-resistant armor matching:
 
 ```python
-from omega.config.enchantments import CreatureType
+from omega.config.creature_types import CreatureType
 
 # Armor resists undead attacks
 ArmorSpec(ar=35, properties={"ResistType": CreatureType.UNDEAD})
@@ -413,15 +414,15 @@ Use `CombatantSpec.armor_pieces` to equip multiple enchanted armor pieces across
 ```python
 defender = CombatantSpec(
     name="Full Enchanted Plate",
-    armor_pieces=[
-        ArmorSpec(name="Fire Helm", ar=20, layer=LAYER_HELM).enchant_with(
+    armor_pieces={
+        LAYER_HELM: ArmorSpec(name="Fire Helm", ar=20, layer=LAYER_HELM).enchant_with(
             ArmorEnchantment.OF_DAEMONS_BREATH
         ),
-        ArmorSpec(name="Piercing Chest", ar=35, layer=LAYER_CHEST).enchant_with(
+        LAYER_CHEST: ArmorSpec(name="Piercing Chest", ar=35, layer=LAYER_CHEST).enchant_with(
             ArmorEnchantment.OF_PIERCING
         ),
-        ArmorSpec(name="Plain Legs", ar=22, layer=LAYER_LEGS),
-    ],
+        LAYER_LEGS: ArmorSpec(name="Plain Legs", ar=22, layer=LAYER_LEGS),
+    },
 )
 ```
 

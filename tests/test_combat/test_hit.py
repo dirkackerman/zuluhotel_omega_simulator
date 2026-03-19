@@ -644,3 +644,24 @@ class TestWeaponSkillEdgeCases:
         mob.set_skill(SKILLID_WRESTLING, 300)  # 30 display
         mob.equip(LAYER_HAND1, Armor(name="Shield", ar=10))
         assert _weapon_skill(mob, None) == 30
+
+    def test_short_name_attribute_resolves_swords(self):
+        """Config short name 'Swords' resolves to Swordsmanship skill."""
+        mob = Mobile(name="Test")
+        mob.set_skill(SKILLID_SWORDSMANSHIP, 800)  # 80 display
+        weapon = Weapon(name="Katana", attribute="Swords")  # short name from cfg
+        assert _weapon_skill(mob, weapon) == 80
+
+    def test_short_name_attribute_resolves_mace(self):
+        """Config short name 'Mace' resolves to Macefighting skill."""
+        mob = Mobile(name="Test")
+        mob.set_skill(SKILLID_MACEFIGHTING, 600)  # 60 display
+        weapon = Weapon(name="Hammer", attribute="Mace")
+        assert _weapon_skill(mob, weapon) == 60
+
+    def test_full_name_attribute_resolves(self):
+        """Full ATTRIBUTEID name 'Swordsmanship' also resolves."""
+        mob = Mobile(name="Test")
+        mob.set_skill(SKILLID_SWORDSMANSHIP, 700)  # 70 display
+        weapon = Weapon(name="Sword", attribute="Swordsmanship")
+        assert _weapon_skill(mob, weapon) == 70

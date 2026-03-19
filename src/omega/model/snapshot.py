@@ -96,3 +96,6 @@ def restore(mobile: Mobile, snap: MobileSnapshot) -> None:
         item = mobile.get_equipped(layer)
         if item is not None:
             item.hp = hp_val
+
+    # Invalidate wrestling weapon cache (equipment state may have changed)
+    mobile._cached_wrestling = None

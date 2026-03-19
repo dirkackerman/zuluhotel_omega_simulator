@@ -217,6 +217,131 @@ class TestMobileWeaponProperty:
         mob.equip(LAYER_HAND2, Armor(name="Shield", ar=15))
         assert mob.weapon is sword
 
+
+class TestWrestlingWeaponCache:
+    """Tests for the per-instance wrestling weapon cache lifecycle.
+
+    The Mobile.weapon property caches the wrestling fallback per-instance.
+    The cache must be invalidated on equip(), unequip(), and restore().
+    """
+
+    def test_wrestling_cached_same_object(self):
+        """Repeated .weapon access on unarmed mobile returns same instance."""
+        mob = Mobile(name="Test")
+        w1 = mob.weapon
+        w2 = mob.weapon
+        assert w1 is w2
+        assert w1.name == "Wrestling"
+
+    def test_cache_not_shared_between_mobiles(self):
+        """Each mobile gets its own wrestling weapon (no singleton)."""
+        mob1 = Mobile(name="A")
+        mob2 = Mobile(name="B")
+        assert mob1.weapon is not mob2.weapon
+
+    def test_equip_invalidates_cache(self):
+        """Equipping a weapon in HAND1 invalidates wrestling cache."""
+        mob = Mobile(name="Test")
+        wrestling = mob.weapon  # cache created
+        assert wrestling.name == "Wrestling"
+
+        sword = Weapon(name="Sword", attribute=ATTRIBUTEID_SWORDSMANSHIP)
+        mob.equip(LAYER_HAND1, sword)
+        assert mob.weapon is sword  # now returns the sword, not cached wrestling
+
+    def test_unequip_invalidates_cache(self):
+        """Unequipping weapon returns to fresh wrestling (not stale cache)."""
+        mob = Mobile(name="Test")
+        sword = Weapon(name="Sword", attribute=ATTRIBUTEID_SWORDSMANSHIP)
+        mob.equip(LAYER_HAND1, sword)
+        assert mob.weapon is sword
+
+        mob.unequip(LAYER_HAND1)
+        w = mob.weapon
+        assert w.name == "Wrestling"
+        # Must be a fresh cache, not the old one
+        assert w is mob.weapon  # cached now
+
+    def test_equip_hand2_invalidates_cache(self):
+        """Equipping HAND2 also invalidates."""
+        from omega.model.constants import LAYER_HAND2
+        mob = Mobile(name="Test")
+        wrestling = mob.weapon
+        assert wrestling.name == "Wrestling"
+
+        bow = Weapon(name="Bow", attribute="Archery")
+        mob.equip(LAYER_HAND2, bow)
+        assert mob.weapon is bow
+
+    def test_unequip_hand2_invalidates_cache(self):
+        """Unequipping HAND2 invalidates."""
+        from omega.model.constants import LAYER_HAND2
+        mob = Mobile(name="Test")
+        bow = Weapon(name="Bow", attribute="Archery")
+        mob.equip(LAYER_HAND2, bow)
+        assert mob.weapon is bow
+
+        mob.unequip(LAYER_HAND2)
+        assert mob.weapon.name == "Wrestling"
+
+    def test_restore_invalidates_cache(self):
+        """snapshot.restore() clears the wrestling cache."""
+        from omega.model.snapshot import snapshot, restore
+
+        mob = Mobile(name="Test")
+        mob.str_base = 100
+        mob.hp = 200
+        mob.max_hp = 200
+
+        snap = snapshot(mob)
+
+        # Create a cached wrestling weapon
+        wrestling1 = mob.weapon
+        assert wrestling1.name == "Wrestling"
+
+        # Restore should invalidate the cache
+        restore(mob, snap)
+        wrestling2 = mob.weapon
+        assert wrestling2.name == "Wrestling"
+        # Must be a NEW instance (cache was invalidated by restore)
+        assert wrestling1 is not wrestling2
+
+    def test_equip_unequip_equip_cycle(self):
+        """Full equip → unequip → re-equip cycle works correctly."""
+        mob = Mobile(name="Test")
+
+        # Start unarmed
+        assert mob.weapon.name == "Wrestling"
+
+        # Equip sword
+        sword = Weapon(name="Sword", attribute=ATTRIBUTEID_SWORDSMANSHIP)
+        mob.equip(LAYER_HAND1, sword)
+        assert mob.weapon is sword
+
+        # Unequip → back to wrestling
+        mob.unequip(LAYER_HAND1)
+        assert mob.weapon.name == "Wrestling"
+
+        # Re-equip different weapon
+        mace = Weapon(name="Mace", attribute="Mace")
+        mob.equip(LAYER_HAND1, mace)
+        assert mob.weapon is mace
+
+        # Unequip again
+        mob.unequip(LAYER_HAND1)
+        assert mob.weapon.name == "Wrestling"
+
+    def test_equip_non_hand_layer_does_not_invalidate(self):
+        """Equipping armor on chest doesn't affect weapon cache."""
+        from omega.model.constants import LAYER_CHEST
+        mob = Mobile(name="Test")
+        wrestling = mob.weapon
+        assert wrestling.name == "Wrestling"
+
+        mob.equip(LAYER_CHEST, Armor(name="Plate", ar=30))
+        # Cache should still be valid — chest equip doesn't affect hands
+        assert mob.weapon is wrestling
+
     def test_weapon_attribute_accessible(self):
         """attacker.weapon.attribute should work (used by omegaattack)."""
         mob = Mobile(name="Test")
@@ -357,3 +482,70 @@ class TestCheckHitChanceFormula:
             r1 = _run_check_hit_chance(shard, combat_trees, attacker, defender, rng_seed=seed)
             r2 = _run_check_hit_chance(shard, combat_trees, attacker, defender, rng_seed=seed)
             assert r1 == r2, f"Non-deterministic at seed {seed}"
+
+    def test_mage_uses_lowest_class_skill(self, shard, combat_trees):
+        """Mage class uses GetLowestClassSkillValue instead of weapon skill.
+
+        The shard's CheckHitChance checks GetObjProperty(attacker, CLASSEID_MAGE)
+        and if truthy, uses the lowest skill from the class skill set instead of
+        the weapon's attribute skill. A mage with high Swordsmanship but low
+        Magery should hit less than a warrior with the same Swordsmanship.
+        """
+        from omega.model.constants import SKILLID_EVALINT, SKILLID_MEDITATION
+
+        # Mage with high swords (100) but low class skills (Magery=30)
+        mage = _make_melee_attacker(skill=100, class_level=0)
+        mage.set_property(CLASSEID_MAGE, 3)
+        mage.set_skill(SKILLID_MAGERY, 300)  # 30 display — low
+        mage.set_skill(SKILLID_EVALINT, 300)
+        mage.set_skill(SKILLID_MEDITATION, 300)
+        defender = _make_defender()
+
+        # Warrior with same swords (100) — uses weapon skill directly
+        warrior = _make_melee_attacker(skill=100, class_level=3)
+
+        hits_mage = sum(
+            1 for seed in range(200)
+            if _run_check_hit_chance(shard, combat_trees, mage, defender, rng_seed=seed) == 1
+        )
+        hits_warrior = sum(
+            1 for seed in range(200)
+            if _run_check_hit_chance(shard, combat_trees, warrior, defender, rng_seed=seed) == 1
+        )
+
+        # Mage uses lowest class skill (30) → lower hit rate than warrior (100)
+        assert hits_mage < hits_warrior, (
+            f"Mage hit {hits_mage}/200 vs warrior {hits_warrior}/200 — "
+            f"mage with low class skills should hit less"
+        )
+
+    def test_thief_uses_lowest_class_skill(self, shard, combat_trees):
+        """Thief class also uses GetLowestClassSkillValue."""
+        from omega.model.constants import (
+            SKILLID_HIDING, SKILLID_STEALING, SKILLID_SNOOPING,
+            SKILLID_LOCKPICKING, SKILLID_REMOVETRAP, SKILLID_POISONING,
+        )
+
+        # Thief with high swords (100) but low thief skills (20)
+        thief = _make_melee_attacker(skill=100, class_level=0)
+        thief.set_property(CLASSEID_THIEF, 3)
+        for sid in (SKILLID_HIDING, SKILLID_STEALING, SKILLID_SNOOPING,
+                    SKILLID_LOCKPICKING, SKILLID_REMOVETRAP, SKILLID_POISONING):
+            thief.set_skill(sid, 200)  # 20 display — low
+
+        warrior = _make_melee_attacker(skill=100, class_level=3)
+        defender = _make_defender()
+
+        hits_thief = sum(
+            1 for seed in range(200)
+            if _run_check_hit_chance(shard, combat_trees, thief, defender, rng_seed=seed) == 1
+        )
+        hits_warrior = sum(
+            1 for seed in range(200)
+            if _run_check_hit_chance(shard, combat_trees, warrior, defender, rng_seed=seed) == 1
+        )
+
+        assert hits_thief < hits_warrior, (
+            f"Thief hit {hits_thief}/200 vs warrior {hits_warrior}/200 — "
+            f"thief with low class skills should hit less"
+        )

@@ -253,9 +253,19 @@ SKILLID_TO_ATTRIBUTE: dict[int, str] = {
 }
 
 # Reverse map: attribute name (lowercased) → skill ID
+# Includes both full ATTRIBUTEID names ("swordsmanship") and short names
+# from itemdesc.cfg ("swords", "mace") for seamless config → skill lookup.
 ATTRIBUTE_TO_SKILLID: dict[str, int] = {
     v.lower(): k for k, v in SKILLID_TO_ATTRIBUTE.items()
 }
+# Short-name aliases used in itemdesc.cfg Attribute fields
+ATTRIBUTE_TO_SKILLID.update({
+    "swords": SKILLID_SWORDSMANSHIP,
+    "mace": SKILLID_MACEFIGHTING,
+    "archery": SKILLID_ARCHERY,
+    "fencing": SKILLID_FENCING,
+    "wrestling": SKILLID_WRESTLING,
+})
 
 # ---------------------------------------------------------------------------
 # Vital IDs

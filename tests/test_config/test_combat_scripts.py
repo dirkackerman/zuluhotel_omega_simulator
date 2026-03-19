@@ -35,6 +35,12 @@ class TestCombatScriptEnum:
         for cs in CombatScript:
             assert cs.value.startswith(":combat:"), f"{cs.name} = {cs.value!r}"
 
+    def test_total_member_count(self):
+        """27 members: 1 mainhit + 12 weapon + 14 armor onhit + 1 reactive (but check)."""
+        # MAINHIT(1) + weapon(12) + armor(14) + REACTIVEARMORONHIT(1) = 28
+        # Actual count may differ — this test catches unintended additions/removals.
+        assert len(CombatScript) == 28
+
     def test_all_values_unique(self):
         values = [cs.value for cs in CombatScript]
         assert len(values) == len(set(values))

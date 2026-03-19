@@ -20,6 +20,7 @@ from typing import Any
 
 from omega.combat.hit import execute_hit
 from omega.combat.result import HitResult
+from omega.config.armor_enchantments import ArmorEnchantmentRegistry
 from omega.config.armor_zones import ArmorZoneConfig
 from omega.config.enchantments import EnchantmentRegistry
 from omega.interpreter.executor import Executor
@@ -90,6 +91,13 @@ def run_scenario(
         if hitscript_cfg.exists():
             enchantment_registry = EnchantmentRegistry.from_cfg(hitscript_cfg)
 
+    # Auto-load armor enchantment registry from shard if needed
+    armor_enchantment_registry: ArmorEnchantmentRegistry | None = None
+    if shard is not None:
+        onhitscript_cfg = shard.root / "pkg" / "systems" / "combat" / "config" / "onhitscriptdesc.cfg"
+        if onhitscript_cfg.exists():
+            armor_enchantment_registry = ArmorEnchantmentRegistry.from_cfg(onhitscript_cfg)
+
     # Auto-load armor zone config from shard if available
     armor_zone_config: ArmorZoneConfig | None = None
     if shard is not None:
@@ -100,9 +108,11 @@ def run_scenario(
     # Build combatants from specs
     attacker, weapon, _atk_armor = build_combatant(
         scenario.attacker, enchantment_registry=enchantment_registry,
+        armor_enchantment_registry=armor_enchantment_registry,
     )
     defender, _def_weapon, armor = build_combatant(
         scenario.defender, enchantment_registry=enchantment_registry,
+        armor_enchantment_registry=armor_enchantment_registry,
     )
 
     # Build executor once — reused across all iterations
@@ -199,6 +209,13 @@ def run_sweep(
         if hitscript_cfg.exists():
             enchantment_registry = EnchantmentRegistry.from_cfg(hitscript_cfg)
 
+    # Auto-load armor enchantment registry from shard if needed
+    armor_enchantment_registry: ArmorEnchantmentRegistry | None = None
+    if shard is not None:
+        onhitscript_cfg = shard.root / "pkg" / "systems" / "combat" / "config" / "onhitscriptdesc.cfg"
+        if onhitscript_cfg.exists():
+            armor_enchantment_registry = ArmorEnchantmentRegistry.from_cfg(onhitscript_cfg)
+
     # Build the Cartesian product grid
     if not sweep.variables:
         # No variables — just run the base scenario
@@ -210,6 +227,7 @@ def run_sweep(
             em_modules_dir=em_modules_dir,
             _executor=shared_executor,
             enchantment_registry=enchantment_registry,
+            shard=shard,
         )
         elapsed = time.monotonic() - start
         return SimulationResult(cells=[cell], total_time=elapsed)
@@ -272,6 +290,7 @@ def run_sweep(
             em_modules_dir=em_modules_dir,
             _executor=shared_executor,
             enchantment_registry=enchantment_registry,
+            shard=shard,
         )
         cell.variable_values = dict(zip(var_names, combo))
         cells.append(cell)

@@ -316,6 +316,41 @@ class TestArmorSpellOnHitSpellTypes:
         assert result.metrics.get("onhit_spell_triggered") == 1
         assert result.metrics.get("onhit_spell_id") == int(Spell.HARM)
 
+    @pytest.mark.parametrize("spell,circle", [
+        (Spell.CLUMSY, 1),
+        (Spell.FEEBLEMIND, 1),
+        (Spell.MAGIC_ARROW, 1),
+        (Spell.WEAKEN, 1),
+        (Spell.HARM, 2),
+        (Spell.FIREBALL, 3),
+        (Spell.CURSE, 4),
+        (Spell.LIGHTNING, 4),
+        (Spell.MANA_DRAIN, 4),
+        (Spell.MIND_BLAST, 5),
+        (Spell.PARALYZE, 5),
+        (Spell.ENERGY_BOLT, 6),
+        (Spell.EXPLOSION, 6),
+        (Spell.MASS_CURSE, 6),
+        (Spell.CHAIN_LIGHTNING, 7),
+        (Spell.FLAME_STRIKE, 7),
+        (Spell.METEOR_SWARM, 7),
+        (Spell.EARTHQUAKE, 8),
+    ])
+    def test_all_18_spell_types_execute(self, shard, combat_trees, spell, circle):
+        """Every spell-type armor enchantment executes and triggers."""
+        attacker = _make_attacker()
+        defender = _make_defender()
+        weapon = _make_plain_weapon()
+        armor = _make_enchanted_armor(chance=100, spell_id=int(spell), circle=circle)
+
+        result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
+        _skip_on_failure(result)
+
+        assert result.metrics.get("onhit_spell_triggered") == 1
+        assert result.metrics.get("onhit_spell_id") == int(spell)
+        assert result.metrics.get("onhit_spell_circle") == circle
+        assert result.metrics.get("onhit_type") == "spell"
+
 
 # ---------------------------------------------------------------------------
 # Cursed armor

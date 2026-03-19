@@ -273,6 +273,29 @@ class TestSlayerArmorOnHit:
         assert result.final_damage > 0
 
 
+class TestAllSlayerTypesExecute:
+    """Verify all 17 creature types work as armor slayer ProtectedType."""
+
+    @pytest.mark.parametrize("creature_type", list(CreatureType))
+    def test_slayer_match_executes(self, shard, combat_trees, creature_type):
+        """Each creature type as ProtectedType produces a slayer match."""
+        attacker = _make_attacker(is_npc=True, creature_type=creature_type)
+        defender = _make_defender()
+        weapon = _make_plain_weapon()
+        armor = _make_onhit_armor(
+            onhitscript=CombatScript.RACERESISTONHIT,
+            ProtectedType=creature_type,
+        )
+        result = _run_hit(shard, combat_trees, attacker, defender, weapon, armor)
+        _skip_on_failure(result)
+
+        assert result.metrics.get("onhit_slayer_match") == 1, (
+            f"Slayer match failed for {creature_type}"
+        )
+        assert result.metrics.get("onhit_type") == "slayer"
+        assert result.final_damage > 0
+
+
 # ---------------------------------------------------------------------------
 # Piercing Armor (piercingonhit)
 # ---------------------------------------------------------------------------

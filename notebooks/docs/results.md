@@ -233,7 +233,7 @@ When hit rate is 100%, the overall and on-hit rates are identical.
 | `onhit_trigger_rate` | Fraction of all swings where an armor onhit script fired |
 | `onhit_trigger_rate_on_hit` | Fraction of *hits* where an armor onhit script fired (conditional on the swing connecting) |
 
-The `onhit_type` metric key is available per-hit in `HitResult.metrics`. It uses a unified value across all 14 onhit scripts: `"spell"`, `"slayer"`, `"piercing"`, `"drain"`, `"poison"`, `"blind"`, `"banish"`, `"vampiric"`, `"leech"`, `"bloody"`, `"planar"`, `"void"`, `"elemental"`, `"reactive"`.
+The `onhit_type` metric key is available per-hit in `HitResult.metrics`. It uses a unified value across all 14 onhit scripts: `"spell"`, `"slayer"`, `"piercing"`, `"banish"`, `"poison"`, `"bouncing"`, `"manadrain"`, `"staminadrain"`, `"blinding"`, `"deflection"`, `"trielemental"`, `"avenging"`, `"invisible"`, `"dualplanar"`.
 
 ```python
 r = result.ratios

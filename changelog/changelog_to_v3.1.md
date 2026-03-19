@@ -266,4 +266,72 @@ All 14 onhit scripts now emit a consistent `onhit_type` metric key:
 
 - Tests: 2699 (was 2687, +12 new)
 - Fixture files: 286 (unchanged)
-- V3.1 milestone status: **Complete** (M30–M34 all done)
+
+---
+
+## Post-M34 — Audit Fixes
+
+Comprehensive review of V3.1 implementation found 6 issues requiring fixes. All addressed.
+
+### Bug Fixes
+
+- **`runner.py` missing armor enchantment registry** (CRITICAL): `run_scenario()` loaded weapon `EnchantmentRegistry` from `hitscriptdesc.cfg` but never loaded `ArmorEnchantmentRegistry` from `onhitscriptdesc.cfg`. Named armor enchantments via the runner would fail with `ValueError`. Fixed by auto-loading `onhitscriptdesc.cfg` and passing `armor_enchantment_registry` to `build_combatant()`. `run_sweep()` delegates to `run_scenario()` so inherits the fix.
+- **Wrestling weapon shared singleton** (MODERATE): `_WRESTLING_WEAPON` was a module-level singleton returned by `Mobile.weapon` for unarmed characters. If properties were modified on it, all unarmed mobiles would be affected. Changed to `_wrestling_weapon()` factory function that returns a fresh instance.
+- **`ArmorEnchantmentEntry.armor_properties` raw string** (MODERATE): Race-resistant entries returned the raw `race_type` string from cfg instead of `CreatureType` enum, inconsistent with `_ARMOR_ENCHANTMENT_META` which uses the enum. Fixed with `CreatureType(self.race_type)` conversion with fallback.
+
+### Documentation Fixes
+
+- **Import path errors** in `combatant-specs.md` and `examples.md`: `ArmorEnchantment`, `CombatScript`, `CreatureType` were imported from `omega.config.enchantments` instead of their actual modules. Fixed to use correct paths.
+- **`armor_pieces` type mismatch** in `combatant-specs.md`: Docs showed list syntax but actual type is `dict[int, ArmorSpec]`. Fixed to dict syntax with layer constants.
+- **`results.md` wrong `onhit_type` values**: Listed values like "drain", "blind", "vampiric" that don't match actual script values. Fixed to actual 14 values.
+- **Missing `onhitscript` field** in ArmorSpec field table in `combatant-specs.md`. Added.
+
+### Test Fixes
+
+- **`test_combat_scripts.py` missing count assertion**: Added `test_total_member_count` verifying `len(CombatScript) == 28`.
+- **Armor zone tolerance**: Verified mathematically — 3% tolerance on 7% zones with 10,000 samples is 11.7 sigma, not flaky.
+
+### Stats
+
+- Tests: 2700 (was 2699, +1 count assertion)
+
+### Test Coverage Expansion
+
+Addressed audit-identified test coverage gaps:
+
+- **All 18 spell types tested** (`test_armor_spell_onhit.py`): Parametrized test covers Clumsy through Earthquake — each verifies `onhit_spell_triggered`, `onhit_spell_id`, `onhit_spell_circle`, and `onhit_type` (+18 tests)
+- **All 17 slayer creature types tested** (`test_armor_effect_onhit.py`): Parametrized test verifies every `CreatureType` member as `ProtectedType` produces a slayer match (+17 tests)
+- **Thief/Mage class lowest-skill handling** (`test_omega_attack.py`): Verifies that Mage and Thief classes with high weapon skill but low class skills hit less than warriors (shard's `GetLowestClassSkillValue` fallback) (+2 tests)
+- **Avenging extended coverage** (`test_armor_greater_onhit.py`): Cursed targets defender, higher Powerlevel → more revenge, NPC defender bypasses class gate (+3 tests)
+
+### Stats
+
+- Tests: 2740 (was 2700, +40 new)
+- V3.1 status: **Complete** (M30–M34 + audit fixes + coverage expansion)
+
+### Second Audit Fixes
+
+- **Weapon attribute short-name aliases** (CRITICAL): `ATTRIBUTE_TO_SKILLID` only had full names ("swordsmanship") but itemdesc.cfg uses short names ("swords", "mace", "archery", "fencing"). Added 5 short-name aliases so `_attribute_to_skill_id()` resolves correctly for config-loaded weapons.
+- **Missing `armor_enchantment_registry` in `run_sweep()`** (CRITICAL): `run_sweep()` auto-loaded weapon `EnchantmentRegistry` but not `ArmorEnchantmentRegistry`. Added auto-loading and passed `shard=` to `run_scenario()` calls so the registry propagates.
+- **`spell_runner.py` exclusion documented**: Spell execution doesn't trigger weapon hitscripts or armor OnHitScripts, so enchantment registries are not needed. Added comment.
+- **`CombatantSpec` armor priority documented**: Docstring now clarifies that `armor_pieces` takes precedence over `armor` when both are populated.
+- **Wrestling weapon per-instance caching**: `Mobile.weapon` property now caches the wrestling fallback weapon per mobile instance (avoiding object creation on repeated access) while invalidating on hand-slot equipment changes. Eliminates shared mutable state risk from singleton AND avoids performance overhead for future `OmegaAttack` flow (11 `attacker.weapon` accesses per call).
+
+### Third Audit Fixes
+
+- **Wrestling cache invalidation on unequip()**: `unequip()` did not clear `_cached_wrestling` — stale weapon returned after removing hand slot items. Fixed.
+- **Wrestling cache invalidation on restore()**: `snapshot.restore()` did not clear `_cached_wrestling` — stale cache persisted across iteration resets. Fixed.
+- **`_cached_wrestling` initialized in `__init__()`**: Previously only created dynamically via `getattr()` fallback. Now explicitly initialized to `None` in constructor.
+- **Short-name attribute skill lookup tests**: 3 new tests verify that config short names ("Swords", "Mace") and full names ("Swordsmanship") all resolve to the correct skill ID through `_weapon_skill()`.
+
+- **Wrestling weapon cache unit tests**: 9 tests covering the full cache lifecycle: caching returns same object, not shared between mobiles, equip/unequip/restore invalidation, HAND1/HAND2 invalidation, full equip→unequip→re-equip cycle, non-hand equip doesn't invalidate.
+
+### Stats
+
+- Tests: 2756 (was 2740, +16 new — 9 cache lifecycle + 3 short-name attribute + 4 armor_enchantment_comparison plot)
+
+### Fourth Audit Fixes
+
+- Cleaned up redundant type annotation in `equip()` cache invalidation
+- Added 4 `armor_enchantment_comparison()` plot tests (returns figure, custom title, empty cells, onhit trigger rate on secondary axis)
+- Verified: no remaining magic strings, no double-load issues, distribution mismatch is mathematically equivalent
